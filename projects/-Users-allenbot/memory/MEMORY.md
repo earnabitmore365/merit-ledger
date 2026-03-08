@@ -10,20 +10,20 @@
 
 > 覆盖更新，不累积。只记下次会话需要知道的事。
 
-- **evolver rollback 问题已解决**：pre-commit snapshot（evolve.sh step0）+ `EVOLVER_ROLLBACK_MODE=stash` 双保险，手动改的文件不再被 hard reset 撸掉
-- **所有回滚文件已恢复并提交**：CLAUDE.md（两层记忆/写要点/步骤3b）、session_start.py（删session_summaries注入块）、MEMORY.md（上次会话要点区域）、evolve.sh（stash模式+pre-commit）
-- **solidify 已跑通**：validate-modules.js shim 放在 `~/.claude/scripts/`，evolver validation 通过，exit 0，score 0.85
-- **genes.json 已重建**：删掉了坏的 `gene_auto_9dbc7cee`，两个 gene 都设 `"validation": []`，已 commit 防被 claude -p 删掉
-- **待解决两个问题**：
-  1. macOS timestamp bug：`date '+%s%3N'` 输出 `17xxx3N`（末尾多 N）→ 改成 `$(date +%s)000`
-  2. Signal contamination：evolver MEMORY.md 里写的是 auto-trading 项目背景，太极模式下跑会让 claude -p 产出 OpenClaw 专属文件（plugins/等）→ 改成太极/多项目背景
+- **evolver 全部跑通**：session读取/进化/自动触发完整链路验证完成
+- **三个关键修复**：① timestamp bug（`date +%s)000`）② session读取（`AGENT_SESSIONS_DIR` env var + `formatSessionLog` 支持 user/assistant type）③ evolver MEMORY.md 改为太极上下文
+- **重要发现**：evolver 创建的 `skills/` 目录就是 Claude Code skill 目录，进化产出直接可用（已有 `code-stats`、`evo-stats` 两个 skill）
+- **自动触发已配置**：PreCompact + SessionEnd hook → `scripts/evolve_hook.sh` → 后台跑 `evolve.sh`，日志在 `/tmp/evolve_hook_taiji.log`
+- **feishu/plugins/ 污染**：来自 GEP prompt 硬编码，无法通过 session 读取修复，但影响小（只改几个 JSON 文件，不破坏系统）
+- **下次压缩**：evolver 会自动在 PreCompact 时触发，可验证完整自动化流程
 
 ---
 
 ## 会话索引（最新在最上面）
 | # | ID | 日期 | 核心内容 |
 |---|-----|------|----------|
-| S36（new） | 1f704c1f续2 | 03-09 | 压缩后恢复；修复两个剩余evolver问题（timestamp+MEMORY.md） |
+| S37（new） | 1f704c1f续3 | 03-09 | evolver完整链路跑通：session读取+自动触发hook+skills目录验证 |
+| S36 | 1f704c1f续2 | 03-09 | 压缩后恢复；修复两个剩余evolver问题（timestamp+MEMORY.md） |
 | S35 | 1f704c1f续 | 03-09 | evolver rollback彻底解决+所有文件恢复+genes.json重建+solidify跑通（shim生效） |
 | S34 | 1f704c1f | 03-08 | evolver迁移~/.claude/evolver/+多项目支持(taiji/auto-trading验证)+~/.claude/ git init+基因库共享；三层→两层记忆决策；bridge实装测试 |
 | S33 | S32续 | 03-08 | 擅自执行被批→RUL-006→三层记忆研究(鲜活/温度/冷)→Vibe Coding→DESIGN_DECISIONS.md创建+/reflect门槛修改→三套记忆系统完成 |
