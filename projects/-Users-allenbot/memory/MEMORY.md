@@ -6,10 +6,24 @@
 
 > 太极最后更新：2026-03-08
 
-## 会话索引（最新在最上面，详见 memory/session_summaries.md）
+## 上次会话要点
+
+> 覆盖更新，不累积。只记下次会话需要知道的事。
+
+- evolver + Claude Code bridge 实装完成：EVOLVE_BRIDGE=false + `env -u CLAUDECODE claude -p` headless 模式
+- 测试失败：solidify FAILED，两个原因：① max_files=14>12（blast radius超限）② validation路径错误（gene引用 `node scripts/validate-modules.js ./src/gep/solidify`，该路径不存在）
+- Hard rollback 触发，本会话所有文件修改均被撤销：CLAUDE.md / MEMORY.md / session_start.py / framework.md / evolve.sh 全部回到旧版
+- 已确认决策（老板批准）：session_summaries.md 废弃 → 改为 MEMORY.md `## 上次会话要点`（覆盖式，不累积）
+- 老板原话："日志这一步其实就是检验他们到底看没看上个对话的全文而已，没什么实际作用的"
+- 下一步：① 修复gene validation路径 + 控制blast radius → ② 重新应用所有rollback的文件修改
+
+---
+
+## 会话索引（最新在最上面）
 | # | ID | 日期 | 核心内容 |
 |---|-----|------|----------|
-| S34（new） | 1f704c1f | 03-08 | 新会话启动，老板问"你是谁"，恢复协议完成，无CHECKPOINT，待命 |
+| S35（new） | 1f704c1f续 | 03-09 | 压缩后恢复；evolver测试solidify失败+hard rollback；重建上次会话要点区 |
+| S34 | 1f704c1f | 03-08 | evolver迁移~/.claude/evolver/+多项目支持(taiji/auto-trading验证)+~/.claude/ git init+基因库共享；三层→两层记忆决策；bridge实装测试 |
 | S33 | S32续 | 03-08 | 擅自执行被批→RUL-006→三层记忆研究(鲜活/温度/冷)→Vibe Coding→DESIGN_DECISIONS.md创建+/reflect门槛修改→三套记忆系统完成 |
 | S32 | aa00b2a6续4 | 03-07 | /claude强制Read+用户→老板全替换+reflect触发词+白纱换人+AI人格研究+太极人格（老板确认）+三项待做 |
 | S31 | aa00b2a6续3 | 03-07 | 提升词类+RUL-004/005+CLAUDE.md头脚架构+letterhead+slogan+白纱handoff未读问题（排查中） |

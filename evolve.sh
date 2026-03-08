@@ -1,33 +1,77 @@
 #!/bin/bash
-# 太极级 — 自进化启动脚本
+# 太极级 — 自进化启动脚本（Claude Code bridge）
 # 用法：
-#   bash ~/.claude/evolve.sh                          # 跑一次，生成 GEP prompt
-#   bash ~/.claude/evolve.sh auto-trading             # 指定项目（默认 auto-trading）
-#   EVOLVE_STRATEGY=repair-only bash ~/.claude/evolve.sh  # 只修bug
+#   bash ~/.claude/evolve.sh taiji        # 太极自进化
+#   bash ~/.claude/evolve.sh auto-trading # 项目进化
 
 set -e
 
-PROJECT="${1:-auto-trading}"
-PROJECT_DIR="/Users/allenbot/project/$PROJECT"
+PROJECT="${1:-}"
 EVOLVER_DIR="$HOME/.claude/tools/evolver"
 EVOLVER_WORKSPACE="$HOME/.claude/evolver"
 
-# 切到项目根目录（让 evolver 找到 .git 确认 repo root）
-cd "$PROJECT_DIR"
+if [ -z "$PROJECT" ]; then
+  echo "用法: bash ~/.claude/evolve.sh <project>"
+  echo "  project: taiji | auto-trading"
+  exit 1
+fi
 
-# 运行 evolver，workspace 在 ~/.claude/evolver/
+if [ "$PROJECT" = "taiji" ]; then
+  REPO_ROOT="$HOME/.claude"
+else
+  REPO_ROOT="$HOME/project/$PROJECT"
+fi
+
+cd "$REPO_ROOT"
+
+# ── Step 0: Pre-commit snapshot ─────────────────────────────────────────
+# 防止 rollback 把手动改的文件一起撤掉
+# git add -u 只 stage 已 tracked 文件的修改，不会意外提交敏感文件
+if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+  echo "📌 提交 pre-evolve snapshot..."
+  git add -u
+  git -c user.name="太极" -c user.email="taiji@claude.local" \
+    commit -m "pre-evolve snapshot $(date '+%Y-%m-%d %H:%M:%S')" || true
+fi
+
+# ── Step 1: 生成 GEP Prompt ─────────────────────────────────────────────
+echo "🧬 生成 GEP Prompt..."
 MEMORY_DIR="$EVOLVER_WORKSPACE" \
 OPENCLAW_WORKSPACE="$EVOLVER_WORKSPACE" \
-EVOLVER_REPO_ROOT="$PROJECT_DIR" \
+EVOLVER_REPO_ROOT="$REPO_ROOT" \
+EVOLVE_BRIDGE=false \
+EVOLVER_ROLLBACK_MODE=stash \
 node "$EVOLVER_DIR/index.js" run "${@:2}"
 
-# 输出最新 GEP prompt 路径
+# ── Step 2: 找最新 Prompt ─────────────────────────────────────────────
 LATEST=$(ls -t "$EVOLVER_WORKSPACE/evolution/gep_prompt_"*.txt 2>/dev/null | head -1)
-if [ -n "$LATEST" ]; then
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "GEP Prompt 已生成：$LATEST"
-  echo "黑丝用以下命令读取："
-  echo "  cat \"$LATEST\""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+if [ -z "$LATEST" ]; then
+  echo "❌ 未找到 GEP prompt 文件"
+  exit 1
 fi
+
+CYCLE=$(echo "$LATEST" | grep -oE 'Cycle_#([0-9]+)' | grep -oE '[0-9]+')
+RESPONSE_FILE="$EVOLVER_WORKSPACE/evolution/gep_response_Cycle_${CYCLE}.json"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "GEP Prompt: $LATEST"
+echo "Cycle: #${CYCLE}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# ── Step 3: Claude Code headless 执行 ────────────────────────────────
+echo "🤖 Claude Code 执行中..."
+cat "$LATEST" | env -u CLAUDECODE claude -p \
+  --allowedTools "Read,Write,Edit,Bash" \
+  > "$RESPONSE_FILE"
+
+# ── Step 4: Solidify ─────────────────────────────────────────────────
+echo "💾 Solidify..."
+MEMORY_DIR="$EVOLVER_WORKSPACE" \
+OPENCLAW_WORKSPACE="$EVOLVER_WORKSPACE" \
+EVOLVER_REPO_ROOT="$REPO_ROOT" \
+EVOLVER_ROLLBACK_MODE=stash \
+node "$EVOLVER_DIR/index.js" solidify
+
+echo ""
+echo "✅ 进化周期 #${CYCLE} 完成"
