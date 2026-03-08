@@ -18,8 +18,11 @@ fi
 
 if [ "$PROJECT" = "taiji" ]; then
   REPO_ROOT="$HOME/.claude"
+  SESSIONS_DIR="$HOME/.claude/projects/-Users-allenbot"
 else
   REPO_ROOT="$HOME/project/$PROJECT"
+  PROJECT_ENCODED=$(echo "$REPO_ROOT" | sed 's|/|-|g')
+  SESSIONS_DIR="$HOME/.claude/projects/${PROJECT_ENCODED}"
 fi
 
 cd "$REPO_ROOT"
@@ -42,6 +45,7 @@ PROMPT_FILE="$EVOLVER_WORKSPACE/evolution/gep_prompt_run_${TIMESTAMP}.txt"
 MEMORY_DIR="$EVOLVER_WORKSPACE" \
 OPENCLAW_WORKSPACE="$EVOLVER_WORKSPACE" \
 EVOLVER_REPO_ROOT="$REPO_ROOT" \
+AGENT_SESSIONS_DIR="$SESSIONS_DIR" \
 EVOLVE_BRIDGE=false \
 EVOLVER_ROLLBACK_MODE=stash \
 node "$EVOLVER_DIR/index.js" run "${@:2}" > "$PROMPT_FILE"
