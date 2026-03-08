@@ -1,0 +1,51 @@
+   530→                    "策略": strategy_name,
+   531→                    "杠杆": f"{leverage}x",
+   532→                    "余额": f"${balance:.2f}",
+   533→                    "持仓": str(adapter.get_positions()),
+   534→                }
+   535→
+   536→                show_continue = menu.show_status(status)
+   537→                if not show_continue:
+   538→                    adapter.disconnect()
+   539→                    return
+   540→
+   541→                # 运行交易
+   542→                if continuous:
+   543→                    stdscr.clear()
+   544→                    stdscr.addstr(0, 0, "持续运行中... 按 Esc 停止")
+   545→                    stdscr.refresh()
+   546→                    try:
+   547→                        system.run(interval_seconds=60)
+   548→                    except KeyboardInterrupt:
+   549→                        pass
+   550→                else:
+   551→                    result = system.run_once()
+   552→                    stdscr.clear()
+   553→                    stdscr.addstr(0, 0, f"信号: {result.get('signal', 'N/A')}")
+   554→                    stdscr.addstr(1, 0, f"操作: {result.get('action', 'N/A')}")
+   555→                    stdscr.addstr(2, 0, f"持仓: {result.get('position', 'N/A')}")
+   556→                    stdscr.addstr(3, 0, f"开仓价: {result.get('entry_price', 'N/A')}")
+   557→                    stdscr.addstr(5, 0, "按 Enter 返回菜单...")
+   558→                    stdscr.refresh()
+   559→                    while True:
+   560→                        key = stdscr.getch()
+   561→                        if key in [curses.KEY_ENTER, 10, 13]:
+   562→                            break
+   563→
+   564→                adapter.disconnect()
+   565→                break
+   566→
+   567→
+   568→if __name__ == "__main__":
+   569→    try:
+   570→        curses.wrapper(main)
+   571→    except Exception as e:
+   572→        print(f"错误: {e}")
+   573→        import traceback
+   574→        traceback.print_exc()
+   575→        input("按回车键退出...")
+   576→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

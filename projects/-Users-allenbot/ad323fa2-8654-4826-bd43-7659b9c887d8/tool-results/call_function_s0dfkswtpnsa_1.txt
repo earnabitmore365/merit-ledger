@@ -1,0 +1,33 @@
+<tool_use_error>String to replace not found in file.
+String:     def generate_signal(
+        self, coin: str, candles: List[Dict] = None
+    ) -> TradingSignal:
+        """Generate ATR Trailing Stop signal
+        
+        Args:
+            coin: Trading pair
+            candles: OHLCV data
+            
+        Returns:
+            TradingSignal with trailing stop analysis
+        """
+        # Validate candles
+        min_required = self.config.lookback
+        if not candles or len(candles) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=candles[-1]["time"] if candles else 0,
+                metadata={"reason": "Insufficient candles"},
+            )
+        
+        # Extract closes
+        closes = [c["close"] for c in candles]
+        current_price = closes[-1]
+        
+        # Calculate ATR
+        atr = self.calculate_atr(candles)
+        
+        # Calculate trailing stops
+        trail = self.calculate_trailing_stops(candles, atr)</tool_use_error>

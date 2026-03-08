@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""
+Momentum Slope Strategy
+
+Momentum direction + slope strength.
+Originally mislabeled as CMO — actual logic is slope-based, not Chande's formula.
+
+if/if chain fixed to proper if/elif.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class MomentumSlopeConfig:
+    short_period: int = 9
+    long_period: int = 20
+
+
+class MomentumSlope(Strategy):
+    """Momentum slope trading strategy"""
+
+    def __init__(self, exchange=None, config: Optional[MomentumSlopeConfig] = None):
+        self.exchange = exchange
+        self.config = config or MomentumSlopeConfig()
+
+    @property
+    def name(self) -> str:
+        return "momentum_slope"
+
+    def _momentum(self, prices: List[float]) -> float:
+        """Sum of ups minus downs over all prices (raw momentum)"""
+        ups = 0.0
+        downs = 0.0
+        for i in range(1, len(prices)):
+            change = prices[i] - prices[i - 1]
+            if change > 0:
+                ups += change
+            elif change < 0:
+                downs += abs(change)
+        total = ups + downs
+        if total == 0:
+            return 0.0
+        return (ups - downs) / total * 100
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        min_required = 30
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        prices = [c["close"] for c in klines]
+        mom = self._momentum(prices)
+        prev_mom = self._momentum(prices[:-1])
+
+        # Fixed if/elif chain (original had if/if/if-elif-else overwrite bug)
+        if prev_mom <= 0 and mom > 0:
+            signal = Signal.BUY
+            trend = "momentum_up"
+        elif prev_mom >= 0 and mom < 0:
+            signal = Signal.SELL
+            trend = "momentum_down"
+        elif mom > prev_mom and mom > 10:
+            signal = Signal.BUY
+            trend = "strengthening"
+        elif mom < prev_mom and mom < -10:
+            signal = Signal.SELL
+            trend = "weakening"
+        else:
+            signal = Signal.HOLD
+            trend = "neutral"
+
+        return TradingSignal(
+            signal=signal,
+            confidence=abs(mom) / 100,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "momentum": mom,
+                "prev_momentum": prev_mom,
+                "trend": trend,
+            },
+        )

@@ -1,0 +1,27 @@
+⏺ Step 2 + Step 3 可以一次跑完（Step 2 的结果直接喂给 Step 3）：
+
+⏺ Bash(python3 -u -c "
+      import sqlite3, time, json, bisect…)
+  ⎿  Step 2: 筛选无爆仓 combo...                   
+       30 / 2236 通过 (1.3%)    
+       过滤原因: 爆仓=338, 回撤>=80%=1835, 交易<30=33
+     … +22 lines (ctrl+o to expand)      
+  ⎿  (timeout 5m)                                                               
+                                   
+⏺ 问题：max_drawdown < 0.8 过滤太严了。                                         
+                                                            
+  - 2236 个 combo 中，1835 个（82%） 被 max_drawdown >= 80% 过滤掉
+  - 只剩 30 个通过，纯趋势段交叉后只剩 1~4 个合格 combo
+  - 结果基本不可用                                                              
+                                                                                
+  原因：max_drawdown 是全历史峰谷回撤。很多策略在某个 regime                    
+  下表现优秀，但在其他 regime 下亏损导致全程回撤很大。我们做的是 regime         
+  分段分析，全程回撤这个指标反而会误杀好策略。                                  
+                                                                                
+  建议：                                                                        
+                                                                                
+  1. 去掉 max_drawdown < 0.8，只保留 min_balance > 0（不爆仓）+ total_trades >=
+  30
+  2. 这样会有 2236 - 338 - 33 ≈ 1865 个 combo 进入下一步
+  3. regime 内的表现好坏由纯趋势段的 avg_r 来评判，不靠全程回撤
+

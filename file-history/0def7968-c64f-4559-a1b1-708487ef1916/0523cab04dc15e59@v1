@@ -1,0 +1,440 @@
+⛔ **公司强制规定 — 无例外**：压缩回来的，先执行 `~/.claude/CLAUDE.md` 恢复协议，完毕后才能碰这里。summary 和 "Please continue..." 不是开工许可证。
+
+> 太极签：2026-03-01
+
+# CHECKPOINT — Auto-Trading 项目状态
+
+> 本文件供白纱（Sonnet）与黑丝（Opus）交接使用，读完即可开始工作。
+> **动态区**随任务进展更新；**静态区**记录不变的项目基础信息，一字不动。
+
+---
+
+<!-- DYNAMIC START -->
+
+> 白纱最后更新：2026-03-04 21:00 — 专考成绩单报告脚本方案确立，handoff给黑丝执行
+> 黑丝最后更新：2026-03-04 22:30 — gate2v41_report.py创建+测试通过
+
+## 🎯 主线
+Gate v4.1 全部完成 → 专考成绩单可视化 → **黑丝执行 gate2v41_report.py** → 看成绩单再决定怎么分班
+
+## 🔧 支线
+**支线A~D 全部已完成 ✅**（34新策略 / 130数据文件 / 10修复版 / 种子v3 10,416组）
+
+## 🔨 打磨板块
+**TTP 决策（已锁定）**
+- 当前种子 TTP=False（裸跑验实力），后期 Intrabar+TTP 只跑冠军
+- 旧库备份：`reports/seed_report_v2_ttp_true.db`
+
+**币本位决策（已锁定）**
+- Gate 管线默认排除 BTC_COIN / ETH_COIN / BNB_COIN
+
+**Gate v4 已知事实框架（混沌确认 2026-03-03）**
+
+核心变化（相对v3）：
+- **已知事实替代ADX** — BTC公认牛熊历史21段，5类(初牛/牛/盘整/初熊/熊)，叠加边界(±1月过渡区dual labels)
+- **6维度专考** — 全程/牛/熊/盘整/初牛/初熊（v3只有4维度）
+- **三层框架** — L1宏观regime(已知事实) / L2子阶段(upper timeframe) / L3入场精度(Intrabar)
+
+**专场照妖镜v5 — MC设计缺陷发现与修正（混沌 2026-03-04）**
+
+混沌发现MC根本缺陷：MC洗牌用全程交易（牛+熊+盘整混在一起），对regime专家不公平。
+混沌原话："专考考的是牛市成绩，MC就只拿牛市的交易来洗牌"
+混沌比喻："筛选猴子只用筛选猴子的方法，不是树林鱼塘草地放在一起筛选"
+
+**15/15/14 三考场（混沌亲自设计）**：
+| 考场 | 子组 | 合计 |
+|------|------|------|
+| 牛场（猴子爬树）| 纯牛(6) + 牛&初牛(9) | **15** |
+| 盘整场（鱼儿游水）| 初牛&盘整(5) + 盘整&初熊(8) + 纯盘整(2) | **15** |
+| 熊场（兔子下坡）| 初熊&熊(10) + 纯熊(4) | **14** |
+
+**4种对比实测结果**（gate_mirror_v5.py，135个gate3候选）：
+| 方法 | Short | Mid | Long | 总计 |
+|------|-------|-----|------|------|
+| 不跑照妖镜 | 51 | 41 | 43 | **135** |
+| **专场WF（采用）** | **36** | **41** | **42** | **119** |
+| 专场MC（不用） | 9 | 25 | 40 | 74 |
+| WF+MC（不用） | 9 | 25 | 39 | 73 |
+
+核心发现：WF几乎不淘汰(135→119)，MC淘汰45%，WF+MC≈MC(73)。
+初牛/初熊单独测MC→短期队全灭(0通过)，MC统计量不够误杀专科高手。
+
+**最终决策**：混沌原话"所以还是MC淘汰人。。。那我们暂时专考不考MC，就这么定了"
+→ **专考照妖镜 = 只跑WF，不跑MC**
+→ 135→119，淘汰16个WF不一致的策略
+
+**OOS 80/20**：讨论过，留后面做。混沌原话："OOS，不要留到最后组队才用，现在跑前四"
+
+## ⬜ 当前步骤
+**黑丝执行：新建 gate2v41_report.py 专考成绩单查看脚本**
+
+已完成：
+- ✅ L1: BTC已知事实21段5类 + regime_fact_labels(89.5M) + Gate v4(49冠军)
+- ✅ L2: sub_phase_labels(69.4M, 7类子阶段) + Gate v4.1(86冠军)
+- ✅ 核心验证: 1m/5m 经 L1+L2 两层细分仍全军覆没
+- ✅ 专场照妖镜v5: 15/15/14三考场设计+4种对比实测+初牛初熊solo测试
+- ✅ **混沌决策：专考只跑WF不跑MC** → 135→119
+- ✅ Gate v4.1 报告补齐 — mirror_v5 结果写入DB(2新表) + README.md + 旧版删除
+- ✅ 专考设计哲学确立（混沌+白纱+黑丝三方讨论）
+
+**专考的正确理解（混沌确认）：**
+- 专考 = 全体摸底，每个策略的6状态完整成绩单（月考出成绩）
+- 不淘汰、不分班、不贴标签 — 看完成绩才知道擅长哪科
+- 6个状态：牛/熊/盘整/初牛/初熊/全程（全程=总分参考，不成班）
+- 4个指标：pnl / trades / win_rate / avg_r
+- trades 不设门槛（笔数是班级归属的信号，不是筛选条件）
+- 分班是下一步，不是现在
+
+**黑丝执行任务（已完成 ✅）：**
+
+`lab/gate2v41_report.py` 已创建并测试通过：
+- 读：`lab/results/gate_v41/gate_v41_report.db` → `gate2_1m` ~ `gate2_1d`（10张表合并）
+- 输出：每策略一张卡，6行（5状态+全程）× 4列，正PnL绿色/负PnL红色，insufficient⚠标记
+- 默认：全程pnl降序，显示前20名
+- 参数：`--top N` / `--sort 字段` / `--strategy` / `--coin` / `--interval` / `--all` / `--asc`
+- 只输出屏幕，不写DB（纯查看工具）
+
+下一步（报告跑出来后）：
+1. 看成绩单，决定怎么分班
+2. OOS 80/20
+3. Layer 3 Intrabar — 更远期
+
+**脚本文件**：
+```
+Gate v3: gate1_threshold.py / gate2_scorecard.py / gate_wf_all.py / gate3_team.py / gate_mc_all.py / run_gate.py
+Gate v4: regime_fact_timeline.py / gate2v4_scorecard.py / gate3v4_team.py / gate_mcv4.py / run_gate_v4.py
+Gate v4.1: sub_phase_labels.py / gate2v41_scorecard.py / gate3v41_team.py / gate_mcv41.py / run_gate_v41.py
+专场照妖镜: gate_mirror_v5.py（15/15/14三考场4种对比）
+```
+
+**报告文件**：
+- `lab/results/gate_v41/gate_v41_report.db` — **Gate v4.1 报告**（31张表/86冠军/13维度/含mirror_v5）
+- `lab/results/gate_v41/README.md` — 人看的报告目录（流程图+表说明+常用SQL）
+- ~~gate_v3/ gate_v4/~~ — 已删除（老板确认）
+
+**详见 lab/handoff.md 完整讨论记录（第七章专场照妖镜v5 / 第九章组考质疑 / 第十章白纱+混沌讨论 / 第十一章黑丝分班方案）**
+
+## 种子v3最终数据
+
+| 项目 | 数值 |
+|------|------|
+| 总组合 | **10,416**（理论10,920，缺504=MIN_KLINES跳过） |
+| 策略 | 84（86注册 - _base - adaptive） |
+| 币种 | 13（10合约 + 3币本位） |
+| 周期 | 10（1m/5m/15m/30m/1h/2h/4h/8h/12h/1d） |
+| 总交易 | **89,482,144 笔** |
+| TTP | False |
+| DB | 19.7 GB |
+| close_type | signal 89.1M / stop_loss 375K / end_of_data 9K |
+
+### verify_seed.py 验证结果（TTP=False）
+
+| 维度 | 结果 | 说明 |
+|------|------|------|
+| 维度1 重跑对比 | ✅ 5/5 全部一致 | 15项全部一致 |
+| 维度2 内部一致性 | ✅ | PnL差异3组（最大$0.04浮点精度） |
+| 维度3 逻辑合理性 | ✅ | holding_bars≤0 仅560/89M=0.0006% |
+| 维度4 Regime一致性 | ✅ 100/100 | |
+
+### 策略清单
+
+| 分类 | 数量 |
+|------|------|
+| 原有策略 | 41 |
+| 全新策略 | 34 |
+| _2yi 修复版 | 10 |
+| 跳过 | 2（_base + adaptive） |
+| **参与种子** | **84** |
+
+### Intrabar Simulation（后期规划）
+- 概念：1h策略信号 + 1m精度执行止损/TTP
+- 改动：backtest.py 加内层循环，约50~80行，策略接口不变
+- 性能：全量×10~20倍，但只对优胜策略跑可控
+- 路线：Gate选优胜 → 改backtest.py → 优胜策略跑TTP=True+Intrabar → 对比选实盘配置
+
+### 旧种子 Gate 结果（参考，基于旧种子2236组/TTP=True/4周期）
+
+| 周期 | 总R | WF通过 | MC翻倍 | MC d2d 95%CI | MC max_dd 95%CI |
+|------|-----|--------|--------|-------------|-----------------|
+| 1m | +26.76R / 1442笔 | 1/5 ❌ | 0.1% ❌ | — | 5.6~14.0% |
+| 5m | +73.07R / 1078笔 | 3/5 ⚠️ | 100% ✅ | 258~778笔 | 11.3~27.0% |
+| 15m | +89.07R / 528笔 | 3/5 ⚠️ | 100% ✅ | 125~297笔 | 6.9~16.2% |
+| **1h** | **+169.51R / 548笔** | **5/5 ✅** | **100% ✅** | **61~188笔** | **9.3~21.2%** |
+
+### 已知问题清单
+
+| # | 问题 | 严重度 | 状态 |
+|---|------|--------|------|
+| 1 | ~~regime 窗口没按周期分~~ | ~~⚠️~~ | ✅ 已修复 |
+| 2 | ~~新周期数据还没补~~ | ~~⚠️~~ | ✅ 已完成（支线B） |
+| 3 | 慢熊代表换了（advancedkline/SOL 取代 ccishort/ETH） | ℹ️ | 旧种子结论，新种子待重跑 |
+| 4 | ADX 没发挥作用（Wilder等价周期压缩） | ℹ️ | 待定 |
+| 5 | L1 投票分母（弃权是否算人头） | ℹ️ | 待定 |
+| 6 | AD 策略出现2次（疯牛 ad/SOL + 盘整 ad/LINK） | ℹ️ | 旧种子结论，新种子待重跑 |
+| 7 | 短周期（1m/5m/15m）全部无法通过 WF 5/5 | ⚠️ | 旧种子结论，新种子含6新周期待验证 |
+| 8 | Regime 轻微lookahead（窗口含当前K线close） | ℹ️ | 不改 |
+
+### 存档文件
+- `lab/reports/seed_v3.db` — **当前种子**（10,416组/89.5M笔/19.7GB/TTP=False + regime_fact_labels 89.5M + sub_phase_labels 69.4M）
+- `lab/results/gate_v41/gate_v41_report.db` — **Gate v4.1 报告**（26张表/86冠军/13维度/Layer 2子阶段）
+- `lab/results/gate_v4/gate_v4_report.db` — Gate v4 报告（26张表/49冠军/6维度/Layer 1）
+- `lab/results/gate_v3/gate_v3_report.db` — Gate v3 参考报告（27张表/36冠军/含WF）
+- `reports/seed_report_v2_ttp_true.db` — 旧种子备份（2,236组/TTP=True/9.8GB）
+
+## 任务历程
+
+1. ✅ 初始系统搭建 — v1.4，44策略、HyperLiquid适配器、回测引擎、curses UI
+2. ✅ UI 重构 — v1.5，BaseMenu组件库、trade_menu 7步流程、紧凑卡片面板
+3. ✅ 全矩阵回测 v1 — 1521份报告（复利注码），确定 proc+LINK+15m 为首选
+4. ✅ Regime Detection v1（MA+RSI）— 完成但效果不好，1680次切换/年
+5. ✅ Regime Detection v2 — ADX(28)+SMA(50)+ATR(14) 三层复合，273次/年，当过滤器非切换器
+6. ✅ 指标库 src/indicators/ — 12个指标（链上/市场/衍生品/情绪），MarketScore加权综合
+7. ✅ 全矩阵回测 v2 — 1720组（43策略×10币×4周期），固定注码
+8. ✅ 种子报告 v1 — 1720组/12.4M笔/2.17GB（被误删，教训：破坏性操作必须先问用户）
+9. ✅ v2 种子系统重建 — 35字段schema + $1固定注码(Van Tharp) + 断点续传(策略级) + 自动检测
+10. ✅ 数据下载全量完成 — 13币种 × 4周期 = 52组，零错误（含3个币本位）
+11. ✅ v2 种子生成全量完成 — 2236组 / 30,033,724笔 / 7.54GB，零失败
+12. ✅ verify_seed.py 验证通过 — 4维度全部通过，数据完整、真实、有效
+13. ✅ 行动 1+2：字段核实 + VACUUM — 字段全部正确，原文件已紧凑（1.3%压缩率），保留原文件
+14. ✅ 行动 3 Step 1-3：纯趋势段过滤(93K段/27.5M笔) + 无爆仓筛选(1859/2236) + 按d2d排序 → SOL胜出
+15. ✅ 行动 3 Step 4：SOL/1h 4条对比 — solo全归零，自动切换12天翻倍/$114K/55.6%DD/Sharpe+2.13
+16. ✅ 回测报告生成 — SOL 4份JSON（reports/backtest/），旧格式，完整资金链
+17. ✅ Step 5：SOL/1h 结果写入 investment_plan.md 第四节 + Phase1 策略更新
+18. ✅ BNB_COIN 专项分析 — Step3+Step4+4份报告，结论：自动切换不如accumulationdistribution独跑
+19. ✅ BNB_COIN Step5 — investment_plan.md 第四节第2层写入完成
+20. ✅ 交易系统开发 — 4个新文件(state.py/notifier.py/runner.py/run.py) + lab/.gitignore，语法+import全部通过
+21. ✅ 路A 策略优化 — 新配置(vpt/ad/renko)全量碾压旧配置，但 walk-forward OOS 崩盘(-46.6%)，过拟合，维持原配置
+22. ✅ 路B 暂停 — 第一层筛选出尖子生后再推进多币轮动
+23. ✅ 第一层筛选 — 照妖镜完成：105组直接候选→38通过 + 67组拆方向→21通过 = 59名尖子生入池
+24. ✅ 第二层加考 — 执行完成(20/20通过)，K折验证通过
+25. ✅ 融合方案锁定 — Bull:AD/XRP/1h + Bear:MR/XRP/5m + Ranging:MR/XRP/15m，太极数据核实100%对齐
+26. ✅ Regime两层检测系统 + 照妖镜 — 5维度(regime_5d)+3维度(regime_v2)双字段写入，Walk-Forward 5段全过
+27. ✅ 关卡二 — 5维度成绩单完成（1904组通过门槛→5考场TOP30输出，存lab/results/gate2_scorecard.json）
+28. ✅ 关卡三+四 — 白纱去重选15代表(排除币本位)→243队Walk-Forward(239/243全过)+冠军Monte Carlo(100%翻倍/d2d 62~192/max_dd 9.1%~20.2%)
+29. ✅ 修 regime 窗口 — price_change_pct 按周期分 + √时间阈值缩放 + regime_5d重算 + 4周期全量Gate2→4重跑，1h冠军稳定(4/5不变)，短周期仍不可靠
+30. ✅ investment_plan.md 写入第3层冠军队（草稿）— 1h 5人组，+169.51R/WF5/5/MC100%，待新种子Gate重跑后最终确认
+31. ✅ BNB_COIN 单币种验证 — 3人组/5人组均测试，结论：accumulationdistribution 跨 regime 牛熊通吃
+32. ✅ 全周期数据下载 — 130文件/13币×10周期全到位
+33. ✅ 差生策略修复 — lstm/cci删除，10个_2yi修复版，3个类名bug修复
+34. ✅ 种子v3全量生成 — 10,416组/84策略/89.5M笔/19.7GB/TTP=False
+35. ✅ 种子v3验证通过 — 4维度全部通过（重跑5/5一致、内部一致、逻辑合理、Regime 100/100）
+36. ✅ Gate v3 方案确认 — 白纱出方案，黑丝审阅接受，混沌批准执行
+37. ✅ Gate v3 四关执行完成 — 初考7231/8400→专考10份→组考Short16/Mid12/Long16→照妖镜25个冠军（Short3/Mid8/Long14），全部MC翻倍率100%/爆仓率0%
+38. ✅ Gate v3 审阅+方案确认 — 白纱审阅5大发现，混沌纠正流程顺序，全量报告方案确立（旧报告删除，新存 gate_v3/）
+39. ✅ Gate v3 全量报告重建（SQLite版）— 正确流程(初考→专考→WF全量→组考→MC)，36冠军(Short11/Mid11/Long14)，存 lab/results/gate_v3/gate_v3_report.db
+40. ✅ Gate v4 Layer 1 完成 — 已知事实21段5类regime + regime_fact_labels(89.5M标签) + 6维度专考 + 无WF组考 + MC → 49冠军(Short11/Mid18/Long20)，存 lab/results/gate_v4/gate_v4_report.db
+41. ✅ Gate v4.1 Layer 2 完成 — sub_phase_labels(69.4M/7类子阶段) + 13维度专考(6regime+7sub_phase) + 组考 + MC → **86冠军**(Short14/Mid31/Long41)，存 lab/results/gate_v41/gate_v41_report.db。**核心验证: 1m/5m仍全军覆没，子阶段细分无法救短周期**
+
+<!-- DYNAMIC END -->
+
+---
+
+## Gate 管线命名规范（永久）
+
+> ⛔ 静态区，任何 AI 不得修改。完整规范同步写入 `MEMORY.md → Gate 管线命名规范`
+
+**关卡名称（混沌定）**：初考（门槛）/ 专考（成绩单）/ 组考（组队）/ 照妥镜（WF+MC）
+
+**输出文件命名**（统一 `gate{N}_` 前缀，存放 `lab/results/`）：
+```
+gate1.json                     ← 初考（门槛）
+gate2_{interval}.json × 10     ← 专考（成绩单），如 gate2_1h.json
+gate2_summary.json             ← 专考汇总
+gate3_short/mid/long.json      ← 组考（组队）
+gate4_wf_short/mid/long.json   ← 照妥镜 WF
+gate4_mc_short/mid/long.json   ← 照妥镜 MC
+champion_v3.json               ← 冠军队
+```
+
+**汇报规范**：向混沌汇报时必须用关卡名+人话 → 再跟文件名
+例：「专考（成绩单）1h 完成 → gate2_1h.json」
+
+**脚本文件**（`lab/` 根目录）：
+`gate1_threshold.py / gate2_scorecard.py / gate3_team.py / gate4_mirror.py / run_gate.py`
+
+---
+
+## 当前状态（参考）
+
+### 种子数据库：reports/seed_report.db
+- **规模**：2236 组 combo | 30,033,724 笔 paired_trades | 21,723,330 条 regime_timeline | 7.54 GB
+- **覆盖**：13 币种（10 合约 + 3 币本位）× 4 周期（1m/5m/15m/1h）× 43 策略
+- **验证结果**（verify_seed.py，02-28 黑丝已跑）：
+
+| 维度 | 结果 |
+|------|------|
+| 维度1 重跑对比（5组随机） | ✅ 5/5，15项全部一致 |
+| 维度2 内部一致性（2236组） | ✅ 胜率2236/2236；PnL 19/20（1组差$0.01浮点精度） |
+| 维度3 逻辑合理性（30M行） | ✅ MFE/MAE/fee/direction/price/NULL全部通过；holding_bars≤0仅68笔（0.00023%） |
+| 维度4 Regime一致性 | ✅ 100/100通过 |
+
+- **平仓类型分布**：signal 28.6M / ttp 1.28M / stop_loss 92K / end_of_data 1.6K
+
+### K线数据：src/backtest/data/historical/
+
+全部 52 组到位，零错误：
+
+| 币种 | 1m | 5m | 15m | 1h |
+|------|-----|-----|------|-----|
+| BTC | ✅1,052K | ✅420K | ✅140K | ✅70K |
+| ETH | ✅1,052K | ✅420K | ✅140K | ✅70K |
+| XRP | ✅1,052K | ✅420K | ✅140K | ✅68.5K |
+| BNB | ✅1,052K | ✅420K | ✅140K | ✅70K |
+| SOL | ✅1,052K | ✅420K | ✅140K | ✅48.6K |
+| ADA | ✅1,052K | ✅420K | ✅140K | ✅68.9K |
+| TRX | ✅1,052K | ✅420K | ✅140K | ✅67.5K |
+| AVAX | ✅1,052K | ✅420K | ✅140K | ✅47.6K |
+| LINK | ✅1,052K | ✅420K | ✅140K | ✅62.3K |
+| DOT | ✅1,052K | ✅420K | ✅140K | ✅48.4K |
+| BTC_COIN | ✅1,052K | ✅420K | ✅140K | ✅48.6K |
+| ETH_COIN | ✅1,052K | ✅420K | ✅140K | ✅48.5K |
+| BNB_COIN | ✅1,052K | ✅420K | ✅140K | ✅48.4K |
+
+---
+
+## 已知限制（非 bug，记录在案）
+
+| 限制 | 说明 | 影响 |
+|------|------|------|
+| Regime 轻微 lookahead | window 包含当前 K 线 close，严格应只用前根 | ADX/SMA 本身滞后，实际影响极小 |
+| MFE/MAE 单位 | 存的是"(high-entry)/entry × leverage"比率，不是美元 | 分析时注意单位，不是 bug |
+| signal_close_count 含 end_of_data | end_of_data 仅 1.6K / 30M = 0.005% | 可忽略 |
+| max_daily_dd 定义 | 最差单日 PnL，非标准峰谷回撤 % | 有参考价值，但定义与标准不同 |
+| CAGR 计算 | 用 K 线数推算天数，有 gap 时略偏高 | 5m gap 16根、1h gap ≤25根，影响极小 |
+
+---
+
+## v2 种子数据库 Schema（完整版）
+
+```sql
+-- 汇总表（35字段）
+CREATE TABLE combo_summary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy TEXT, coin TEXT, interval TEXT,
+    total_return REAL, final_balance REAL, max_drawdown REAL,
+    sharpe_ratio REAL, sortino_ratio REAL, calmar_ratio REAL,
+    total_trades INTEGER, winning_trades INTEGER, losing_trades INTEGER, win_rate REAL,
+    avg_win_pct REAL, avg_loss_pct REAL, profit_factor REAL,
+    ttp_count INTEGER, double_count INTEGER, fastest_double_days REAL, avg_double_days REAL,
+    daily_open_positions REAL,
+    cagr REAL, max_daily_dd REAL, reward_risk REAL, max_consec_loss_amt REAL, total_fees REAL,
+    max_balance REAL, min_balance REAL, max_win REAL, max_loss REAL,
+    expectancy_ratio REAL, longest_win_streak INTEGER, longest_loss_streak INTEGER,
+    signal_close_count INTEGER
+);
+
+-- 配对交易表（24字段）
+CREATE TABLE paired_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    combo_id INTEGER REFERENCES combo_summary(id),
+    open_candle_idx INTEGER, close_candle_idx INTEGER,
+    open_time TEXT, close_time TEXT, holding_bars INTEGER,
+    direction TEXT, entry_price REAL, exit_price REAL,
+    capital REAL, position_size REAL,
+    pnl REAL, r_value REAL, balance_after REAL,
+    close_type TEXT,           -- signal / ttp / stop_loss / liquidation / end_of_data
+    regime_at_open TEXT,       -- bull / bear / ranging / unknown
+    fee REAL, funding_cost REAL, slippage_cost REAL,
+    mfe REAL, mae REAL,        -- 杠杆后比率，非美元
+    open_atr_pct REAL, open_volume REAL, funding_count INTEGER
+);
+
+-- Regime 时间线（每根K线）
+CREATE TABLE regime_timeline (
+    coin TEXT, interval TEXT, candle_idx INTEGER,
+    candle_time_ms INTEGER, regime TEXT, adx REAL, sma_direction TEXT
+);
+
+-- 运行元数据
+CREATE TABLE run_metadata (key TEXT PRIMARY KEY, value TEXT);
+
+-- 索引
+CREATE INDEX idx_pt_combo ON paired_trades(combo_id);
+CREATE INDEX idx_pt_regime ON paired_trades(regime_at_open);
+CREATE UNIQUE INDEX idx_rt ON regime_timeline(coin, interval, candle_idx);
+CREATE UNIQUE INDEX idx_cs ON combo_summary(strategy, coin, interval);
+```
+
+---
+
+## 关键文件
+
+| 文件 | 说明 | 状态 |
+|------|------|------|
+| `src/backtest/backtest.py` | 回测引擎，含 BacktestResult dataclass | ✅ v2 完成 |
+| `src/backtest/generate_seed.py` | 种子生成脚本 | ✅ v2 完成，35字段+自动检测+argparse+断点续传 |
+| `src/backtest/verify_seed.py` | 4维度验证脚本 | ✅ 已运行，验证通过 |
+| `download_latest_coins_2.0.py` | 数据下载脚本 | ✅ 断点续传+双交易所(spot+delivery) |
+| `reports/seed_report.db` | 种子数据库 | ✅ 7.54GB，字段核实通过，VACUUM 确认无碎片 |
+| `src/backtest/data/historical/` | K 线数据 | ✅ 52组全部完成 |
+| `run_full_matrix.py` | 旧全矩阵回测 | ❌ 已删除，被 generate_seed.py 替代 |
+| `src/indicators/` | 12个市场指标 | ✅ 完成 |
+| `src/trading/regime/` | Regime v2（ADX三层） | ✅ 完成 |
+
+---
+
+## 回测参数（种子生成时的固定值）
+
+| 参数 | 值 | 说明 |
+|------|----|------|
+| DAYS | 0 | 全量数据，不截取 |
+| INITIAL_CAPITAL | $500 | 初始本金（Van Tharp 标准化基准） |
+| LEVERAGE | 10x | |
+| STOP_LOSS_PCT | 10% | 逐仓止损，回测与实盘等价 |
+| ENABLE_TTP | True | 追踪止盈开启 |
+| FIXED_BET | True | $1 固定注码，PnL = R值 |
+| FEE_RATE | 0.035%/侧 | HyperLiquid taker 费 |
+| SLIPPAGE_PCT | 0.02%/侧 | |
+| FUNDING_RATE_8H | 0.01%/8h | |
+
+---
+
+## 设计原则（用户反复强调，违反会被骂）
+
+- **完整性、真实性、有效性** — 唯一标准，没有"差不多就行"
+- **不写死任何配置** — 币种、周期、策略全部自动识别（扫目录，不写死列表）
+- **改代码必须先说，等用户确认再动** — 这条违反过多次，用户非常在意
+- **不隐瞒遗漏** — 跳过了什么、省略了什么，必须主动报告
+- **用户持有 BNB 现货** — 币本位合约交易是实际需求，数据必须完整
+- **报告验证原则** — 报告格式必须让用户自己能对得上数（开仓balance+pnl=平仓balance，平仓balance=下笔开仓balance）
+
+---
+
+## 项目基本信息
+
+- 路径：`/Users/allenbot/project/auto-trading`
+- 版本：v1.8
+- 语言：Python 3.11+，中文注释和 UI，macOS 上用 `python3`
+- GitHub：`earnabitmore365/auto-trading` (private)
+- 数据路径：`src/backtest/data/historical/{COIN}/{interval}.json`
+- 协作模式：白纱(Sonnet)出方案 → 黑丝(Opus)执行，用户确认后再动
+
+---
+
+## AI Sandbox — lab/
+
+**位置**：`/Users/allenbot/project/auto-trading/lab/`（不上传，已加 .gitignore）
+
+**结构**：
+```
+lab/
+├── src/          # 原系统 src/ 的完整副本（1.9MB）
+│   └── backtest/data → ../../src/backtest/data  # 软链接，共享原系统数据
+└── .env          # 从原系统复制（测试网配置）
+```
+
+**用途**：AI 自主开发/实验专用环境
+- 白纱 + 黑丝可以在这里随便修改、测试，不影响原系统
+- 策略开发、参数调试、新功能实验全部在 lab/ 进行
+- 输出（报告、数据库）写到 `lab/reports/`，不污染原系统
+- 完成后由用户决定是否覆盖回原系统
+
+**工作流**：
+```
+lab/ 开发 → 测试通过 → 汇报用户 → 用户确认 → 覆盖回 src/
+```
+
+**注意**：
+- K 线数据通过软链接共享，lab 和原系统读的是同一份数据
+- `.env` 是测试网配置，实盘操作不在 lab 进行
+- 核心系统改动（回测引擎、交易系统）仍需用户确认；策略层可 AI 自主执行

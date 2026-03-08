@@ -1,0 +1,4 @@
+WebSocket 连接关闭: sent 1000 (OK); no close frame received
+WebSocket 实例: <HyperLiquidWebSocket: 已连接>
+WebSocket 连接状态: True
+WebSocket 获取 ETH 价格: 1826.7

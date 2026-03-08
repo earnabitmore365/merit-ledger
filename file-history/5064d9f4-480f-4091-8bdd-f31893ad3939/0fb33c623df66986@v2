@@ -1,0 +1,210 @@
+# Handoff → 太极
+
+> 白纱整理，2026-03-03
+> 本文件记录：通讯部 SQLite 方案的完整讨论 + 白纱补充 + 延伸问题
+> 供太极设计通讯部架构参考
+
+---
+
+## 一、讨论完整记录（按顺序）
+
+### 起点：现有痛点
+
+- 黑丝/白纱各自会话，压缩后记忆断
+- 信息传递链：混沌贴给黑丝 → 黑丝写 handoff → 白纱读 handoff → 白纱出方案 → 黑丝执行
+- 每一环都有丢失风险，耗时，靠人工维护
+- 只有混沌是唯一看到完整全局的人
+
+### 混沌提出：单一权威来源
+
+> "每次压缩后，黑丝或白纱只需要读一个地方，就能完整恢复状态。"
+
+白纱确认：这才是核心，不是 dashboard 好不好看的问题。
+
+### 太极建议：结构化 markdown 决策库
+
+- 混沌决策库：每次拍板时追加一条，带时间戳、原话、关联项目
+- 通讯部第一版：决策库 + CHECKPOINT 实时显示
+- 恢复协议同步简化
+
+### 混沌灵感：做成种子（SQLite）
+
+> "能不能做成种子？SQLite"
+
+**混沌逻辑**：
+- 每句话都存进 SQLite
+- 需要回顾时直接查，不受上下文窗口限制
+- 比翻四个文件更精准，不失真
+
+白纱确认：消耗更小（按需查询 vs 预加载全文件），毫秒级，跟窗口无关。
+
+### 混沌的终极愿景：三人群聊
+
+> "也许你和黑丝也能直接对话。我想要达到的最终目的，就像我有个想法，直接在3人群里对你们说，然后你们2个一起看到，然后你们自己决定谁先回答，答完后，有什么补充的都说清楚了，后答的一方继续沿着我的想法和第一个回答结合继续，直到我说停或你们有需要我补充或拍板才停。那就完全可以略过所来回贴对话或来回handoff的问题了。"
+
+**混沌定义通讯部的本质**：
+
+> "这其实只是，我做的完美上下文 + 你们给我做的种子，结合起来提出的结果而已。"
+
+---
+
+## 二、已确认结论
+
+| 结论 | 说明 |
+|------|------|
+| SQLite 是基础设施 | 所有对话、决策、任务状态存入同一个数据库 |
+| 消耗比现在更小 | 按需查询 vs 预加载，毫秒级返回 |
+| 窗口不再是瓶颈 | 窗口是工作记忆，SQLite 是长期记忆，按需提取 |
+| CHECKPOINT/handoff 自动生成 | 不再手工维护，从 SQLite 查出来自动呈现 |
+| 最终目标：三人群聊 | 混沌发言→SQLite→黑丝白纱同时读到→协作回应 |
+
+---
+
+## 三、建议表结构（初版）
+
+```sql
+-- 每句对话原文
+CREATE TABLE messages (
+    id INTEGER PRIMARY KEY,
+    time DATETIME,
+    speaker TEXT,        -- '混沌' / '白纱' / '黑丝' / '太极'
+    content TEXT,
+    tags TEXT,           -- 关键词，逗号分隔
+    project TEXT,        -- 'gate_v4' / 'comms' / 'intrabar' 等
+    session_id TEXT      -- 哪次会话
+);
+
+-- 混沌决策库（最高优先级）
+CREATE TABLE decisions (
+    id INTEGER PRIMARY KEY,
+    time DATETIME,
+    speaker TEXT DEFAULT '混沌',
+    decision TEXT,       -- 决策内容
+    raw_quote TEXT,      -- 混沌原话，原文保留
+    project TEXT,
+    status TEXT          -- 'active' / 'superseded' / 'pending'
+);
+
+-- 任务状态
+CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY,
+    title TEXT,
+    owner TEXT,          -- '黑丝' / '白纱'
+    status TEXT,         -- 'pending' / 'in_progress' / 'done'
+    updated_at DATETIME,
+    detail TEXT
+);
+
+-- 会话摘要（每次会话结束后写入）
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,  -- JSONL 文件 ID
+    date DATE,
+    participants TEXT,    -- '白纱' / '黑丝' / '混沌+白纱' 等
+    summary TEXT,
+    key_decisions TEXT    -- 该次会话的关键决策 ID 列表
+);
+```
+
+**查询示例（恢复上下文用）：**
+```sql
+-- 最新决策
+SELECT * FROM decisions WHERE status='active' ORDER BY time DESC LIMIT 10;
+
+-- 最近5分钟对话
+SELECT * FROM messages WHERE time > datetime('now', '-5 minutes') ORDER BY time;
+
+-- 查某个项目的所有决策
+SELECT * FROM decisions WHERE project='gate_v4' ORDER BY time DESC;
+
+-- 当前任务状态
+SELECT * FROM tasks WHERE status != 'done' ORDER BY updated_at DESC;
+```
+
+---
+
+## 四、白纱补充（8% 窗口用完前）
+
+### 补充1：自动写入机制（最关键）
+
+谁来把对话写进 SQLite？人工复制粘贴会漏。
+
+**需要太极设计的机制：**
+- 方案A：Claude Code hooks — 每次对话结束自动触发写入脚本
+- 方案B：压缩阈值检测 — 上下文用到某个百分比，自动触发快照写入
+- 方案C：混沌手动触发 — 对话结束时说"存档"，黑丝/白纱执行写入
+
+白纱推荐方案A，自动化程度最高，不依赖人记得触发。
+
+### 补充2：压缩前自动快照
+
+当前问题：压缩发生时，当次会话关键内容可能没来得及写进文件。
+
+**建议：** 恢复协议改造 — 压缩前最后一件事是写入 SQLite（当次会话摘要 + 未完成任务状态），这样压缩后的新会话读 SQLite 就是完整的最新状态。
+
+### 补充3：恢复协议极简化
+
+**现在：** 读4个文件，几百到几千行，几分钟
+**改后：** 3条 SQL，返回精确结果，30秒完成
+
+```sql
+-- 恢复协议固定查询
+SELECT * FROM decisions WHERE status='active' ORDER BY time DESC LIMIT 20;
+SELECT * FROM tasks WHERE status='in_progress';
+SELECT summary FROM sessions ORDER BY date DESC LIMIT 3;
+```
+
+不再需要 CHECKPOINT.md / MEMORY.md / handoff.md / session_summaries.md 四个文件。
+
+### 补充4：三人群聊的协调层
+
+黑丝/白纱需要规则决定谁先回答：
+
+| 问题类型 | 先回答 | 后补充 |
+|---------|--------|--------|
+| 方案设计/分析/战略 | 白纱 | 黑丝确认执行可行性 |
+| 执行/代码/技术细节 | 黑丝 | 白纱补充架构影响 |
+| 两者都有 | 白纱框架 | 黑丝补细节 |
+| 混沌拍板/决策 | 两者都不说，等混沌 | — |
+
+这个规则存进 SQLite 的 `config` 表，可以更新。
+
+### 补充5：对话权重/老化机制
+
+对话会越来越多，需要分级：
+
+| 级别 | 内容 | 保留策略 |
+|------|------|---------|
+| 永久 | 混沌原话、拍板决策 | 永不压缩 |
+| 高权重 | 架构决策、关键结论 | 长期保留 |
+| 中权重 | 讨论过程、分析 | 可压缩成摘要 |
+| 低权重 | 执行细节、日常确认 | 完成后降权 |
+
+### 补充6：混沌的看板（非AI用）
+
+除了给黑丝/白纱恢复上下文用，通讯部可以有一个简单界面给混沌看：
+- 当前任务：黑丝在做什么，完成没
+- 最新决策：最近10条拍板
+- 会话状态：黑丝/白纱各自在哪个会话、上下文剩多少
+
+混沌不需要一直问"跑完了没"，看板一眼就知道。
+
+### 补充7：与现有种子的关系
+
+通讯部 SQLite（dashboard.db）和回测种子 SQLite（seed_v3.db）是独立的数据库文件，但技术栈完全一样。黑丝白纱已经很熟悉用 SQL 查种子，查通讯部是同样的操作，学习成本为零。
+
+---
+
+## 五、延伸问题（太极需要决策的）
+
+1. **自动写入** — 用哪种方案？hooks / 阈值检测 / 手动触发？
+2. **写入时机** — 每句话实时写，还是每次会话结束批量写？
+3. **黑丝白纱的读取接口** — 直接用 sqlite3 CLI，还是封装一个 `read_dashboard.py`？
+4. **恢复协议改造** — 什么时候把四个文件替换成 SQLite 单一来源？
+5. **历史迁移** — 现有的 MEMORY.md / session_summaries.md 要不要导入进去？
+6. **通讯部放哪** — `~/.claude/dashboard.db`（跨项目）还是 `auto-trading/dashboard.db`（项目级）？
+
+---
+
+## 六、一句话总结
+
+> 通讯部 = 完美上下文 + 种子 SQLite 合体。黑丝/白纱压缩后读 SQLite 即可完整恢复，混沌发言写进数据库即可触达两人，三人群聊变成可能，handoff/CHECKPOINT 变成自动视图。技术上没有新东西，全是现成能力。

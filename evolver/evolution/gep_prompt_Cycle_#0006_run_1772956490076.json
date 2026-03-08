@@ -1,0 +1,15 @@
+{
+  "type": "GepPromptArtifact",
+  "at": "2026-03-08T07:54:50.114Z",
+  "cycle_id": "Cycle #0006",
+  "run_id": "run_1772956490076",
+  "prompt_path": "/Users/allenbot/.claude/evolver/evolution/gep_prompt_Cycle_#0006_run_1772956490076.txt",
+  "meta": {
+    "agent": "main",
+    "drift_enabled": false,
+    "review_mode": false,
+    "dry_run": false,
+    "mutation_id": "mut_1772956490075",
+    "personality_key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.4|obedience=0.9"
+  }
+}

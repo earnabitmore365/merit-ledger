@@ -1,0 +1,448 @@
+#!/usr/bin/env python3
+"""
+第二层加考 — validate_layer2.py
+
+Step 1: 从 champions_layer1.json 取 OOS avg_r 前20名
+Step 2: 时间序列K折加考（>=5年切5段 / 3~5年切4段 / <3年切3段）
+        通过标准: n-1/n 段 avg_r > 0
+Step 3: 通过的按 regime_at_open 标注各 regime 下 avg_r
+Step 4: bull/bear/ranging 各挑最强策略组队
+
+输出:
+  lab/results/champions_layer2.json — 真学霸名单 + regime标注
+  lab/results/regime_team.json — 实盘组队配置
+"""
+
+import sqlite3
+import os
+import json
+import statistics
+from datetime import datetime
+
+DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'reports', 'seed_report.db'
+)
+LAYER1_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'results', 'champions_layer1.json'
+)
+
+TOP_N = 20
+EXCLUDE_COINS = ('BTC_COIN', 'ETH_COIN', 'BNB_COIN')
+
+
+# ══════════════════════════════════════════════════════════════
+#  数据查询
+# ══════════════════════════════════════════════════════════════
+
+def get_combo_id(db_path, strategy, coin, interval):
+    """查 combo_id"""
+    conn = sqlite3.connect(db_path)
+    row = conn.execute("""
+        SELECT id FROM combo_summary
+        WHERE strategy = ? AND coin = ? AND interval = ?
+    """, (strategy, coin, interval)).fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def get_trades_with_time(db_path, combo_id, direction_filter=None):
+    """获取交易（含 open_time 用于计算时间跨度）"""
+    conn = sqlite3.connect(db_path)
+    if direction_filter:
+        rows = conn.execute("""
+            SELECT open_candle_idx, r_value, open_time, regime_at_open
+            FROM paired_trades
+            WHERE combo_id = ? AND LOWER(direction) = LOWER(?)
+            ORDER BY open_candle_idx
+        """, (combo_id, direction_filter)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT open_candle_idx, r_value, open_time, regime_at_open
+            FROM paired_trades
+            WHERE combo_id = ?
+            ORDER BY open_candle_idx
+        """, (combo_id,)).fetchall()
+    conn.close()
+    return rows
+
+
+def calc_time_span_years(trades):
+    """从 open_time 计算时间跨度（年）"""
+    if len(trades) < 2:
+        return 0
+    first_time = trades[0][2]   # open_time string
+    last_time = trades[-1][2]
+    # open_time 格式: "YYYY-MM-DD HH:MM" 或 ISO 格式
+    try:
+        from datetime import datetime as dt
+        t1 = dt.fromisoformat(first_time.replace('Z', '+00:00')) if 'T' in first_time else dt.strptime(first_time, '%Y-%m-%d %H:%M')
+        t2 = dt.fromisoformat(last_time.replace('Z', '+00:00')) if 'T' in last_time else dt.strptime(last_time, '%Y-%m-%d %H:%M')
+        days = (t2 - t1).total_seconds() / 86400
+        return days / 365.25
+    except Exception:
+        return 0
+
+
+# ══════════════════════════════════════════════════════════════
+#  Step 2: 时间序列K折加考
+# ══════════════════════════════════════════════════════════════
+
+def time_series_kfold(trades, n_folds):
+    """
+    按交易数量均分成 n_folds 段（保持时间顺序）
+    返回每段的 avg_r
+    """
+    if len(trades) < n_folds * 5:  # 每段至少5笔
+        return None
+
+    fold_size = len(trades) // n_folds
+    folds = []
+
+    for i in range(n_folds):
+        start = i * fold_size
+        end = start + fold_size if i < n_folds - 1 else len(trades)
+        fold_trades = trades[start:end]
+        r_values = [t[1] for t in fold_trades]
+        avg_r = statistics.mean(r_values) if r_values else 0
+        folds.append({
+            'fold': i + 1,
+            'trades': len(fold_trades),
+            'avg_r': round(avg_r, 4),
+            'first_time': fold_trades[0][2] if fold_trades else '',
+            'last_time': fold_trades[-1][2] if fold_trades else '',
+        })
+
+    return folds
+
+
+def check_kfold_pass(folds, n_folds):
+    """n-1/n 段 avg_r > 0 才通过"""
+    if not folds:
+        return False, 0
+    positive_count = sum(1 for f in folds if f['avg_r'] > 0)
+    required = n_folds - 1
+    return positive_count >= required, positive_count
+
+
+# ══════════════════════════════════════════════════════════════
+#  Step 3: Regime 标注
+# ══════════════════════════════════════════════════════════════
+
+def regime_breakdown(trades):
+    """按 regime_at_open 分组统计"""
+    regime_data = {}
+    for t in trades:
+        regime = t[3]  # regime_at_open
+        if regime in ('unknown', None, ''):
+            continue
+        if regime not in regime_data:
+            regime_data[regime] = []
+        regime_data[regime].append(t[1])  # r_value
+
+    results = {}
+    for regime, r_values in regime_data.items():
+        if len(r_values) < 10:  # 过滤 trade_count < 10
+            continue
+        results[regime] = {
+            'avg_r': round(statistics.mean(r_values), 4),
+            'trades': len(r_values),
+            'total_r': round(sum(r_values), 2),
+        }
+
+    return results
+
+
+# ══════════════════════════════════════════════════════════════
+#  主流程
+# ══════════════════════════════════════════════════════════════
+
+def main():
+    if not os.path.exists(DB_PATH):
+        print(f"数据库不存在: {DB_PATH}")
+        return
+
+    if not os.path.exists(LAYER1_PATH):
+        print(f"第一层结果不存在: {LAYER1_PATH}")
+        return
+
+    # 读取第一层结果
+    with open(LAYER1_PATH, 'r', encoding='utf-8') as f:
+        layer1 = json.load(f)
+
+    champions = layer1['champions']
+    print(f"第一层尖子生: {len(champions)} 名")
+
+    # ══════════ Step 1: 取前20名 ══════════
+
+    # 已按 oos_avg_r DESC 排序，取前 TOP_N
+    top_n = champions[:TOP_N]
+
+    # 去重: AD 和 CMF 完全重合的情况（同 coin/interval 的 AD 和 CMF 数据一样）
+    seen = set()
+    deduped = []
+    for c in top_n:
+        key = (c['coin'], c['interval'], c.get('direction_filter', ''),
+               str(c['oos_avg_r']), str(c['avg_r']), str(c['total_trades']))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(c)
+        else:
+            print(f"  去重: {c['strategy']} {c['coin']}/{c['interval']} (与前面完全重复)")
+
+    # 如果去重后不足20，从后面补
+    idx = TOP_N
+    while len(deduped) < TOP_N and idx < len(champions):
+        c = champions[idx]
+        key = (c['coin'], c['interval'], c.get('direction_filter', ''),
+               str(c['oos_avg_r']), str(c['avg_r']), str(c['total_trades']))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(c)
+        idx += 1
+
+    print(f"\n{'#'*70}")
+    print(f"  Step 1: OOS avg_r 前 {len(deduped)} 名（去重后）")
+    print(f"{'#'*70}")
+
+    for i, c in enumerate(deduped):
+        d = c.get('direction_filter', '—')
+        print(f"  {i+1:>2}. {c['strategy']:<28} {c['coin']:<6} {c['interval']:<5} "
+              f"{d:<8} oos_r={c['oos_avg_r']:.4f} trades={c['total_trades']}")
+
+    # ══════════ Step 2: 时间序列K折加考 ══════════
+
+    print(f"\n{'#'*70}")
+    print(f"  Step 2: 时间序列K折加考")
+    print(f"{'#'*70}")
+
+    layer2_passed = []
+    layer2_failed = []
+
+    for i, c in enumerate(deduped):
+        strategy = c['strategy']
+        coin = c['coin']
+        interval = c['interval']
+        direction_filter = c.get('direction_filter')
+
+        # 查 combo_id
+        combo_id = get_combo_id(DB_PATH, strategy, coin, interval)
+        if combo_id is None:
+            print(f"  {i+1}. {strategy} {coin}/{interval} — combo_id 找不到，跳过")
+            continue
+
+        # 获取交易
+        trades = get_trades_with_time(DB_PATH, combo_id, direction_filter)
+        if len(trades) < 15:
+            print(f"  {i+1}. {strategy} {coin}/{interval} — 交易太少({len(trades)}笔)，跳过")
+            continue
+
+        # 计算时间跨度
+        years = calc_time_span_years(trades)
+
+        # 决定切段数
+        if years >= 5:
+            n_folds = 5
+        elif years >= 3:
+            n_folds = 4
+        else:
+            n_folds = 3
+
+        # K折
+        folds = time_series_kfold(trades, n_folds)
+        if folds is None:
+            print(f"  {i+1}. {strategy} {coin}/{interval} — 数据不足以切{n_folds}段，跳过")
+            continue
+
+        passed, positive_count = check_kfold_pass(folds, n_folds)
+
+        # Regime 标注
+        regime_stats = regime_breakdown(trades)
+
+        # 找最强 regime
+        best_regime = None
+        best_regime_avg_r = -999
+        for regime, stats in regime_stats.items():
+            if stats['avg_r'] > best_regime_avg_r:
+                best_regime_avg_r = stats['avg_r']
+                best_regime = regime
+
+        status = "✅ 通过" if passed else "❌ 未通过"
+        fold_detail = " / ".join([f"F{f['fold']}:{f['avg_r']:+.4f}" for f in folds])
+        print(f"  {i+1:>2}. {strategy:<28} {coin:<6} {interval:<5} "
+              f"{years:.1f}年 切{n_folds}段 [{positive_count}/{n_folds}] {status}")
+        print(f"      {fold_detail}")
+
+        entry = {
+            'strategy': strategy,
+            'coin': coin,
+            'interval': interval,
+            'avg_r': c['avg_r'],
+            'oos_avg_r': c['oos_avg_r'],
+            'total_trades': len(trades),
+            'sharpe': c.get('sharpe', 0),
+            'win_rate': c.get('win_rate', 0),
+            'max_drawdown': c.get('max_drawdown', 0),
+            'years': round(years, 1),
+            'n_folds': n_folds,
+            'folds': folds,
+            'positive_folds': positive_count,
+            'kfold_pass': passed,
+            'regime_stats': regime_stats,
+            'best_regime': best_regime,
+            'best_regime_avg_r': round(best_regime_avg_r, 4) if best_regime else None,
+        }
+
+        if direction_filter:
+            entry['direction_filter'] = direction_filter
+
+        if passed:
+            layer2_passed.append(entry)
+        else:
+            layer2_failed.append(entry)
+
+    # ══════════ Step 2 结果 ══════════
+
+    print(f"\n{'#'*70}")
+    print(f"  Step 2 结果: {len(layer2_passed)}/{len(deduped)} 通过加考")
+    print(f"{'#'*70}")
+
+    if layer2_passed:
+        print(f"\n  真学霸名单:")
+        print(f"  {'#':<3} {'策略':<28} {'币/周期':<12} {'avg_r':>7} {'oos_r':>7} "
+              f"{'折数':>4} {'通过':>6} {'最强regime':<10} {'regime_r':>9}")
+        print(f"  {'-'*95}")
+
+        for i, c in enumerate(layer2_passed):
+            d = c.get('direction_filter', '')
+            label = f"{c['coin']}/{c['interval']}"
+            if d:
+                label += f"/{d}"
+            regime_label = c['best_regime'] if c['best_regime'] else '—'
+            regime_r = f"{c['best_regime_avg_r']:.4f}" if c['best_regime_avg_r'] else '—'
+            print(f"  {i+1:<3} {c['strategy']:<28} {label:<12} {c['avg_r']:>7.4f} "
+                  f"{c['oos_avg_r']:>7.4f} {c['n_folds']:>4} "
+                  f"{c['positive_folds']}/{c['n_folds']:>3} {regime_label:<10} {regime_r:>9}")
+
+    # ══════════ Step 3+4: Regime 组队 ══════════
+
+    print(f"\n{'#'*70}")
+    print(f"  Step 3+4: Regime 组队")
+    print(f"{'#'*70}")
+
+    # 收集每种 regime 下所有通过者的表现
+    regime_candidates = {'bull': [], 'bear': [], 'ranging': []}
+
+    for c in layer2_passed:
+        for regime in ['bull', 'bear', 'ranging']:
+            if regime in c['regime_stats']:
+                stats = c['regime_stats'][regime]
+                d = c.get('direction_filter', '')
+                regime_candidates[regime].append({
+                    'strategy': c['strategy'],
+                    'coin': c['coin'],
+                    'interval': c['interval'],
+                    'direction_filter': d,
+                    'avg_r': stats['avg_r'],
+                    'trades': stats['trades'],
+                    'total_r': stats['total_r'],
+                    'overall_avg_r': c['avg_r'],
+                    'oos_avg_r': c['oos_avg_r'],
+                    'sharpe': c.get('sharpe', 0),
+                })
+
+    # 每种 regime 按 avg_r DESC 排序，选最强
+    team = {}
+    for regime in ['bull', 'bear', 'ranging']:
+        candidates = regime_candidates[regime]
+        candidates.sort(key=lambda x: x['avg_r'], reverse=True)
+
+        print(f"\n  {regime.upper()} 候选 ({len(candidates)}个):")
+        if candidates:
+            print(f"  {'策略':<28} {'币/周期':<12} {'regime_r':>9} {'trades':>7} {'total_r':>9}")
+            print(f"  {'-'*70}")
+            for rc in candidates[:5]:
+                d = rc.get('direction_filter', '')
+                label = f"{rc['coin']}/{rc['interval']}"
+                if d:
+                    label += f"/{d}"
+                print(f"  {rc['strategy']:<28} {label:<12} {rc['avg_r']:>9.4f} "
+                      f"{rc['trades']:>7} {rc['total_r']:>9.2f}")
+
+            team[regime] = candidates[0]  # 取第一名
+        else:
+            print(f"  （无候选）")
+            team[regime] = None
+
+    # ══════════ 输出组队结果 ══════════
+
+    print(f"\n{'#'*70}")
+    print(f"  最终组队")
+    print(f"{'#'*70}")
+
+    for regime in ['bull', 'bear', 'ranging']:
+        pick = team[regime]
+        if pick:
+            d = pick.get('direction_filter', '')
+            label = f"{pick['strategy']} {pick['coin']}/{pick['interval']}"
+            if d:
+                label += f" ({d})"
+            print(f"  {regime:>8}: {label:<40} regime_avg_r={pick['avg_r']:.4f} trades={pick['trades']}")
+        else:
+            print(f"  {regime:>8}: （无合适策略）")
+
+    # ══════════ 保存 ══════════
+
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
+    os.makedirs(output_dir, exist_ok=True)
+
+    # champions_layer2.json
+    layer2_report = {
+        'generated_at': datetime.now().isoformat(),
+        'input': {
+            'layer1_total': len(champions),
+            'top_n_selected': len(deduped),
+            'dedup_removed': TOP_N - len(deduped) + (len(deduped) - TOP_N if len(deduped) > TOP_N else 0),
+        },
+        'kfold_results': {
+            'passed': len(layer2_passed),
+            'failed': len(layer2_failed),
+            'total': len(deduped),
+        },
+        'champions': layer2_passed,
+        'failed': layer2_failed,
+    }
+
+    path1 = os.path.join(output_dir, 'champions_layer2.json')
+    with open(path1, 'w', encoding='utf-8') as f:
+        json.dump(layer2_report, f, indent=2, ensure_ascii=False)
+    print(f"\n  真学霸名单已保存: {path1}")
+
+    # regime_team.json
+    team_config = {
+        'generated_at': datetime.now().isoformat(),
+        'team': {},
+    }
+    for regime in ['bull', 'bear', 'ranging']:
+        pick = team[regime]
+        if pick:
+            team_config['team'][regime] = {
+                'strategy': pick['strategy'],
+                'coin': pick['coin'],
+                'interval': pick['interval'],
+                'direction_filter': pick.get('direction_filter', ''),
+                'regime_avg_r': pick['avg_r'],
+                'regime_trades': pick['trades'],
+                'regime_total_r': pick['total_r'],
+                'overall_oos_avg_r': pick['oos_avg_r'],
+            }
+        else:
+            team_config['team'][regime] = None
+
+    path2 = os.path.join(output_dir, 'regime_team.json')
+    with open(path2, 'w', encoding='utf-8') as f:
+        json.dump(team_config, f, indent=2, ensure_ascii=False)
+    print(f"  组队配置已保存: {path2}")
+
+
+if __name__ == '__main__':
+    main()

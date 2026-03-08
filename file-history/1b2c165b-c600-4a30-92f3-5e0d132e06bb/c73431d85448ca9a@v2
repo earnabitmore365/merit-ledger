@@ -1,0 +1,71 @@
+# Abby 代码生成规范（2026-02-19）
+
+## 核心问题
+
+1. **代码架构不统一** — 交易系统、回测系统、策略各自为政
+2. **幻想代码（最严重）** — 创造出系统不存在的 API、模块、函数
+
+爸爸原话：
+> "你会幻想出很多假的代码，系统看不懂的"
+> "创新词的时候要记得定义，锁定好"
+
+## 禁止幻想代码
+
+1. **只使用已存在的模块和 API** — 用之前先 read 代码确认
+2. **创新词必须定义** — 创造新术语/函数前先检查是否已存在
+3. **Python 逻辑优先** — PEP 8、标准库优先、函数式风格
+
+## 代码生成检查清单
+
+**写前确认**：模块是否存在？API 怎么调用？变量名冲突？创新词定义了吗？
+
+**写后验证**：能 import 吗？函数存在吗？参数对吗？
+
+## 命名规则
+
+```python
+# 模块名：snake_case
+from core.indicator.macd import MACD
+
+# 类名：PascalCase
+class BB_SqueezeStrategy: pass
+
+# 函数名/变量名：snake_case
+def calculate_bollinger_bands(price: pd.Series, period: int = 20) -> dict: pass
+entry_price = 105000.0
+```
+
+## 函数签名规范
+
+```python
+def strategy_bb_squeeze(
+    df: pd.DataFrame,
+    symbol: str = "HYPE",
+    params: dict = None
+) -> pd.DataFrame:
+    """
+    BB Squeeze 策略
+
+    Args:
+        df: 包含 OHLCV 数据的 DataFrame
+        symbol: 交易对符号
+        params: 策略参数
+
+    Returns:
+        包含信号的 DataFrame
+    """
+    pass
+```
+
+## 代码标记规范
+
+```python
+#!/usr/bin/env python3
+"""模块名称 - 功能描述"""
+
+# ==================== 导入部分 ====================
+# ==================== 配置 ====================
+# ==================== 类定义 ====================
+# ==================== 核心函数 ====================
+# ==================== 主程序 ====================
+```

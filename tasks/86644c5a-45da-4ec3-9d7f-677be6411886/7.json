@@ -1,0 +1,9 @@
+{
+  "id": "7",
+  "subject": "修复 WebSocket 启用问题",
+  "description": "启用 adapter.py 中被禁用的 WebSocket，修复连接问题",
+  "activeForm": "修复 WebSocket",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

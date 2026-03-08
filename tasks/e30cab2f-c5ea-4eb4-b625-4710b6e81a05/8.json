@@ -1,0 +1,9 @@
+{
+  "id": "8",
+  "subject": "重写 config.py — ADX 三层参数",
+  "description": "替换 RegimeDetectorConfig 和 RegimeConfig，删除 MA+RSI 参数，加入 ADX/SMA/ATR 参数、滞后阈值、min_dwell_bars、use_market_score",
+  "activeForm": "重写 config.py",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

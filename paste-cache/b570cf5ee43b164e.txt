@@ -1,0 +1,52 @@
+Hyperliquid API 支持快速反手（Reverse Position）功能，可以通过“先平后开”或“使用 Reduce Only 订单”来实现。通常在自动化交易中，通过一次性发送平仓和开仓的订单来实现快速换向。 
+YouTube
+YouTube
+ +1
+以下是关于 Hyperliquid API 实现反手功能的详细指南：
+1. 核心实现逻辑
+要在 Hyperliquid 上实现反手，主要有两种API操作方式：
+方法A：使用 reduceOnly 标记分别操作（最常用）
+发送一个 reduceOnly: true 的订单，数量等于当前持仓，方向与持仓相反（例如持有长仓，则发送卖出单）以平仓。
+立即发送一个新方向的常规订单（例如卖出新短仓）。
+方法B：使用 "Place Order" 直接反向（不推荐）
+在持仓状态下，直接下达相反方向的订单。如果仓位足够大，会自动平掉老仓并开启新仓。风险： 容易出现仓位管理混乱或因保证金不足导致下单失败。
+2. API 参数设置（重要）
+使用 POST https://api.hyperliquid.xyz/exchange 接口时：
+平仓阶段：必须将 orderType 设为适当类型，并设置 reduce_only: true。这确保订单只会平仓，而不会在平仓后反向开仓。
+资产标识：使用 coin（如 ETH）和 sz（持仓数量）。 
+YouTube
+YouTube
+ +2
+3. 实现步骤与 Python 示例（基于 CCXT 或官方 SDK）
+python
+# 伪代码示例：实现 ETH 的反手操作
+# 假设已经初始化了 exchange 对象
+
+# 1. 获取当前仓位
+positions = exchange.private_post_info_user_token_positions({"user": "your_wallet_address"})
+# 找到 ETH_USD 的持仓数量 (position_size)
+
+# 2. 如果是多单，卖出平仓并反向开空
+if position_size > 0:
+    # 平仓 (Reduce Only)
+    exchange.order(symbol='ETH/USDC', side='sell', amount=position_size, params={'reduceOnly': True})
+    # 开空
+    exchange.order(symbol='ETH/USDC', side='sell', amount=new_size)
+
+# 3. 如果是空单，买入平仓并反向开多
+elif position_size < 0:
+    # 平仓 (Reduce Only)
+    exchange.order(symbol='ETH/USDC', side='buy', amount=abs(position_size), params={'reduceOnly': True})
+    # 开多
+    exchange.order(symbol='ETH/USDC', side='buy', amount=new_size)
+4. 关键注意事项
+API 钱包安全：建议生成专用的 API 钱包来执行交易，不要使用主钱包私钥，确保没有提现权限。
+高波动性风险：在快速移动的市场中，使用市价单（Market Order）反手可能会产生滑点。
+保证金模式：Hyperliquid 支持全仓（Cross）和逐仓（Isolated）。反手操作可能受到可用保证金的限制。
+交易细节：资产在 API 中可能使用特定的索引（如 coin），在处理时需检查 meta 信息。 
+YouTube
+YouTube
+ +3
+如果您使用 Hummingbot 等第三方框架，它们通常有内置的 reverse 或 close_and_open 逻辑。 
+GitHub
+GitHub

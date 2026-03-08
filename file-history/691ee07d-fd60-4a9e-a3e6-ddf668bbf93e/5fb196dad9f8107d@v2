@@ -1,0 +1,110 @@
+"""RSI Divergence — RSI背离策略（Wilder标准RSI）"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class RSIDivergenceConfig:
+    rsi_period: int = 14
+    lookback: int = 10
+
+
+class RSIDivergence(Strategy):
+    """RSI 背离策略：价格创新高/低但RSI没跟上"""
+
+    def __init__(self, exchange=None, config: Optional[RSIDivergenceConfig] = None):
+        self.exchange = exchange
+        self.config = config or RSIDivergenceConfig()
+
+    @property
+    def name(self) -> str:
+        return "rsi_divergence"
+
+    def _calc_rsi(self, closes: List[float]) -> float:
+        """Wilder标准RSI"""
+        period = self.config.rsi_period
+        if len(closes) < period + 1:
+            return 50.0
+
+        gains = 0.0
+        losses = 0.0
+        for i in range(1, period + 1):
+            change = closes[i] - closes[i - 1]
+            if change > 0:
+                gains += change
+            else:
+                losses += abs(change)
+
+        avg_gain = gains / period
+        avg_loss = losses / period
+
+        for i in range(period + 1, len(closes)):
+            change = closes[i] - closes[i - 1]
+            gain = change if change > 0 else 0.0
+            loss = abs(change) if change < 0 else 0.0
+            avg_gain = (avg_gain * (period - 1) + gain) / period
+            avg_loss = (avg_loss * (period - 1) + loss) / period
+
+        if avg_loss == 0:
+            return 100.0
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+
+    def _find_peaks(self, values: List[float], lb: int) -> List[int]:
+        peaks = []
+        for i in range(lb, len(values) - 1):
+            if all(values[i] >= values[j] for j in range(max(0, i - lb), i)) and \
+               all(values[i] >= values[j] for j in range(i + 1, min(len(values), i + lb + 1))):
+                peaks.append(i)
+        return peaks
+
+    def _find_troughs(self, values: List[float], lb: int) -> List[int]:
+        troughs = []
+        for i in range(lb, len(values) - 1):
+            if all(values[i] <= values[j] for j in range(max(0, i - lb), i)) and \
+               all(values[i] <= values[j] for j in range(i + 1, min(len(values), i + lb + 1))):
+                troughs.append(i)
+        return troughs
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = 50
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        recent = klines[-50:]
+        closes = [k["close"] for k in recent]
+
+        # 算每个位置的RSI
+        rsi_values = []
+        all_closes = [k["close"] for k in klines]
+        for i in range(len(klines) - 50, len(klines)):
+            rsi_values.append(self._calc_rsi(all_closes[:i + 1]))
+
+        lb = self.config.lookback
+        peaks = self._find_peaks(closes, lb)
+        troughs = self._find_troughs(closes, lb)
+
+        if len(peaks) >= 2:
+            p1, p2 = peaks[-2], peaks[-1]
+            # 顶背离：价格创新高，RSI没创新高
+            if closes[p2] > closes[p1] and rsi_values[p2] < rsi_values[p1]:
+                return TradingSignal(signal=Signal.SELL, confidence=0.7, coin=coin,
+                                     timestamp=klines[-1]["time"],
+                                     metadata={"type": "bearish_divergence",
+                                                "rsi": rsi_values[-1]})
+
+        if len(troughs) >= 2:
+            t1, t2 = troughs[-2], troughs[-1]
+            # 底背离：价格创新低，RSI没创新低
+            if closes[t2] < closes[t1] and rsi_values[t2] > rsi_values[t1]:
+                return TradingSignal(signal=Signal.BUY, confidence=0.7, coin=coin,
+                                     timestamp=klines[-1]["time"],
+                                     metadata={"type": "bullish_divergence",
+                                                "rsi": rsi_values[-1]})
+
+        return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                             timestamp=klines[-1]["time"],
+                             metadata={"rsi": rsi_values[-1]})

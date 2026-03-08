@@ -1,0 +1,46 @@
+已选定配置:
+  1. TTP_BTC_stddev_1h_1095天_无提款
+  2. TTP_ETH_stddev_1h_1095天_无提款
+
+
+已选择:
+  币种: BTC, ETH
+  策略: stddev
+  周期: 1h
+  时长: 1095天
+  TTP: 开启
+
+我觉得，增加策略的时候，界面应该是这样的
+ ==============================================================================
+                                      交易状态 
+ ==============================================================================
+
+网络: testnet
+账号: default
+币种: ETH
+策略: stddev
+杠杆: 10x
+余额: $902.23
+持仓: []
+
+[Enter] 继续交易  [Esc] 停止并退出
+
+我开始交易后，变成这个界面。
+
+然后在选择继续交易，现在页面变成这样了。
+
+                                 2026-02-24 02:34:16,646 - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+                                          2026-02-24 02:34:35,383 - TradingSystem - ERROR - 执行错误: 'TradingSignal' object has no attribute 'value'
+                                                                     Traceback (most recent call last):
+                         File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 167, in run_once
+                                     result['signal'] = signal.value
+                                                                                           ^^^^^^^^^^^^
+                       AttributeError: 'TradingSignal' object has no attribute 'value'
+      2026-02-24 02:34:35,383 - ERROR - 执行错误: 'TradingSignal' object has no attribute 'value'
+                 Traceback (most recent call last):
+                                                     File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 167, in run_once
+                                                                 result['signal'] = signal.value
+                                       ^^^^^^^^^^^^
+                                                   AttributeError: 'TradingSignal' object has no attribute 'value'
+
+

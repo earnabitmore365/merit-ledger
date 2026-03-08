@@ -1,0 +1,84 @@
+   160→    
+   161→    def run(self, interval_seconds: int = 60, max_iterations: int = None):
+   162→        """运行交易系统
+   163→        
+   164→        Args:
+   165→            interval_seconds: 执行间隔（秒）
+   166→            max_iterations: 最大执行次数（None=无限）
+   167→        """
+   168→        self.running = True
+   169→        self.logger.info("=" * 50)
+   170→        self.logger.info("交易系统启动")
+   171→        self.logger.info(f"交易所: {self.exchange.get_exchange_name()}")
+   172→        self.logger.info(f"策略: {self.strategy.name}")
+   173→        self.logger.info(f"币种: {self.config.get('coin', 'ETH')}")
+   174→        self.logger.info("=" * 50)
+   175→        
+   176→        try:
+   177→            iteration = 0
+   178→            while self.running:
+   179→                iteration += 1
+   180→                
+   181→                # 检查是否达到最大次数
+   182→                if max_iterations and iteration > max_iterations:
+   183→                    self.logger.info(f"达到最大执行次数: {max_iterations}")
+   184→                    break
+   185→                
+   186→                self.run_once()
+   187→                
+   188→                # 休眠
+   189→                self._sleep(interval_seconds)
+   190→        
+   191→        except KeyboardInterrupt:
+   192→            self.logger.info("收到停止信号 (Ctrl+C)")
+   193→        finally:
+   194→            self.stop()
+   195→    
+   196→    def run_once(self) -> Dict:
+   197→        """执行一次交易检查
+   198→
+   199→        Returns:
+   200→            Dict: 执行结果
+   201→        """
+   202→        # 先同步持仓状态
+   203→        self._sync_position()
+   204→
+   205→        result = {
+   206→            'timestamp': datetime.now().isoformat(),
+   207→            'signal': None,
+   208→            'action': Action.NONE.value,
+   209→            'position': self.position,
+   210→            'entry_price': self.entry_price,
+   211→        }
+   212→
+   213→        try:
+   214→            coin = self.config.get('coin', 'ETH')
+   215→
+   216→            # 1. 获取 K 线数据
+   217→            klines = self._get_klines()
+   218→            if not klines:
+   219→                self.logger.warning("无法获取 K 线数据")
+   220→                return result
+   221→            
+   222→            # 2. 生成信号
+   223→            signal = self._generate_signal(klines)
+   224→            # TradingSignal 有 .signal 属性，Signal 有 .value 属性
+   225→            if hasattr(signal, 'signal'):
+   226→                result['signal'] = signal.signal.value
+   227→            else:
+   228→                result['signal'] = signal.value
+   229→
+   230→            # 4. 风险管理检查
+   231→            risk_result = None
+   232→            if self.position and self.position != "NO_POSITION" and self.risk_manager:
+   233→                risk_result = self._check_risk()
+   234→                if risk_result.should_close:
+   235→                    # 根据持仓方向和原因生成正确的平仓 action
+   236→                    close_action = self._get_close_action(self.position, risk_result.reason)
+   237→                    self._close_position(close_action)
+   238→                    result['action'] = close_action.value
+   239→                    self.logger.info(f"[{result['timestamp']}] {result['action']} | 持仓: {result['position']}")
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

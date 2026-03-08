@@ -1,0 +1,42 @@
+46:        self._saved_selections = {}
+60:    def draw_header(self, selections):
+84:        if selections:
+87:            for key, value in selections.items():
+99:    def navigate_options(self, options, title, multi=False, selections=None, searchable=False):
+101:        if title in self._saved_selections:
+102:            saved = self._saved_selections[title]
+137:            start_y = self.draw_header(selections)
+215:                            self._saved_selections[title] = self.selected_indices.copy()
+222:                    self._saved_selections[title] = self.selected_indices.copy()
+234:    def get_yes_no(self, title, default=True, selections=None):
+240:            y = self.draw_header(selections)
+276:    def get_number(self, title, default, selections=None):
+282:            start_y = self.draw_header(selections)
+361:        menu._saved_selections = {}
+364:        selections = {}
+371:                result = menu.navigate_options(networks, "选择网络", selections=selections)
+377:                selections['网络'] = result[0] if isinstance(result, list) else result
+383:                result = menu.navigate_options(accounts, "选择账号", selections=selections)
+389:                selections['账号'] = result[0] if isinstance(result, list) else result
+396:                result = menu.navigate_options(coins, "选择交易币种 [空格多选, 输入搜索]", multi=True, selections=selections, searchable=True)
+402:                selections['币种'] = ", ".join(result)
+408:                result = menu.navigate_options(strategies, "选择策略 [空格多选, 输入搜索]", multi=True, selections=selections, searchable=True)
+414:                selections['策略'] = ", ".join(result)
+419:                result = menu.get_number("杠杆倍数", 10, selections)
+425:                selections['杠杆'] = f"{result}x"
+430:                result = menu.get_number("仓位比例 (0.1 = 10%)", 10, selections)
+436:                selections['仓位'] = f"{result}%"
+441:                result = menu.get_number("止损比例 (0.1 = 10%)", 0, selections)
+447:                selections['止损'] = f"{result}%"
+452:                result = menu.get_yes_no("是否启用移动止盈 (TTP)", True, selections)
+458:                selections['TTP'] = "开启" if result else "关闭"
+463:                result = menu.get_yes_no("是否持续运行? (YES=持续运行, NO=执行一次)", True, selections)
+469:                selections['模式'] = "持续运行" if result else "执行一次"
+484:                network = 'testnet' if '测试网' in selections.get('网络', '') else 'mainnet'
+485:                account = selections.get('账号', 'default')
+486:                coin = selections.get('币种', 'ETH').split(', ')[0]  # 取第一个
+487:                strategy_name = selections.get('策略', 'vwap').split(', ')[0]
+488:                leverage = int(selections.get('杠杆', '10x').replace('x', ''))
+489:                position_pct = int(selections.get('仓位', '10%').replace('%', '')) / 100
+490:                stop_loss = int(selections.get('止损', '10%').replace('%', '')) / 100
+491:                enable_ttp = selections.get('TTP', '关闭') == '开启'

@@ -1,0 +1,33 @@
+#!/bin/bash
+# Auto-Trading 自进化启动脚本
+# 用法：
+#   bash lab/evolve.sh              # 跑一次，生成 GEP prompt
+#   bash lab/evolve.sh --review     # 人工审批模式
+#   EVOLVE_STRATEGY=repair-only bash lab/evolve.sh   # 只修bug
+
+set -e
+
+PROJECT_DIR="/Users/allenbot/project/auto-trading"
+EVOLVER_DIR="$HOME/.claude/tools/evolver"
+EVOLUTION_OUTPUT="$PROJECT_DIR/lab/evolver"
+
+# 切到项目根目录（让 evolver 找到 .git 确认 repo root）
+cd "$PROJECT_DIR"
+
+# 运行 evolver（不接网，不用 sessions_spawn，结果写到 lab/evolver/）
+# OPENCLAW_WORKSPACE 让 evolver 从 lab/evolver/ 读 MEMORY.md + USER.md
+MEMORY_DIR="$EVOLUTION_OUTPUT" \
+OPENCLAW_WORKSPACE="$EVOLUTION_OUTPUT" \
+EVOLVER_REPO_ROOT="$PROJECT_DIR" \
+node "$EVOLVER_DIR/index.js" run "$@"
+
+# 输出最新 GEP prompt 路径
+LATEST=$(ls -t "$EVOLUTION_OUTPUT/evolution/gep_prompt_"*.txt 2>/dev/null | head -1)
+if [ -n "$LATEST" ]; then
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "GEP Prompt 已生成：$LATEST"
+  echo "黑丝用以下命令读取："
+  echo "  cat \"$LATEST\""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+fi

@@ -1,0 +1,785 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→Backtest System with Trailing Take Profit (TTP)
+     4→=================================================
+     5→abby-auto-trading 版本
+     6→
+     7→核心功能：
+     8→1. 信号反转时反手（平旧开新）
+     9→2. 移动止盈（攻守兼备）- VWAP TTP
+    10→3. 爆仓检测
+    11→4. 完整的风险指标（夏普、索提诺、卡玛）
+    12→5. 5年历史数据回测
+    13→"""
+    14→
+    15→import sys
+    16→import json
+    17→import logging
+    18→import statistics
+    19→import os
+    20→from dataclasses import dataclass, field
+    21→from typing import List, Dict
+    22→from datetime import datetime
+    23→from enum import Enum
+    24→
+    25→# 项目根目录 - 根据当前文件位置自动计算
+    26→_current_file = os.path.abspath(__file__)
+    27→_src_dir = os.path.dirname(_current_file)  # backtest/
+    28→_backtest_dir = os.path.dirname(_src_dir)  # src/
+    29→PROJECT_ROOT = os.path.dirname(_backtest_dir)  # abby-auto-trading/
+    30→
+    31→DATA_DIR = os.path.join(PROJECT_ROOT, 'src', 'backtest', 'data')
+    32→REPORT_DIR = os.path.join(PROJECT_ROOT, 'src', 'backtest', 'reports')
+    33→
+    34→# 添加项目路径
+    35→if PROJECT_ROOT not in sys.path:
+    36→    sys.path.insert(0, PROJECT_ROOT)
+    37→src_dir = os.path.join(PROJECT_ROOT, 'src')
+    38→if src_dir not in sys.path:
+    39→    sys.path.insert(0, src_dir)
+    40→
+    41→from core.strategy import get_strategy
+    42→from core.strategy.base import Signal
+    43→from core.risk import TTPManager, TTPConfig
+    44→from core.risk import TTPManager, TTPConfig
+    45→
+    46→logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    47→logger = logging.getLogger(__name__)
+    48→
+    49→
+    50→@dataclass
+    51→class Trade:
+    52→    """交易记录"""
+    53→    time: str
+    54→    order_type: str  # BUY, SELL, CLOSE_BUY, CLOSE_SELL, TTP_BUY, TTP_SELL, LIQUIDATION
+    55→    price: float
+    56→    capital: float
+    57→    pnl: float
+    58→    balance: float  # 该笔交易后的余额
+    59→    withdraw: float = 0  # 提款金额（默认0）
+    60→
+    61→
+    62→@dataclass
+    63→class BacktestResult:
+    64→    """回测结果"""
+    65→    coin: str
+    66→    interval: str
+    67→    period: str
+    68→    
+    69→    # 基本统计
+    70→    total_trades: int = 0
+    71→    winning_trades: int = 0
+    72→    losing_trades: int = 0
+    73→    
+    74→    # 收益指标
+    75→    total_return: float = 0
+    76→    final_balance: float = 0  # 最终余额
+    77→    max_balance: float = 0  # 最大余额
+    78→    min_balance: float = 0  # 最小余额
+    79→    win_rate: float = 0
+    80→    avg_win: float = 0
+    81→    avg_loss: float = 0
+    82→    
+    83→    # 风险指标
+    84→    max_drawdown: float = 0
+    85→    max_profit: float = 0
+    86→    max_loss: float = 0
+    87→    
+    88→    # 风险调整收益
+    89→    sharpe_ratio: float = 0
+    90→    sortino_ratio: float = 0
+    91→    calmar_ratio: float = 0
+    92→    
+    93→    # 交易详情
+    94→    trades: List[Trade] = field(default_factory=list)
+    95→    
+    96→    # 信号统计
+    97→    buy_signals: int = 0
+    98→    sell_signals: int = 0
+    99→    
+   100→    # 日均开仓量
+   101→    daily_open_positions: float = 0  # 日均开仓数量
+   102→
+   103→
+   104→class BacktestEngine:
+   105→    """回测引擎"""
+   106→    
+   107→    def __init__(
+   108→        self,
+   109→        coin: str,
+   110→        interval: str = '1h',
+   111→        days: int = 1095,
+   112→        initial_capital: float = 500,
+   113→        enable_ttp: bool = True,
+   114→        stop_loss_pct: float = 0.1,
+   115→        leverage: float = 10.0,
+   116→        enable_withdraw: bool = True  # 启用自动提款功能
+   117→    ):
+   118→        self.coin = coin.upper()
+   119→        self.interval = interval
+   120→        self.days = days
+   121→        self.initial_capital = initial_capital
+   122→        self.enable_ttp = enable_ttp
+   123→        self.stop_loss_pct = stop_loss_pct
+   124→        self.leverage = leverage
+   125→        self.enable_withdraw = enable_withdraw  # 提款开关
+   126→
+   127→        # TTP 管理器
+   128→        ttp_config = TTPConfig(
+   129→            ttp_enabled=enable_ttp,
+   130→            ttp_buffer_pips=5.0,
+   131→            ttp_trigger_pct=0.01  # 1% 浮盈后启动
+   132→        )
+   133→        self.ttp_manager = TTPManager(ttp_config)
+   134→
+   135→        self.candles = self._load_data()
+   136→        
+   137→        if not self.candles:
+   138→            logger.error(f"无法获取 {coin} K线数据")
+   139→            self.candles = []
+   140→        
+   141→        self.trades: List[Trade] = []
+   142→        self.balance: List[float] = [initial_capital]
+   143→        self.current_balance: float = initial_capital  # 当前余额（实时更新）
+   144→        
+   145→        # 提款相关变量
+   146→        self.withdraw_count = 0  # 提款次数
+   147→        self.first_withdraw_day = None  # 第一次提款时的天数
+   148→        
+   149→        logger.info(f"🚀 回测初始化: {coin} {interval} ({days}天) | K线: {len(self.candles)} | 提款: {'开启' if enable_withdraw else '关闭'}")
+   150→    
+   151→    def _load_data(self):
+   152→        """加载K线数据"""
+   153→        data_file = os.path.join(DATA_DIR, 'historical', self.coin, f'{self.interval}.json')
+   154→        
+   155→        if not os.path.exists(data_file):
+   156→            logger.warning(f"数据文件不存在: {data_file}")
+   157→            return []
+   158→        
+   159→        try:
+   160→            with open(data_file, 'r') as f:
+   161→                data = json.load(f)
+   162→            
+   163→            # 筛选指定天数的数据
+   164→            if self.days and len(data) > self.days * 24:
+   165→                data = data[-self.days * 24:]  # 1h = 24条/天
+   166→            
+   167→            logger.info(f"📁 加载数据: {len(data)} 条 | 文件: {data_file}")
+   168→            return data
+   169→            
+   170→        except Exception as e:
+   171→            logger.error(f"加载数据失败: {e}")
+   172→            return []
+   173→    
+   174→    def _calculate_pip(self, price: float) -> float:
+   175→        """计算价格跳动点"""
+   176→        if price >= 1000:
+   177→            return 0.0001
+   178→        elif price >= 100:
+   179→            return 0.001
+   180→        elif price >= 10:
+   181→            return 0.0001
+   182→        else:
+   183→            return price * 0.0001
+   184→    
+   185→    def _check_withdraw(self, day_index: int = None) -> float:
+   186→        """检查是否需要提款
+   187→        
+   188→        Args:
+   189→            day_index: 当前是第几天
+   190→        
+   191→        Returns:
+   192→            提款金额（0表示不需要提款）
+   193→        """
+   194→        # 如果关闭了提款功能，直接返回0
+   195→        if not getattr(self, 'enable_withdraw', True):
+   196→            return 0
+   197→        
+   198→        WITHDRAW_THRESHOLD = 2000
+   199→        WITHDRAW_AMOUNT = 1000
+   200→        
+   201→        if self.balance[-1] > WITHDRAW_THRESHOLD:
+   202→            # 更新提款统计
+   203→            self.withdraw_count += 1
+   204→            if self.first_withdraw_day is None and day_index is not None:
+   205→                self.first_withdraw_day = day_index
+   206→            
+   207→            return WITHDRAW_AMOUNT
+   208→        return 0
+   209→    
+   210→    def run_backtest(self, strategy_name: str) -> BacktestResult:
+   211→        """运行回测"""
+   212→        if not self.candles:
+   213→            logger.error("没有K线数据，无法运行回测")
+   214→            return None
+   215→        
+   216→        # 创建策略
+   217→        strategy = get_strategy(strategy_name)
+   218→        if not strategy:
+   219→            logger.error(f"策略不存在: {strategy_name}")
+   220→            return None
+   221→        
+   222→        logger.info(f"📊 回测策略: {strategy_name}")
+   223→        
+   224→        closes = [c['close'] for c in self.candles]
+   225→        times = [datetime.fromtimestamp(c['time']/1000).strftime('%Y-%m-%d') for c in self.candles]
+   226→        
+   227→        position = None  # 当前持仓方向
+   228→        entry_price = 0  # 开仓价格
+   229→        
+   230→        # TTP 追踪变量
+   231→        high_since_entry = None  # 开仓后最高价
+   232→        low_since_entry = None   # 开仓后最低价
+   233→        swing_low = None          # 回调低点
+   234→        swing_high = None         # 回调高点
+   235→        ttp_level = None          # 移动止盈触发线
+   236→        previous_high = None      # 前高
+   237→        previous_low = None       # 前低
+   238→        
+   239→        # 信号计数
+   240→        buy_signals = 0
+   241→        sell_signals = 0
+   242→        
+   243→        n_candles = len(self.candles)
+   244→        start_idx = max(0, n_candles - self.days * 24)
+   245→        
+   246→        for i in range(start_idx, n_candles):
+   247→            try:
+   248→                # 兼容两种信号生成方式
+   249→                if hasattr(strategy, 'generate_signal'):
+   250→                    signal = strategy.generate_signal(self.coin, self.candles[:i+1])
+   251→                    if hasattr(signal, 'signal'):
+   252→                        action = signal.signal.value
+   253→                    else:
+   254→                        action = signal.value if isinstance(signal, Signal) else signal
+   255→                else:
+   256→                    signal = strategy.get_signal(i)
+   257→                    action = signal.value if isinstance(signal, Signal) else signal
+   258→            except Exception as e:
+   259→                logger.error(f"信号生成错误: {e}")
+   260→                action = 'HOLD'
+   261→            
+   262→            current_price = closes[i]
+   263→            current_time = times[i]
+   264→            
+   265→            # 计算 pip
+   266→            pip = self._calculate_pip(current_price)
+   267→            
+   268→            trade_capital = max(self.balance[-1] * 0.1, 100)
+   269→            position_size = trade_capital * self.leverage  # 开仓总额
+   270→            
+   271→            # ===== BUY 持仓的移动止盈检测 =====
+   272→            if self.enable_ttp and position == 'BUY' and self.balance[-1] > 0:
+   273→                # 使用统一的 TTP 管理器
+   274→                position_info = {'coin': self.coin, 'side': 'LONG', 'entry_price': entry_price}
+   275→                result = self.ttp_manager.check(
+   276→                    position=position_info,
+   277→                    current_price=current_price,
+   278→                    entry_price=entry_price,
+   279→                    position_side='LONG'
+   280→                )
+   281→
+   282→                # TTP 触发
+   283→                if result.should_close:
+   284→                    ttp_price = result.ttp_level or current_price
+   285→                    pnl = (ttp_price - entry_price) / entry_price * position_size
+   286→                    self.balance.append(self.balance[-1] + pnl)
+   287→                    new_balance = self.balance[-1]
+   288→
+   289→                    # 检查提款
+   290→                    day_index = (i - start_idx) // 24
+   291→                    withdraw = self._check_withdraw(day_index)
+   292→                    if withdraw > 0:
+   293→                        self.balance[-1] = self.balance[-1] - withdraw
+   294→                        new_balance = self.balance[-1]
+   295→
+   296→                    self.trades.append(Trade(current_time, 'TTP_BUY', ttp_price, trade_capital, pnl, new_balance, withdraw))
+   297→                    self.current_balance = new_balance
+   298→
+   299→                    position = None
+   300→                    self.ttp_manager.reset()
+   301→                    continue
+   302→            
+   303→            # ===== SELL 持仓的移动止盈检测 =====
+   304→            if self.enable_ttp and position == 'SELL' and self.balance[-1] > 0:
+   305→                floating_profit = (entry_price - current_price) / entry_price
+   306→                
+   307→                if floating_profit > 0:
+   308→                    # 创新低
+   309→                    if low_since_entry is None or current_price < low_since_entry:
+   310→                        previous_low = low_since_entry
+   311→                        low_since_entry = current_price
+   312→                    
+   313→                    # 回调更新 swing_high
+   314→                    if low_since_entry is not None and current_price > low_since_entry and current_price < entry_price:
+   315→                        if swing_high is None or current_price > swing_high:
+   316→                            swing_high = current_price
+   317→                    
+   318→                    # 跌破前低后设置 TTP
+   319→                    if previous_low is not None and current_price < previous_low:
+   320→                        if swing_high is not None and swing_high < entry_price:
+   321→                            new_ttp = swing_high + pip * 5
+   322→                            if ttp_level is None or new_ttp < ttp_level:
+   323→                                ttp_level = new_ttp
+   324→                    
+   325→                    # TTP 触发
+   326→                    if ttp_level is not None and current_price > ttp_level:
+   327→                        pnl = (entry_price - ttp_level) / entry_price * position_size
+   328→                        self.balance.append(self.balance[-1] + pnl)
+   329→                        new_balance = self.balance[-1]
+   330→                        
+   331→                        # 检查提款
+   332→                        day_index = (i - start_idx) // 24
+   333→                        withdraw = self._check_withdraw(day_index)
+   334→                        if withdraw > 0:
+   335→                            self.balance[-1] = self.balance[-1] - withdraw
+   336→                            new_balance = self.balance[-1]
+   337→                        
+   338→                        self.trades.append(Trade(current_time, 'TTP_SELL', current_price, trade_capital, pnl, new_balance, withdraw))
+   339→                        self.current_balance = new_balance
+   340→                        
+   341→                        position = None
+   342→                        previous_low = None
+   343→                        low_since_entry = None
+   344→                        swing_high = None
+   345→                        ttp_level = None
+   346→                        continue
+   347→            
+   348→            # 信号处理 - 按顺序检查
+   349→            # 1. BUY信号处理
+   350→            if action == 'BUY' and position != 'BUY':
+   351→                # 重置追踪变量
+   352→                previous_high = None
+   353→                high_since_entry = None
+   354→                swing_low = None
+   355→                ttp_level = None
+   356→                
+   357→                if position == 'SELL':
+   358→                    pnl = (entry_price - current_price) / entry_price * position_size
+   359→                    self.balance.append(self.balance[-1] + pnl)
+   360→                    new_balance = self.balance[-1]
+   361→                    
+   362→                    # 检查提款
+   363→                    day_index = (i - start_idx) // 24
+   364→                    withdraw = self._check_withdraw(day_index)
+   365→                    if withdraw > 0:
+   366→                        self.balance[-1] = self.balance[-1] - withdraw
+   367→                        new_balance = self.balance[-1]
+   368→                    
+   369→                    self.trades.append(Trade(current_time, 'CLOSE_SELL', current_price, trade_capital, pnl, new_balance, withdraw))
+   370→                    self.current_balance = new_balance
+   371→                    
+   372→                    if self.current_balance <= 0:
+   373→                        self.trades.append(Trade(current_time, 'LIQUIDATION', current_price, 0, 0, self.current_balance))
+   374→                        self.balance.append(0)
+   375→                        position = None
+   376→                        break
+   377→                    
+   378→                    self.trades.append(Trade(current_time, 'BUY', current_price, trade_capital, 0, self.current_balance))
+   379→                position = 'BUY'
+   380→                entry_price = current_price
+   381→                buy_signals += 1
+   382→            
+   383→            # 2. BUY持仓检测
+   384→            elif position == 'BUY':
+   385→                # BUY止损检测
+   386→                price_change = (current_price - entry_price) / entry_price
+   387→                if price_change <= -self.stop_loss_pct:
+   388→                    pnl = -position_size * self.stop_loss_pct
+   389→                    self.balance.append(self.balance[-1] + pnl)
+   390→                    new_balance = self.balance[-1]
+   391→                    
+   392→                    # 检查提款
+   393→                    day_index = (i - start_idx) // 24
+   394→                    withdraw = self._check_withdraw(day_index)
+   395→                    if withdraw > 0:
+   396→                        self.balance[-1] = self.balance[-1] - withdraw
+   397→                        new_balance = self.balance[-1]
+   398→                    
+   399→                    self.trades.append(Trade(current_time, 'CLOSE_BUY', current_price, trade_capital, pnl, new_balance, withdraw))
+   400→                    self.current_balance = new_balance
+   401→                    
+   402→                    if self.current_balance <= 0:
+   403→                        self.trades.append(Trade(current_time, 'LIQUIDATION', current_price, 0, 0, self.current_balance))
+   404→                        self.balance.append(0)
+   405→                        position = None
+   406→                        break
+   407→                    
+   408→                    position = None
+   409→                    previous_high = None
+   410→                    high_since_entry = None
+   411→                    swing_low = None
+   412→                    ttp_level = None
+   413→            
+   414→            # 3. SELL信号处理
+   415→            if action == 'SELL' and position != 'SELL':
+   416→                # 重置追踪变量
+   417→                previous_low = None
+   418→                low_since_entry = None
+   419→                swing_high = None
+   420→                ttp_level = None
+   421→                
+   422→                if position == 'BUY':
+   423→                    pnl = (current_price - entry_price) / entry_price * position_size
+   424→                    self.balance.append(self.balance[-1] + pnl)
+   425→                    new_balance = self.balance[-1]
+   426→                    
+   427→                    # 检查提款
+   428→                    day_index = (i - start_idx) // 24
+   429→                    withdraw = self._check_withdraw(day_index)
+   430→                    if withdraw > 0:
+   431→                        self.balance[-1] = self.balance[-1] - withdraw
+   432→                        new_balance = self.balance[-1]
+   433→                    
+   434→                    self.trades.append(Trade(current_time, 'CLOSE_BUY', current_price, trade_capital, pnl, new_balance, withdraw))
+   435→                    self.current_balance = new_balance
+   436→                    
+   437→                    if self.current_balance <= 0:
+   438→                        self.trades.append(Trade(current_time, 'LIQUIDATION', current_price, 0, 0, self.current_balance))
+   439→                        self.balance.append(0)
+   440→                        position = None
+   441→                        break
+   442→                
+   443→                self.trades.append(Trade(current_time, 'SELL', current_price, trade_capital, 0, self.current_balance))
+   444→                position = 'SELL'
+   445→                entry_price = current_price
+   446→                sell_signals += 1
+   447→            
+   448→            # 4. SELL持仓检测
+   449→            elif position == 'SELL':
+   450→                # SELL止损检测
+   451→                price_change = (entry_price - current_price) / entry_price
+   452→                if price_change <= -self.stop_loss_pct:
+   453→                    pnl = -position_size * self.stop_loss_pct
+   454→                    self.balance.append(self.balance[-1] + pnl)
+   455→                    new_balance = self.balance[-1]
+   456→                    
+   457→                    # 检查提款
+   458→                    day_index = (i - start_idx) // 24
+   459→                    withdraw = self._check_withdraw(day_index)
+   460→                    if withdraw > 0:
+   461→                        self.balance[-1] = self.balance[-1] - withdraw
+   462→                        new_balance = self.balance[-1]
+   463→                    
+   464→                    self.trades.append(Trade(current_time, 'CLOSE_SELL', current_price, trade_capital, pnl, new_balance, withdraw))
+   465→                    self.current_balance = new_balance
+   466→                    
+   467→                    if self.current_balance <= 0:
+   468→                        self.trades.append(Trade(current_time, 'LIQUIDATION', current_price, 0, 0, self.current_balance))
+   469→                        self.balance.append(0)
+   470→                        position = None
+   471→                        break
+   472→                    
+   473→                    position = None
+   474→                    previous_low = None
+   475→                    low_since_entry = None
+   476→                    swing_high = None
+   477→                    ttp_level = None
+   478→        
+   479→        # 结束时平仓
+   480→        final_price = self.candles[-1]['close']
+   481→        
+   482→        if position == 'BUY':
+   483→            pnl = (final_price - entry_price) / entry_price * position_size
+   484→            self.balance.append(self.balance[-1] + pnl)
+   485→            new_balance = self.balance[-1]
+   486→            
+   487→            # 检查提款
+   488→
+   489→            if withdraw > 0:
+   490→                self.balance[-1] = self.balance[-1] - withdraw
+   491→                new_balance = self.balance[-1]
+   492→            
+   493→            self.trades.append(Trade(
+   494→                datetime.fromtimestamp(self.candles[-1]['time']/1000).strftime('%Y-%m-%d'),
+   495→                'CLOSE_BUY', final_price, trade_capital, pnl, new_balance, withdraw
+   496→            ))
+   497→            self.current_balance = new_balance
+   498→        
+   499→        elif position == 'SELL':
+   500→            pnl = (entry_price - final_price) / entry_price * position_size
+   501→            self.balance.append(self.balance[-1] + pnl)
+   502→            new_balance = self.balance[-1]
+   503→            
+   504→            # 检查提款
+   505→
+   506→            if withdraw > 0:
+   507→                self.balance[-1] = self.balance[-1] - withdraw
+   508→                new_balance = self.balance[-1]
+   509→            
+   510→            self.trades.append(Trade(
+   511→                datetime.fromtimestamp(self.candles[-1]['time']/1000).strftime('%Y-%m-%d'),
+   512→                'CLOSE_SELL', final_price, trade_capital, pnl, new_balance, withdraw
+   513→            ))
+   514→            self.current_balance = new_balance
+   515→        
+   516→        return self._calculate_result(strategy_name, buy_signals, sell_signals)
+   517→    
+   518→    def _calculate_result(self, strategy_name: str, buy: int, sell: int) -> BacktestResult:
+   519→        """计算回测结果"""
+   520→        closing = [t for t in self.trades if t.order_type in ['CLOSE_BUY', 'CLOSE_SELL', 'TTP_BUY', 'TTP_SELL']]
+   521→        
+   522→        winning = [t for t in closing if t.pnl > 0]
+   523→        losing = [t for t in closing if t.pnl <= 0]
+   524→        
+   525→        # 最大回撤
+   526→        equity = [e for e in self.balance if e > 0]
+   527→        if not equity:
+   528→            equity = [0]
+   529→        max_eq = self.initial_capital
+   530→        max_dd = 0
+   531→        for e in equity:
+   532→            if e > max_eq:
+   533→                max_eq = e
+   534→            if max_eq > 0:
+   535→                dd = (max_eq - e) / max_eq * 100
+   536→                if dd > max_dd:
+   537→                    max_dd = dd
+   538→        
+   539→        # 计算收益
+   540→        final_balance = self.balance[-1]
+   541→        total_return = (final_balance - self.initial_capital) / self.initial_capital * 100
+   542→        
+   543→        # 风险调整收益
+   544→        returns = []
+   545→        for i in range(1, len(self.balance)):
+   546→            ret = (self.balance[i] - self.balance[i-1]) / self.balance[i-1]
+   547→            returns.append(ret)
+   548→        
+   549→        sharpe = 0
+   550→        sortino = 0
+   551→        
+   552→        if len(returns) > 1 and statistics.stdev(returns) > 0:
+   553→            risk_free_rate = 0.02 / 252  # 日无风险利率
+   554→            sharpe = (statistics.mean(returns) - risk_free_rate) / statistics.stdev(returns) * (252**0.5)
+   555→            
+   556→            negative_returns = [r for r in returns if r < 0]
+   557→            if len(negative_returns) > 1:
+   558→                sortino = (statistics.mean(returns) - risk_free_rate) / statistics.stdev(negative_returns) * (252**0.5)
+   559→        
+   560→        # 卡玛比率
+   561→        if max_dd > 0:
+   562→            calmar = total_return / max_dd
+   563→        else:
+   564→            calmar = 0
+   565→        
+   566→        # 胜率和盈亏比
+   567→        win_rate = len(winning) / len(closing) * 100 if closing else 0
+   568→        avg_win_pct = statistics.mean([t.pnl for t in winning]) / self.initial_capital * 100 if winning else 0
+   569→        avg_loss_pct = abs(statistics.mean([t.pnl for t in losing]) / self.initial_capital * 100) if losing else 0
+   570→        
+   571→        # TTP统计
+   572→        ttp_count = len([t for t in self.trades if 'TTP' in t.order_type])
+   573→        signal_close = len([t for t in self.trades if 'CLOSE' in t.order_type])
+   574→        
+   575→        # 日均开仓量
+   576→        open_trades = [t for t in self.trades if t.order_type in ['BUY', 'SELL']]
+   577→        trading_days = self.days if self.days > 0 else 1
+   578→        daily_open = len(open_trades) / trading_days if open_trades else 0
+   579→        
+   580→        return BacktestResult(
+   581→            coin=self.coin,
+   582→            interval=self.interval,
+   583→            period=f"{self.days}天",
+   584→            total_trades=len(closing),
+   585→            winning_trades=len(winning),
+   586→            losing_trades=len(losing),
+   587→            total_return=total_return,
+   588→            final_balance=final_balance,
+   589→            max_balance=max(self.balance) if self.balance else 0,
+   590→            min_balance=min(self.balance) if self.balance else 0,
+   591→            win_rate=win_rate,
+   592→            avg_win=avg_win_pct,
+   593→            avg_loss=avg_loss_pct,
+   594→            max_drawdown=max_dd,
+   595→            max_profit=max([t.pnl for t in closing]) if closing else 0,
+   596→            max_loss=min([t.pnl for t in closing]) if closing else 0,
+   597→            sharpe_ratio=sharpe,
+   598→            sortino_ratio=sortino,
+   599→            calmar_ratio=calmar,
+   600→            trades=self.trades,
+   601→            buy_signals=buy,
+   602→            sell_signals=sell,
+   603→            daily_open_positions=daily_open
+   604→        )
+   605→    
+   606→    def save_report(self, strategy_name: str, prefix: str = "TTP"):
+   607→        """保存回测报告"""
+   608→        if not self.candles:
+   609→            return
+   610→        
+   611→        # 计算avg_win/avg_loss金额
+   612→        avg_win = statistics.mean([t.pnl for t in self.trades if t.pnl > 0 and 'CLOSE' in t.order_type]) if [t for t in self.trades if t.pnl > 0 and 'CLOSE' in t.order_type] else 0
+   613→        avg_loss = abs(statistics.mean([t.pnl for t in self.trades if t.pnl < 0 and 'CLOSE' in t.order_type])) if [t for t in self.trades if t.pnl < 0 and 'CLOSE' in t.order_type] else 0
+   614→        
+   615→        # 转换时长为中文
+   616→        days_map = {
+   617→            365: "1年",
+   618→            730: "2年",
+   619→            1095: "3年",
+   620→            1825: "5年",
+   621→        }
+   622→        duration = days_map.get(self.days, f"{self.days}天")
+   623→        
+   624→        # 系统名称
+   625→        system_name = "backtest"
+   626→        
+   627→        # 安全值转换
+   628→        def safe_value(v):
+   629→            if v is None:
+   630→                return 0
+   631→            if isinstance(v, float):
+   632→                return round(v, 2)
+   633→            return v
+   634→        
+   635→        # 百分比格式化
+   636→        def format_pct(v):
+   637→            if v is None:
+   638→                return "0.00%"
+   639→            return f"{v:.2f}%"
+   640→        
+   641→        result = self._calculate_result(strategy_name, 0, 0)
+   642→        
+   643→        # 计算盈利因子和期望比率
+   644→        winning = [t for t in self.trades if t.pnl > 0 and 'CLOSE' in t.order_type]
+   645→        losing = [t for t in self.trades if t.pnl < 0 and 'CLOSE' in t.order_type]
+   646→        gross_profit = sum(t.pnl for t in winning)
+   647→        gross_loss = sum(t.pnl for t in losing)
+   648→        profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0
+   649→        
+   650→        expectancy = (result.win_rate/100 * avg_win/100) - ((1 - result.win_rate/100) * avg_loss/100) if result.win_rate > 0 else 0
+   651→        
+   652→        # 连胜连亏
+   653→        closing = [t for t in self.trades if 'CLOSE' in t.order_type]
+   654→        longest_win = 0
+   655→        longest_loss = 0
+   656→        current_win = 0
+   657→        current_loss = 0
+   658→        for t in closing:
+   659→            if t.pnl > 0:
+   660→                current_win += 1
+   661→                current_loss = 0
+   662→                longest_win = max(longest_win, current_win)
+   663→            else:
+   664→                current_loss += 1
+   665→                current_win = 0
+   666→                longest_loss = max(longest_loss, current_loss)
+   667→        
+   668→        # TTP统计
+   669→        ttp_count = len([t for t in self.trades if 'TTP' in t.order_type])
+   670→        signal_close = len([t for t in self.trades if 'CLOSE' in t.order_type])
+   671→        
+   672→        report_data = {
+   673→            'strategy': strategy_name,
+   674→            'config': {
+   675→                'coin': self.coin,
+   676→                'interval': self.interval,
+   677→                'period': duration,
+   678→                'initial_capital': self.initial_capital,
+   679→                'leverage': self.leverage,
+   680→                'stop_loss': f"{self.stop_loss_pct*100:.0f}%",
+   681→                'enable_ttp': self.enable_ttp,
+   682→                'trade_percent': 0.1,  # 每次开仓使用余额的10%
+   683→            },
+   684→            'balance': {
+   685→                'initial': self.initial_capital,
+   686→                'final': safe_value(result.final_balance),
+   687→                'max': safe_value(result.max_balance),
+   688→                'min': safe_value(result.min_balance),
+   689→                'withdraw_count': self.withdraw_count,  # 提款次数
+   690→                'first_time_withdraw': f"第{self.first_withdraw_day}天" if self.first_withdraw_day is not None else "无",  # 第一次提款时的天数
+   691→            },
+   692→            'results': {
+   693→                'total_return': format_pct(safe_value(result.total_return)),  # 总收益%
+   694→                'max_drawdown': format_pct(safe_value(result.max_drawdown)),  # 最大回撤%
+   695→                'sharpe_ratio': safe_value(result.sharpe_ratio),  # 夏普比率
+   696→                'sortino_ratio': safe_value(result.sortino_ratio),  # 索提诺比率
+   697→                'calmar_ratio': safe_value(result.calmar_ratio),  # 卡玛比率
+   698→                'total_trades': safe_value(result.total_trades),  # 总交易数
+   699→                'winning_trades': safe_value(result.winning_trades),  # 盈利交易
+   700→                'losing_trades': safe_value(result.losing_trades),  # 亏损交易
+   701→                'win_rate': format_pct(safe_value(result.win_rate)),  # 胜率%
+   702→                'avg_win': format_pct(safe_value(result.avg_win)),  # 平均盈利%
+   703→                'avg_loss': format_pct(safe_value(result.avg_loss)),  # 平均亏损%
+   704→                'max_win': f"${safe_value(result.max_profit)}",  # 最大单笔盈利金额
+   705→                'max_loss': f"${safe_value(result.max_loss)}",  # 最大单笔亏损金额
+   706→                'profit_factor': safe_value(profit_factor),  # 盈利因子
+   707→                'expectancy_ratio': round(expectancy, 2),  # 期望比率
+   708→                'longest_win': safe_value(longest_win),  # 最长连胜
+   709→                'longest_loss': safe_value(longest_loss),  # 最长连亏
+   710→                'ttp_count': ttp_count,  # TTP止盈次数
+   711→                'signal_close': signal_close,  # 信号平仓次数
+   712→                'daily_open_positions': round(result.daily_open_positions, 2),  # 日均开仓量
+   713→            },
+   714→            'trades': [
+   715→                {
+   716→                    'time': t.time,
+   717→                    'order_type': t.order_type,
+   718→                    'price': t.price,
+   719→                    'capital': t.capital,
+   720→                    'pnl': t.pnl,
+   721→                    'balance': t.balance,
+   722→                    'withdraw': t.withdraw  # 从Trade对象获取
+   723→                }
+   724→                for t in self.trades
+   725→            ]
+   726→        }
+   727→        
+   728→        # 保存文件
+   729→        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+   730→        
+   731→        # 提款状态标识
+   732→        withdraw_status = "有提款" if getattr(self, 'enable_withdraw', True) else "无提款"
+   733→        
+   734→        prefix_str = f"{prefix}_" if prefix else ""
+   735→        report_file = os.path.join(
+   736→            REPORT_DIR, 
+   737→            f'{prefix_str}{self.coin}_{strategy_name}_{self.interval}_{duration}_{withdraw_status}_{system_name}_{timestamp}.json'
+   738→        )
+   739→        
+   740→        with open(report_file, 'w', encoding='utf-8') as f:
+   741→            json.dump(report_data, f, indent=2, ensure_ascii=False)
+   742→        
+   743→        logger.info(f"📁 报告已保存: {report_file}")
+   744→        
+   745→        # 打印摘要
+   746→        print("=" * 60)
+   747→        print(f"💰 最终余额: ${result.final_balance:,.2f}")
+   748→        print(f"💰 最大余额: ${result.max_balance:,.2f}")
+   749→        print(f"💰 最小余额: ${result.min_balance:,.2f}")
+   750→        print("=" * 60)
+   751→        print(f"📈 总收益率: {format_pct(result.total_return)}")
+   752→        print(f"📉 最大回撤: {format_pct(result.max_drawdown)}")
+   753→        print(f"📊 日均开仓: {result.daily_open_positions:.2f}笔")
+   754→        print(f"📊 夏普比率: {result.sharpe_ratio:.2f}")
+   755→        print(f"📊 索提诺: {result.sortino_ratio:.2f}")
+   756→        print(f"📊 卡玛比率: {result.calmar_ratio:.2f}")
+   757→        print(f"🎯 胜率: {result.win_rate:.1f}%")
+   758→        print(f"💰 总交易次数: {result.total_trades}")
+   759→        print(f"📊 日均开仓: {result.daily_open_positions:.2f}笔")
+   760→        print(f"🎯 TTP止盈: {ttp_count} ({ttp_count/result.total_trades*100:.1f}%)" if result.total_trades > 0 else "🎯 TTP止盈: 0")
+   761→        print(f"🎯 信号平仓: {signal_close} ({signal_close/result.total_trades*100:.1f}%)" if result.total_trades > 0 else "🎯 信号平仓: 0")
+   762→        print("=" * 60)
+   763→        
+   764→        return result
+   765→
+   766→
+   767→def run_backtest(coin: str, strategy_name: str, interval: str = '1h', days: int = 1095, initial_capital: float = 500):
+   768→    """便捷回测函数"""
+   769→    engine = BacktestEngine(
+   770→        coin=coin,
+   771→        interval=interval,
+   772→        days=days,
+   773→        initial_capital=initial_capital,
+   774→        enable_ttp=True,
+   775→        stop_loss_pct=0.1,
+   776→        leverage=10.0
+   777→    )
+   778→    result = engine.run_backtest(strategy_name)
+   779→    engine.save_report(strategy_name)
+   780→    return result
+   781→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

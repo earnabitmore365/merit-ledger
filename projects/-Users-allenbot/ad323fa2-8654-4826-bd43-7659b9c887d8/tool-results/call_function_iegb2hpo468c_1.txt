@@ -1,0 +1,13 @@
+🦞 OpenClaw 2026.2.19-2 (45d9b20) — IPC, but it's your phone.
+
+Usage: openclaw configure [options]
+
+Interactive setup wizard for credentials, channels, gateway, and agent defaults
+
+Options:
+  -h, --help           Display help for command
+  --section <section>  Configuration sections (repeatable). Options: workspace,
+                       model, web, gateway, daemon, channels, skills, health
+                       (default: [])
+
+Docs: https://docs.openclaw.ai/cli/configure

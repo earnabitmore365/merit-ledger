@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""
+SMC Strategy - Smart Money Concepts
+
+Smart money analysis strategy.
+
+Features:
+- Order Block detection
+- FVG (Fair Value Gap) identification
+- OTE (Optimal Trade Entry) zone
+- Trend determination
+"""
+
+from typing import Dict, List
+from src.core.strategy import Signal
+
+
+class SMCStrategy:
+    """Smart Money Concepts trading strategy"""
+    
+    def __init__(self):
+        self.name = "smc"
+        self.short_ma = 20
+        self.long_ma = 50
+    
+    def calculate_ma(self, closes: List[float], period: int) -> float:
+        """Calculate Moving Average"""
+        if len(closes) < period:
+            return sum(closes) / len(closes) if closes else 0.0
+        return sum(closes[-period:]) / period
+    
+    def calculate_ote_zone(self, closes: List[float]) -> Dict:
+        """Calculate OTE zone"""
+        if len(closes) < 20:
+            return {"ote_high": closes[-1], "ote_low": closes[-1]}
+        
+        high = max(closes[-20:])
+        low = min(closes[-20:])
+        
+        return {
+            "ote_high": high - (high - low) * 0.382,
+            "ote_low": low + (high - low) * 0.382,
+        }
+    
+    def determine_trend(self, closes: List[float]) -> str:
+        """Determine trend direction"""
+        if len(closes) < self.long_ma:
+            return "neutral"
+        
+        ma_short = self.calculate_ma(closes, self.short_ma)
+        ma_long = self.calculate_ma(closes, self.long_ma)
+        
+        if ma_short > ma_long:
+            return "bullish"
+        elif ma_short < ma_long:
+            return "bearish"
+        return "neutral"
+    
+    def generate_signal(self, coin: str, candles: List[Dict] = None) -> Signal:
+        """Generate SMC trading signal
+        
+        Args:
+            coin: Trading pair
+            candles: OHLCV data
+            
+        Returns:
+            Signal: BUY, SELL, or HOLD
+        """
+        # Validate candles
+        if not candles or len(candles) < self.long_ma:
+            return Signal.HOLD
+        
+        closes = [c["close"] for c in candles]
+        current_price = closes[-1]
+        trend = self.determine_trend(closes)
+        ote = self.calculate_ote_zone(closes)
+        
+        # Simple conditions
+        if trend == "bullish" and current_price < ote["ote_low"]:
+            return Signal.BUY
+        if trend == "bearish" and current_price > ote["ote_high"]:
+            return Signal.SELL
+        return Signal.HOLD

@@ -1,0 +1,20 @@
+2026-02-24 18:47:43,083 - HyperLiquidAdapter - INFO - 连接 HyperLiquid: https://api.hyperliquid-testnet.xyz
+2026-02-24 18:47:43,412 - HyperLiquidWebSocket - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:47:43,586 - HyperLiquidWebSocket - INFO - WebSocket 已连接: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:47:43,586 - HyperLiquidAdapter - INFO - WebSocket 已连接: 测试网
+2026-02-24 18:47:43,587 - TradingSystem - INFO - ==================================================
+2026-02-24 18:47:43,587 - TradingSystem - INFO - 交易系统启动
+2026-02-24 18:47:43,587 - TradingSystem - INFO - 交易所: HyperLiquid (Testnet)
+2026-02-24 18:47:43,587 - TradingSystem - INFO - 策略: vwap
+2026-02-24 18:47:43,587 - TradingSystem - INFO - 币种: ETH
+2026-02-24 18:47:43,587 - TradingSystem - INFO - ==================================================
+2026-02-24 18:47:49,341 - TradingSystem - INFO - 达到最大执行次数: 3
+2026-02-24 18:47:49,341 - TradingSystem - INFO - 交易系统已停止
+2026-02-24 18:47:49,341 - TradingSystem - INFO - ==================================================
+2026-02-24 18:47:49,485 - HyperLiquidWebSocket - WARNING - WebSocket 连接关闭: sent 1000 (OK); no close frame received
+2026-02-24 18:47:49,486 - HyperLiquidWebSocket - INFO - WebSocket 已断开
+2026-02-24 18:47:49,486 - HyperLiquidAdapter - INFO - WebSocket 已断开
+2026-02-24 18:47:49,488 - HyperLiquidAdapter - INFO - 已断开 HyperLiquid 连接
+每秒刷新，按 Ctrl+C 停止
+==================================================
+完成

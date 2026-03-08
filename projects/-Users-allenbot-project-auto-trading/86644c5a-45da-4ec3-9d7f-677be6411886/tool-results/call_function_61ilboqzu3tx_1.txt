@@ -1,0 +1,1 @@
+424:                selections['周期'] = result[0] if isinstance(result, list) else result

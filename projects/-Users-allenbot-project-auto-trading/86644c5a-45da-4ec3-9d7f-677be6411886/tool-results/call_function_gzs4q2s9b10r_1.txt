@@ -1,0 +1,4 @@
+111:#     - 使用 Action 枚举: BUY, SELL, CLOSE_BUY, CLOSE_SELL, REVERSE_BUY, REVERSE_SELL, TTP_CLOSE_BUY, TTP_CLOSE_SELL, NONE
+122:#     策略信号 → Action → OrderRequest → Adapter → 交易所 API
+411:### 9.1 交易操作 (Action)
+474:│  │   策略      │ → │   Signal    │ → │   Action (BUY/SELL)    │  │

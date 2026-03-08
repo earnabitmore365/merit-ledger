@@ -1,0 +1,142 @@
+---
+name: reflect
+description: 从对话种子里提取纠错和学习点，积累到 LEARNINGS.md，重复3次升级为 CLAUDE.md 规则。用户说 /reflect 或"反思一下"时触发。
+user-invocable: true
+---
+
+# Reflect — 自我改进
+
+> 哲学：**被纠正一次，永远不犯第二次。**
+
+## 触发方式
+- 用户说 `/reflect`
+- 用户说"反思一下"、"总结教训"、"有没有学到什么"
+
+---
+
+## 执行步骤
+
+### 步骤1：从对话种子拉纠错信号
+
+```python
+python3 -c "
+import sqlite3, os
+conn = sqlite3.connect(os.path.expanduser('~/.claude/conversations.db'))
+rows = conn.execute('''
+    SELECT time, speaker, content
+    FROM messages
+    WHERE tags LIKE '%纠错%'
+    ORDER BY id DESC LIMIT 50
+''').fetchall()
+for r in rows:
+    print(f'[{r[0]}] {r[1]}: {r[2][:300]}')
+conn.close()
+"
+```
+
+同时也拉最近会话全文（补捉标签未覆盖的隐性纠错）：
+```python
+python3 -c "
+import sqlite3, os
+from datetime import datetime, timedelta
+conn = sqlite3.connect(os.path.expanduser('~/.claude/conversations.db'))
+since = (datetime.now() - timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')
+rows = conn.execute('''
+    SELECT time, speaker, content FROM messages
+    WHERE time >= ? ORDER BY id
+''', (since,)).fetchall()
+for r in rows:
+    print(f'[{r[0]}] {r[1]}: {r[2][:200]}')
+conn.close()
+"
+```
+
+### 步骤2：识别纠错信号
+
+扫描以下模式（老板原话优先，保留原文）：
+
+**显性纠错（高可信）：**
+- "不要这样"、"不对"、"错了"、"你怎么XXX"、"干什么飞机"
+- "你老是XXX"、"又XXX了"、"我不是叫你XXX"
+- "你先别XXX"、"我说的是XXX不是XXX"
+
+**隐性纠错（中可信）：**
+- 用户解释了一遍 Claude 没做到的事
+- 用户重复说了同一件事（说明上次没记住）
+- 用户补充细节（说明 Claude 输出不完整）
+
+**正向确认（记录最佳实践）：**
+- "就这样"、"对"、"完美"、"就是这个意思"
+- 后续不再重复要求同一件事
+
+### 步骤3：写入 LEARNINGS.md
+
+路径：`~/.claude/learnings/LEARNINGS.md`
+
+每条格式：
+```
+## LRN-{YYYYMMDD}-{NNN}
+
+- **日期**：{date}
+- **优先级**：low / medium / high / critical
+- **状态**：pending / 出现{N}次 / promoted
+- **类型**：纠错 / 最佳实践 / 用户偏好
+- **触发原话**（保留原文）："{老板原话}"
+- **教训**：{一句话总结，AI应该做什么/不做什么}
+- **出现次数**：{N}（同一模式跨会话累计）
+
+---
+```
+
+### 步骤4：检查升级候选
+
+读 LEARNINGS.md，找出现次数 ≥ 3 的条目：
+
+```python
+python3 -c "
+import re
+with open(os.path.expanduser('~/.claude/learnings/LEARNINGS.md')) as f:
+    content = f.read()
+# 找出现次数 >= 3 的条目
+entries = re.findall(r'## (LRN-\S+).*?出现次数：(\d+)', content, re.DOTALL)
+candidates = [(id, int(n)) for id, n in entries if int(n) >= 3]
+for id, n in candidates:
+    print(f'{id}: {n}次')
+"
+```
+
+### 步骤5：提案输出
+
+向老板输出结构化报告：
+
+```
+## 本次 Reflect 结果
+
+### 新增学习点（{N} 条）
+1. [LRN-YYYYMMDD-001] **{教训}**
+   触发原话："..."
+   建议操作：记录备查
+
+### 升级候选（出现 ≥ 3 次，建议写进 CLAUDE.md）
+1. [LRN-XXXXXXXX-XXX] 出现 {N} 次
+   **教训**：{内容}
+   **建议加入 CLAUDE.md**：`{具体措辞}`
+   [批准] / [跳过] / [修改措辞]
+
+### 本次无新发现
+（如无纠错信号）
+```
+
+**⚠️ 安全机制：** 任何 CLAUDE.md 修改，必须老板明确批准后才写入，不自动修改。
+
+---
+
+## 集成说明
+
+- **数据源**：`~/.claude/conversations.db` messages 表（tags LIKE '%纠错%'）
+- **学习草稿**：`~/.claude/learnings/LEARNINGS.md`（pending，未毕业）
+- **升级目标（系统自带 memory 目录）**：
+  - 全局规则 → `~/.claude/projects/-Users-allenbot/memory/rules.md`
+  - auto-trading 规则 → `~/.claude/projects/-Users-allenbot-project-auto-trading/memory/rules.md`
+  - 其他项目同理，放对应项目的 memory/rules.md
+- **与对话种子协作**：对话种子负责存原话，reflect 负责从原话里提取规律

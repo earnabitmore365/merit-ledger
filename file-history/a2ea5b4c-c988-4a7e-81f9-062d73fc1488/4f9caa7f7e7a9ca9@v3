@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""
+一键执行 Gate v3 管线: 初考 → 专考 → 照妖镜WF全量 → 组考 → MC+冠军+目录
+输出: lab/results/gate_v3/gate_v3_report.db
+"""
+import time
+
+def main():
+    start = time.time()
+
+    print("=" * 60)
+    print("Gate v3 管线 — 开始执行")
+    print("=" * 60)
+
+    # 初考
+    print("\n[1/5] 初考（门槛）")
+    print("-" * 40)
+    import gate1_threshold
+    gate1_threshold.main()
+
+    # 专考
+    print("\n[2/5] 专考（成绩单）")
+    print("-" * 40)
+    import gate2_scorecard
+    gate2_scorecard.main()
+
+    # 照妖镜WF全量
+    print("\n[3/5] 照妖镜WF全量")
+    print("-" * 40)
+    import gate_wf_all
+    gate_wf_all.main()
+
+    # 组考
+    print("\n[4/5] 组考（组队）")
+    print("-" * 40)
+    import gate3_team
+    gate3_team.main()
+
+    # MC + 冠军 + 目录
+    print("\n[5/5] 照妖镜MC + 冠军 + 目录")
+    print("-" * 40)
+    import gate_mc_all
+    gate_mc_all.main()
+
+    elapsed = time.time() - start
+    print("\n" + "=" * 60)
+    print(f"Gate v3 管线完成，耗时 {elapsed:.0f} 秒")
+    print("=" * 60)
+
+
+if __name__ == '__main__':
+    main()

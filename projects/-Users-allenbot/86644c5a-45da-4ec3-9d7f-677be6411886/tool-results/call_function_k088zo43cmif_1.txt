@@ -1,0 +1,64 @@
+   430→
+   431→    def __repr__(self) -> str:
+   432→        """字符串表示"""
+   433→        return f"<HyperLiquidAdapter: {self.get_exchange_name()}>"
+   434→
+   435→    # ==================== 价格获取 ====================
+   436→
+   437→    def get_price(self, coin: str) -> float:
+   438→        """获取当前价格
+   439→
+   440→        优先用 WebSocket，如果没有就用 REST API
+   441→
+   442→        Args:
+   443→            coin: 币种名称（如 "ETH"）
+   444→
+   445→        Returns:
+   446→            float: 当前价格
+   447→        """
+   448→        # 1. 尝试用 WebSocket
+   449→        if self._ws and self._ws.is_connected:
+   450→            price = self._ws.get_price(coin)
+   451→            if price:
+   452→                return price
+   453→
+   454→        # 2. 回退到 REST API
+   455→        return self._get_price_rest(coin)
+   456→
+   457→    def _get_price_rest(self, coin: str) -> float:
+   458→        """REST API 获取价格"""
+   459→        try:
+   460→            if not self._info:
+   461→                return 0.0
+   462→
+   463→            meta = self._info.meta_and_asset_ctxs()
+   464→            if isinstance(meta, list) and len(meta) >= 2:
+   465→                universe = meta[0].get('universe', []) if isinstance(meta[0], dict) else []
+   466→                asset_ctxs = meta[1] if isinstance(meta[1], list) else []
+   467→
+   468→                # 找到币种的索引
+   469→                coin_idx = None
+   470→                for i, item in enumerate(universe):
+   471→                    if isinstance(item, dict) and item.get('name') == coin:
+   472→                        coin_idx = i
+   473→                        break
+   474→
+   475→                # 获取价格（优先用 markPx，比 midPx 更适合下单）
+   476→                if coin_idx is not None and coin_idx < len(asset_ctxs):
+   477→                    ctx = asset_ctxs[coin_idx]
+   478→                    # markPx 是市场价格，更适合下单
+   479→                    if ctx.get('markPx'):
+   480→                        return float(ctx['markPx'])
+   481→                    elif ctx.get('midPx'):
+   482→                        return float(ctx['midPx'])
+   483→
+   484→            return 0.0
+   485→
+   486→        except Exception as e:
+   487→            self.logger.error(f"获取价格失败: {e}")
+   488→            return 0.0
+   489→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

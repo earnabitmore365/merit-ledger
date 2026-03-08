@@ -1,0 +1,2 @@
+104:                timestamp=klines[-1]["time"] if klines else 0,
+117:            timestamp=klines[-1]["time"],

@@ -1,0 +1,9 @@
+{
+  "id": "10",
+  "subject": "修复 WebSocket",
+  "description": "重写 WebSocket 实现，修复事件循环冲突和 disconnect 问题",
+  "activeForm": "修复 WebSocket 问题",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,54 @@
+   400→        """字符串表示"""
+   401→        return f"<HyperLiquidAdapter: {self.get_exchange_name()}>"
+   402→
+   403→
+   404→# ==================== 价格获取 ====================
+   405→
+   406→    def get_price(self, coin: str) -> float:
+   407→        """获取当前价格
+   408→
+   409→        优先用 WebSocket，如果没有就用 REST API
+   410→
+   411→        Args:
+   412→            coin: 币种名称（如 "ETH"）
+   413→
+   414→        Returns:
+   415→            float: 当前价格
+   416→        """
+   417→        # 1. 尝试用 WebSocket
+   418→        if self._ws and self._ws.is_connected:
+   419→            price = self._ws.get_price(coin)
+   420→            if price:
+   421→                return price
+   422→
+   423→        # 2. 回退到 REST API
+   424→        return self._get_price_rest(coin)
+   425→
+   426→    def _get_price_rest(self, coin: str) -> float:
+   427→        """REST API 获取价格"""
+   428→        try:
+   429→            if not self._info:
+   430→                return 0.0
+   431→
+   432→            meta = self._info.meta_and_asset_ctxs()
+   433→            if isinstance(meta, list) and len(meta) >= 2:
+   434→                universe = meta[0].get('universe', []) if isinstance(meta[0], dict) else []
+   435→                asset_ctxs = meta[1] if isinstance(meta[1], list) else []
+   436→
+   437→                # 找到币种的索引
+   438→                coin_idx = None
+   439→                for i, item in enumerate(universe):
+   440→                    if isinstance(item, dict) and item.get('name') == coin:
+   441→                        coin_idx = i
+   442→                        break
+   443→
+   444→                # 获取价格（优先用 markPx，比 midPx 更适合下单）
+   445→                if coin_idx is not None and coin_idx < len(asset_ctxs):
+   446→                    ctx = asset_ctxs[coin_idx]
+   447→                    # markPx 是市场价格，更适合下单
+   448→                    if ctx.get('markPx'):
+   449→                        return float(ctx['markPx'])
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

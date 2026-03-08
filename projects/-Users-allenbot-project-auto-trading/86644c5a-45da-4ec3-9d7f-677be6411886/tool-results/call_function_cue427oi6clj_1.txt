@@ -1,0 +1,34 @@
+   458→                step = 8
+   459→
+   460→            elif step == 8:
+   461→                # 步骤9: TTP移动止盈
+   462→                result = menu.get_yes_no("是否启用移动止盈 (TTP)", True, selections)
+   463→                if result == "BACK":
+   464→                    step = 7
+   465→                    continue
+   466→                if result is None:
+   467→                    result = True
+   468→                selections['TTP'] = "开启" if result else "关闭"
+   469→                step = 8
+   470→
+   471→            elif step == 8:
+   472→                # 步骤9: 运行模式
+   473→                result = menu.get_yes_no("是否持续运行? (YES=持续运行, NO=执行一次)", True, selections)
+   474→                if result == "BACK":
+   475→                    step = 7
+   476→                    continue
+   477→                if result is None:
+   478→                    result = False
+   479→                selections['模式'] = "持续运行" if result else "执行一次"
+   480→                step = 9
+   481→
+   482→            elif step == 9:
+   483→                # 启动交易系统
+   484→                stdscr.clear()
+   485→                stdscr.addstr(0, 0, "正在启动交易系统...")
+   486→                stdscr.refresh()
+   487→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

@@ -1,0 +1,2 @@
+161:    def run(self, interval_seconds: int = 60, max_iterations: int = None):
+196:    def run_once(self) -> Dict:

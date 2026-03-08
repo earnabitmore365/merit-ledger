@@ -1,0 +1,486 @@
+ ---
+  实施方案：指标库整合进交易系统                                                
+  
+  一、核心设计决策（基于代码阅读）                                              
+                  
+  读完现有代码后，有几个关键发现：
+
+  1. v1 的真正问题：cooldown_bars=3（45分钟）+ MA 交叉太敏感，导致 1680
+  次切换。MA 差距 < 0.5% 才算 ranging，阈值太松。
+  2. detector.py 是纯函数：无状态，易替换，只改实现不改接口。
+  3. 滞后阈值（Hysteresis）放在 strategy.py 而不是 detector.py：detector
+  只负责计算当前 ADX 值，strategy 负责"进入 regime 需要 ADX>25，退出需要
+  ADX<18"的差异化阈值逻辑。
+  4. MarketScore 回测时禁用：use_market_score=False，不改 backtest.py，通过
+  RegimeConfig 控制。
+
+  ---
+  二、文件变更清单
+
+  ┌────────────────────────────────┬──────┬──────────────────────────────────┐
+  │              文件              │ 动作 │             改动幅度             │
+  ├────────────────────────────────┼──────┼──────────────────────────────────┤
+  │ src/trading/regime/config.py   │ 修改 │ 小，替换参数字段                 │
+  ├────────────────────────────────┼──────┼──────────────────────────────────┤
+  │ src/trading/regime/detector.py │ 修改 │ 大，整体替换算法                 │
+  ├────────────────────────────────┼──────┼──────────────────────────────────┤
+  │ src/trading/regime/strategy.py │ 修改 │ 中，替换 cooldown 机制，加       │
+  │                                │      │ MarketScore                      │
+  ├────────────────────────────────┼──────┼──────────────────────────────────┤
+  │ src/backtest/backtest.py       │ 不改 │ —                                │
+  ├────────────────────────────────┼──────┼──────────────────────────────────┤
+  │ src/trading/system.py          │ 不改 │ —                                │
+  ├────────────────────────────────┼──────┼──────────────────────────────────┤
+  │ src/indicators/                │ 不改 │ 直接调用                         │
+  └────────────────────────────────┴──────┴──────────────────────────────────┘
+
+  ---
+  三、每个文件的具体修改
+
+  3.1 config.py — 替换参数
+
+  @dataclass
+  class RegimeDetectorConfig:
+      # ADX 三层方案参数
+      adx_period: int = 14
+      sma_period: int = 50
+      atr_period: int = 14
+
+      # 滞后阈值（Hysteresis）
+      trend_enter_adx: float = 25.0    # 从 ranging 进入趋势：ADX 必须 > 25
+      trend_exit_adx:  float = 18.0    # 从趋势退出：ADX 必须 < 18
+      min_dwell_bars:  int   = 12      # 最少停留 12 根 K 线才允许切换
+
+      # 高波动过滤
+      atr_vol_multiplier: float = 2.0  # 当前 ATR% > 均值 * 2 → 高波动
+
+      min_klines: int = 60             # SMA(50) 至少需要 60 根
+
+
+  @dataclass
+  class RegimeConfig:
+      regime_map: Dict[str, str] = field(default_factory=lambda:
+  dict(DEFAULT_REGIME_MAP))
+      detector: RegimeDetectorConfig =
+  field(default_factory=RegimeDetectorConfig)
+      # 移除 cooldown_bars（改为 detector.min_dwell_bars）
+      use_market_score: bool  = True   # 回测时设 False
+      market_score_weight: float = 0.3 # MarketScore 对信心度的影响权重（0.3 =
+  最多 ±0.15）
+
+  改动位置：全文替换 RegimeDetectorConfig 和 RegimeConfig 两个 dataclass，删除
+  cooldown_bars。
+
+  ---
+  3.2 detector.py — 替换算法实现
+
+  接口保持不变（strategy.py 无需修改调用方式）：
+  - detect(klines) -> str — 返回 "bull"/"bear"/"ranging"/"unknown"
+  - detect_with_details(klines) -> Dict — 返回详细指标值
+
+  内部实现替换：
+
+  class MarketRegimeDetector:
+
+      # ── 指标计算 ──
+
+      @staticmethod
+      def _calc_atr(klines: List[Dict], period: int) -> List[float]:
+          """计算每根 K 线的 True Range"""
+          trs = []
+          for i in range(1, len(klines)):
+              h, l, pc = klines[i]["high"], klines[i]["low"],
+  klines[i-1]["close"]
+              trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+          return trs
+
+      @staticmethod
+      def _calc_adx(klines: List[Dict], period: int) -> float:
+          """计算 ADX(period)
+   
+          用简单平均代替 Wilder 平滑（无状态，效果相近）
+          需要至少 2*period 根 K 线
+          """
+          if len(klines) < period * 2 + 1:
+              return 20.0  # 数据不足，返回模糊区间值
+
+          trs, plus_dms, minus_dms = [], [], []
+          for i in range(1, len(klines)):
+              h, l   = klines[i]["high"],   klines[i]["low"]
+              ph, pl = klines[i-1]["high"], klines[i-1]["low"]
+              pc     = klines[i-1]["close"]
+
+              tr = max(h - l, abs(h - pc), abs(l - pc))
+              plus_dm  = max(h - ph, 0) if (h - ph) > (pl - l) else 0
+              minus_dm = max(pl - l, 0) if (pl - l) > (h - ph) else 0
+
+              trs.append(tr)
+              plus_dms.append(plus_dm)
+              minus_dms.append(minus_dm)
+
+          # 用最后 period 根计算平滑 DI
+          def smooth(vals): return sum(vals[-period:]) / period if vals else
+  1e-9
+
+          atr_val    = smooth(trs)
+          plus_di    = 100 * smooth(plus_dms)  / (atr_val or 1e-9)
+          minus_di   = 100 * smooth(minus_dms) / (atr_val or 1e-9)
+          di_sum     = plus_di + minus_di
+          dx         = 100 * abs(plus_di - minus_di) / (di_sum or 1e-9)
+
+          # ADX = SMA(DX, period)，用滑动窗口多次计算取最后值
+          # （近似：直接返回当前 DX，误差可接受）
+          return round(dx, 2)
+
+      @staticmethod
+      def _calc_sma_slope(closes: List[float], period: int) -> float:
+          """SMA(period) 斜率：正=上升，负=下降
+   
+          用前半段 vs 后半段均值之差近似斜率
+          """
+          if len(closes) < period:
+              return 0.0
+          sma_window = closes[-period:]
+          mid = period // 2
+          slope = (sum(sma_window[mid:]) / mid) - (sum(sma_window[:mid]) / mid)
+          return round(slope, 4)
+
+      @staticmethod
+      def _calc_atr_pct(klines: List[Dict], period: int) -> tuple:
+          """返回 (当前 ATR%, 历史均值 ATR%)"""
+          if len(klines) < period + 1:
+              return 0.0, 0.0
+          trs = []
+          for i in range(1, len(klines)):
+              h, l, pc = klines[i]["high"], klines[i]["low"],
+  klines[i-1]["close"]
+              trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+          recent_tr  = trs[-1]
+          avg_tr     = sum(trs[-period:]) / period
+          close      = klines[-1]["close"] or 1e-9
+          return round(recent_tr / close, 6), round(avg_tr / close, 6)
+
+      # ── 检测 ──
+
+      def detect_with_details(self, klines: List[Dict]) -> Dict:
+          """ADX 三层复合检测
+   
+          Returns dict:
+              adx, sma_slope, atr_pct, atr_mean, high_volatility,
+              sma_direction ("up"/"down"), naive_regime
+          """
+          cfg = self.config
+          if not klines or len(klines) < cfg.min_klines:
+              return {
+                  "naive_regime": "unknown",
+                  "adx": 0.0, "sma_slope": 0.0,
+                  "atr_pct": 0.0, "atr_mean": 0.0,
+                  "high_volatility": False, "sma_direction": "up",
+              }
+
+          closes   = [k["close"] for k in klines]
+          adx      = self._calc_adx(klines, cfg.adx_period)
+          slope    = self._calc_sma_slope(closes, cfg.sma_period)
+          atr_pct, atr_mean = self._calc_atr_pct(klines, cfg.atr_period)
+
+          high_vol     = atr_mean > 0 and atr_pct > atr_mean *
+  cfg.atr_vol_multiplier
+          sma_dir      = "up" if slope > 0 else "down"
+
+          # naive_regime：用中间值 22 作为单一阈值（hysteresis 由 strategy
+  处理）
+          if adx > 22:
+              naive = "bull" if sma_dir == "up" else "bear"
+          else:
+              naive = "ranging"
+
+          return {
+              "naive_regime":   naive,
+              "adx":            adx,
+              "sma_slope":      slope,
+              "atr_pct":        atr_pct,
+              "atr_mean":       atr_mean,
+              "high_volatility": high_vol,
+              "sma_direction":  sma_dir,
+          }
+
+      def detect(self, klines: List[Dict]) -> str:
+          return self.detect_with_details(klines)["naive_regime"]
+
+  ---
+  3.3 strategy.py — 替换冷却机制 + 加 MarketScore
+
+  主要变更：
+  1. 删除 _buffer / _cooldown
+  2. 新增 _regime_bars / _market_score_cache / _market_score_ts
+  3. generate_signal 内部逻辑重写
+
+  class RegimeStrategy(Strategy):
+
+      def __init__(self, config: RegimeConfig = None):
+          self._config = config or RegimeConfig()
+          self.detector = MarketRegimeDetector(self._config.detector)
+          self._strategies: Dict[str, Strategy] = {}
+          for regime, strategy_name in self._config.regime_map.items():
+              self._strategies[regime] = get_strategy(strategy_name)
+          self._current_regime = "unknown"
+          self._regime_bars    = 0          # 当前 regime 已停留根数
+          self._switch_history: List[Dict] = []
+          # MarketScore 缓存（5分钟）
+          self._market_score_cache: float = 0.5
+          self._market_score_ts:    float = 0.0
+
+      # ── Hysteresis 逻辑 ──
+
+      def _apply_hysteresis(self, details: Dict) -> str:
+          """差异化进出阈值：进趋势 ADX>25，退趋势 ADX<18"""
+          adx = details["adx"]
+          direction = details["sma_direction"]
+          cfg = self._config.detector
+
+          if self._current_regime in ("unknown", "ranging"):
+              # 当前在震荡：需要 ADX > 25 才能进趋势
+              if adx > cfg.trend_enter_adx:
+                  return "bull" if direction == "up" else "bear"
+              return "ranging"
+          else:
+              # 当前在趋势（bull/bear）：需要 ADX < 18 才退出
+              if adx < cfg.trend_exit_adx:
+                  return "ranging"
+              return "bull" if direction == "up" else "bear"
+
+      def _maybe_switch(self, new_regime: str, kline_time: int):
+          """满足最少停留根数时才切换"""
+          self._regime_bars += 1
+          if (new_regime != self._current_regime
+                  and self._regime_bars >= self._config.detector.min_dwell_bars
+                  and new_regime != "unknown"):
+              old = self._current_regime
+              self._current_regime = new_regime
+              self._regime_bars = 0
+              self._switch_history.append({"time": kline_time, "from": old,
+  "to": new_regime})
+              logger.info(f"Regime 切换: {old} -> {new_regime}")
+
+      # ── MarketScore ──
+
+      def _get_market_score(self) -> float:
+          """获取市场综合评分（5 分钟本地缓存，不频繁调 API）"""
+          if time.time() - self._market_score_ts < 300:
+              return self._market_score_cache
+          try:
+              from indicators import get_indicator
+              result = get_indicator("market_score").evaluate()
+              if result.ok:
+                  self._market_score_cache = result.score
+          except Exception:
+              pass  # 失败时返回上次缓存值
+          self._market_score_ts = time.time()
+          return self._market_score_cache
+
+      def _adjust_confidence(self, signal: TradingSignal, market_score: float)
+  -> float:
+          """MarketScore 调整信心度（方向感知）
+   
+          BUY 信号：market_score > 0.5 → 加分，< 0.5 → 减分
+          SELL 信号：反向
+          weight=0.3 → 最多调整 ±0.15
+          """
+          w = self._config.market_score_weight
+          if signal.signal == Signal.BUY:
+              delta = (market_score - 0.5) * w
+          elif signal.signal == Signal.SELL:
+              delta = (0.5 - market_score) * w
+          else:
+              delta = 0.0
+          return round(max(0.0, min(1.0, signal.confidence + delta)), 4)
+
+      # ── 核心信号生成 ──
+
+      def generate_signal(self, coin: str, klines: List[Dict] = None) ->
+  TradingSignal:
+          if not klines or len(klines) < self._config.detector.min_klines:
+              return TradingSignal(
+                  signal=Signal.HOLD, confidence=0.0, coin=coin,
+                  timestamp=klines[-1]["time"] if klines else 0,
+                  metadata={"reason": "K线不足", "regime":
+  self._current_regime},
+              )
+
+          # 1. 检测 + 滞后阈值
+          details    = self.detector.detect_with_details(klines)
+          new_regime = self._apply_hysteresis(details)
+          self._maybe_switch(new_regime, klines[-1].get("time", 0))
+
+          # 2. 委托子策略
+          sub = self._strategies.get(self._current_regime)
+          if sub is None:
+              return TradingSignal(
+                  signal=Signal.HOLD, confidence=0.0, coin=coin,
+                  timestamp=klines[-1]["time"],
+                  metadata={"reason": f"无策略: {self._current_regime}",
+  "regime": self._current_regime},
+              )
+
+          signal = sub.generate_signal(coin, klines)
+
+          # 3. 高波动降低信心度
+          if details["high_volatility"]:
+              signal.confidence = round(signal.confidence * 0.5, 4)
+              signal.metadata["high_vol"] = True
+
+          # 4. MarketScore 调整（实盘才启用）
+          if self._config.use_market_score:
+              ms = self._get_market_score()
+              signal.confidence = self._adjust_confidence(signal, ms)
+              signal.metadata["market_score"] = ms
+
+          # 5. 附加 regime 信息
+          signal.metadata.update({
+              "regime":    self._current_regime,
+              "adx":       details["adx"],
+              "regime_bars": self._regime_bars,
+          })
+          return signal
+
+  ---
+  四、整合方案（指标如何影响交易决策）
+
+  K线数据
+      │
+      ▼
+  detector.detect_with_details()
+      ├── ADX(14)：判断趋势强度
+      ├── SMA(50) 斜率：判断方向
+      └── ATR%：判断波动
+
+      │
+      ▼
+  strategy._apply_hysteresis()
+      ├── 当前 ranging → ADX > 25 才进趋势
+      └── 当前 bull/bear → ADX < 18 才退出
+
+      │（+最少停留 12 根）
+      ▼
+  选择子策略（bull→proc / bear→demandindex_short / ranging→mean_reversion）
+
+      │
+      ▼
+  sub.generate_signal()
+      │
+      ├── 高波动？→ confidence × 0.5
+      │
+      └── 实盘 + use_market_score=True？
+              ├── market_score > 0.5：BUY 信心度 +最多0.15
+              └── market_score < 0.5：BUY 信心度 -最多0.15
+
+      │
+      ▼
+  TradingSignal（附带 regime/adx/market_score/high_vol）
+
+  ---
+  五、回测方案（历史数据怎么用）
+
+  回测时 MarketScore 禁用，ADX 用历史 K 线计算：
+
+  # 批量回测入口（batch_backtest.py 或手动测试脚本）
+  from trading.regime import RegimeStrategy
+  from trading.regime.config import RegimeConfig
+
+  # 创建回测用 RegimeStrategy（关闭 MarketScore）
+  config  = RegimeConfig(use_market_score=False)
+  strategy = RegimeStrategy(config)
+
+  # 传入 backtest 引擎（无需改 backtest.py）
+  result = engine.run_backtest("auto", strategy=strategy)
+
+  历史 K 线天然支持 ADX：ADX/SMA/ATR 全部从 klines 计算，不需要外部
+  API，回测每根 K 线都能用。
+
+  对比验证跑法（验证 MarketScore 效果）：
+  - 跑一批 use_market_score=False（纯 ADX，基准）
+  - 实盘观察几天，看 MarketScore 调整后的信心度是否合理
+
+  ---
+  六、实现顺序
+
+  Step 1：config.py（10 分钟）
+
+  替换两个 dataclass。不影响任何运行中的代码。
+
+  验证：python3 -c "from trading.regime.config import RegimeConfig;
+  print(RegimeConfig())"
+
+  ---
+  Step 2：detector.py（45 分钟）
+
+  实现 ADX/SMA/ATR 计算方法，替换三层逻辑。
+
+  验证：
+  # 用真实 LINK/15m 数据测试
+  import json
+  from trading.regime.detector import MarketRegimeDetector
+
+  klines = json.load(open("src/backtest/data/historical/LINK/15m.json"))
+  d = MarketRegimeDetector()
+  result = d.detect_with_details(klines[-100:])
+  print(result)
+  # 期望：adx 在 10-40 之间，sma_slope 有正负变化，high_volatility 偶尔 True
+
+  ---
+  Step 3：strategy.py（30 分钟）
+
+  替换 buffer/cooldown 为 hysteresis + 加 MarketScore 调整。
+
+  验证切换次数：
+  # 模拟跑 365 天 LINK/15m（约 35040 根）
+  klines = json.load(open("src/backtest/data/historical/LINK/15m.json"))
+  strategy = RegimeStrategy(RegimeConfig(use_market_score=False))
+
+  for i in range(60, len(klines)):
+      strategy.generate_signal("LINK", klines[max(0,i-200):i])
+
+  print(f"切换次数: {len(strategy._switch_history)}")
+  # 目标 < 200（v1 是 1680/10币种 ≈ 168/单币）
+
+  ---
+  Step 4：批量回测对比（20 分钟）
+
+  跑全部 10 个币种，对比 v1 基准：
+
+  # 逐币回测
+  for coin in ["BTC","ETH","XRP","BNB","SOL","ADA","TRX","AVAX","LINK","DOT"]:
+      config = RegimeConfig(use_market_score=False)
+      strategy = RegimeStrategy(config)
+      result = engine.run_backtest("auto", strategy=strategy)
+      # 对比 proc 单策略结果
+
+  ---
+  七、验证标准（对比 v1 基准）
+
+  ┌─────────────────────────┬─────────────────┬─────────────────────────────┐
+  │          指标           │     v1 基准     │            目标             │
+  ├─────────────────────────┼─────────────────┼─────────────────────────────┤
+  │ 切换次数/年/单币        │ ~168次          │ < 20次                      │
+  ├─────────────────────────┼─────────────────┼─────────────────────────────┤
+  │ 5/10 币种 Regime >      │ 1/10（只有XRP） │ ≥ 5/10                      │
+  │ 单策略                  │                 │                             │
+  ├─────────────────────────┼─────────────────┼─────────────────────────────┤
+  │ Sharpe ratio vs proc    │ 低              │ ≥ proc × 80%                │
+  ├─────────────────────────┼─────────────────┼─────────────────────────────┤
+  │ 回测参数                │ —               │ 15m, 365天, $500, 10x,      │
+  │                         │                 │ 10%止损                     │
+  └─────────────────────────┴─────────────────┴─────────────────────────────┘
+
+  ---
+  八、不需要改的文件
+
+  - src/backtest/backtest.py — 已支持 strategy= 参数，无需改
+  - src/trading/system.py — TradingSystem 透明使用 RegimeStrategy
+  - src/indicators/ — 直接调用，不改
+  - src/trading/trade_menu.py — "★ 自动识别"选项已存在，继续工作
+
+  ---
+  这份方案可以交给 Opus
+  执行。三个文件，改动清晰，接口不变，TradingSystem/BacktestEngine 零感知。
+

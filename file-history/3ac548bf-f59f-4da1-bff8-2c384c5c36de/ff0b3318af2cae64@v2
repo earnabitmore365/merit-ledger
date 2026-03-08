@@ -1,0 +1,12 @@
+{
+  "language": "中文",
+  "permissions": {
+    "allow": [
+      "Bash(ls -t ~/.claude/projects/*/*.jsonl*)",
+      "Bash(ls -t ~/.claude/projects/**/*.jsonl*)",
+      "Bash(python3 ~/.claude/scripts/convert_conversation.py*)",
+      "Bash(wc -l /tmp/current_session.md)",
+      "Bash(grep -q*)"
+    ]
+  }
+}

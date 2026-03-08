@@ -1,0 +1,19 @@
+   246→            else:
+   247→                signal_val = signal  # 直接是 Signal 枚举
+   248→
+   249→            if signal_val == Signal.BUY and self.position == "NO_POSITION":
+   250→                self._open_position("BUY")
+   251→                result['action'] = Action.BUY.value
+   252→                self.logger.info(f"[{result['timestamp']}] {result['action']} | 信号: BUY")
+   253→
+   254→            elif signal_val == Signal.SELL and self.position == "NO_POSITION":
+   255→                self._open_position("SELL")
+   256→                result['action'] = Action.SELL.value
+   257→                self.logger.info(f"[{result['timestamp']}] {result['action']} | 信号: SELL")
+   258→
+   259→            else:
+   260→                self.logger.debug(f"[{result['timestamp']}] 持仓: {self.position} | 信号: {signal_val.value}")
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

@@ -1,0 +1,56 @@
+{
+  "coin": "BTC",
+  "strategy": "mean_reversion",
+  "interval": "15m",
+  "period": "1095天",
+  "timestamp": "20260217_211911",
+  "config": {
+    "initial_capital": 500,
+    "leverage": 10.0,
+    "min_margin": 100
+  },
+  "balance": {
+    "initial": 500,
+    "final": 515.9799228341063,
+    "max": 515.9799228341063,
+    "min": 500
+  },
+  "results": {
+    "total_return": 3.1959845668212665,
+    "max_drawdown": 0,
+    "sharpe_ratio": 0.5776910931663878,
+    "sortino_ratio": 0,
+    "calmar_ratio": 0,
+    "total_trades": 2,
+    "winning_trades": 1,
+    "losing_trades": 0,
+    "win_rate": 100.0,
+    "avg_win": 3.1959845668212563,
+    "avg_loss": 0,
+    "max_win": 3.1959845668212563,
+    "max_loss": 3.1959845668212563,
+    "profit_factor": 0,
+    "expectancy_ratio": 0,
+    "consecutive_wins": 1,
+    "consecutive_losses": 0,
+    "liquidation_count": 0
+  },
+  "trades": [
+    {
+      "time": "2024-08-06",
+      "order_type": "SELL",
+      "price": 54156.05,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 500
+    },
+    {
+      "time": "2024-08-06",
+      "order_type": "TTP_SELL",
+      "price": 53470.09,
+      "capital": 100,
+      "pnl": 15.979922834106281,
+      "balance": 515.9799228341063
+    }
+  ]
+}

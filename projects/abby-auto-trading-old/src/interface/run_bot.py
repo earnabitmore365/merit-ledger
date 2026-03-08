@@ -1,0 +1,388 @@
+#!/usr/bin/env python3
+"""
+Abby Trading Bot - 简化版
+
+支持多空双向交易，和回测系统保持一致
+"""
+
+import sys
+import time
+from pathlib import Path
+from datetime import datetime
+from typing import Optional
+
+# 添加 src 路径
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+
+from core.strategy import get_strategy
+from core.trading import HyperLiquidAdapter, OrderRequest, OrderSide
+from core.abby_logging import setup_logging, log_trade, log_signal, log_pnl
+
+
+class AbbyBot:
+    """Abby 交易机器人"""
+
+    def __init__(self, config: dict):
+        self.config = config
+        self.strategy_name = config.get('strategy', 'ma')
+        self.coin = config.get('coin', 'BTC')
+        self.interval = config.get('interval', '1h')
+        self.mode = config.get('mode', 'paper')
+        self.stop_loss_pct = config.get('stop_loss_pct', 0.10)  # 默认10%止损
+        self.enable_ttp = config.get('enable_ttp', True)  # 默认启用TTP
+        
+        # 初始化组件
+        self.strategy = get_strategy(self.strategy_name)
+        self.exchange = HyperLiquidAdapter()
+        self.position = None  # None, 'BUY', 'SELL'
+        self.entry_price = None  # 开仓价格
+        self.margin = None  # 保证金（USDT）
+        self.position_size = None  # 仓位大小（币数量）
+        
+        # TTP追踪变量
+        self.high_since_entry = None  # 入场后最高价
+        self.previous_high = None      # 前一个高点
+        self.swing_low = None         # 回调低点
+        self.ttp_level = None        # 移动止盈触发价
+        self.low_since_entry = None   # 入场后最低价
+        self.previous_low = None      # 前一个低点
+        self.swing_high = None        # 反弹高点
+        
+        # 设置日志
+        log_file = f"logs/bot_{self.strategy_name}_{self.coin}_{datetime.now().strftime('%Y%m%d')}.log"
+        setup_logging(log_file=log_file)
+        
+        self.logger = log_trade
+        self.signal_log = log_signal
+        self.pnl_log = log_pnl
+        
+        # 记录交易
+        self.trades = []
+        
+        self.logger(f"🤖 启动 Abby Bot: {self.strategy_name}/{self.coin}/{self.interval}")
+
+    def run(self):
+        """运行机器人"""
+        while True:
+            try:
+                self.step()
+                time.sleep(60)
+            except KeyboardInterrupt:
+                self.logger("\n⏹️ 停止")
+                break
+            except Exception as e:
+                self.logger(f"❌ 错误: {e}")
+                time.sleep(5)
+
+    def step(self):
+        """单步执行"""
+        # 获取K线
+        klines = self.exchange.get_klines(self.coin, self.interval, limit=100)
+        if not klines:
+            return
+
+        current_price = klines[-1]['close']
+
+        # 显示仓位信息
+        self._log_position_info(current_price)
+
+        # 1. 检查止损
+        if self.position == 'BUY':
+            price_change = (current_price - self.entry_price) / self.entry_price
+            if price_change <= -self.stop_loss_pct:
+                self.logger(f"🛑 触发止损 BUY @ ${current_price:.2f} ({price_change*100:.2f}%)")
+                self._close_buy(current_price)
+                self.trades[-1]['side'] = 'STOP_LOSS_BUY'
+                self._reset_ttp()
+                return
+
+        elif self.position == 'SELL':
+            price_change = (self.entry_price - current_price) / self.entry_price
+            if price_change <= -self.stop_loss_pct:
+                self.logger(f"🛑 触发止损 SELL @ ${current_price:.2f} ({price_change*100:.2f}%)")
+                self._close_sell(current_price)
+                self.trades[-1]['side'] = 'STOP_LOSS_SELL'
+                self._reset_ttp()
+                return
+
+        # 2. 检查TTP（移动止盈）
+        if self.enable_ttp and self.position == 'BUY' and self.entry_price:
+            self._check_ttp_buy(current_price)
+        elif self.enable_ttp and self.position == 'SELL' and self.entry_price:
+            self._check_ttp_sell(current_price)
+
+        # 如果TTP触发了，直接返回
+        if self.position is None:
+            return
+
+        # 3. 生成信号
+        signal = self.strategy.generate_signal(self.coin, klines)
+        
+        if signal.name == "HOLD":
+            return
+        
+        # 4. 执行交易 - 和回测系统一致
+        self.signal_log(f"信号: {signal.name} | {self.coin} | ${current_price:.2f}")
+        
+        if signal.name == "BUY":
+            if self.position is None:
+                self._buy(current_price)
+            elif self.position == 'SELL':
+                self._close_sell_and_buy(current_price)
+        elif signal.name == "SELL":
+            if self.position is None:
+                self._sell(current_price)
+            elif self.position == 'BUY':
+                self._close_buy_and_sell(current_price)
+
+    def _log_position_info(self, current_price):
+        """显示仓位信息：保证金、PNL、持仓总额"""
+        if self.position is None or self.margin is None or self.position_size is None:
+            return
+        
+        if self.position == 'BUY':
+            position_value = self.position_size * current_price
+        else:  # SELL
+            position_value = self.position_size * current_price
+        
+        pnl = position_value - self.margin
+        
+        self.logger(f"📊 仓位信息 | 保证金: {self.margin:.2f} USDT | PNL: {pnl:+.2f} USDT | 持仓总额: {position_value:.2f} USDT")
+
+    def _reset_ttp(self):
+        """重置TTP追踪变量"""
+        self.high_since_entry = None
+        self.previous_high = None
+        self.swing_low = None
+        self.ttp_level = None
+
+    def _check_ttp_buy(self, current_price):
+        """检查BUY持仓的TTP"""
+        floating_profit = (current_price - self.entry_price) / self.entry_price
+        
+        if floating_profit <= 0:
+            return  # 没有浮盈，不追踪
+        
+        # 1. 创新高
+        if self.high_since_entry is None or current_price > self.high_since_entry:
+            self.previous_high = self.high_since_entry
+            self.high_since_entry = current_price
+        
+        # 2. 更新回调低点
+        if self.high_since_entry and current_price < self.high_since_entry and current_price > self.entry_price:
+            if self.swing_low is None or current_price < self.swing_low:
+                self.swing_low = current_price
+        
+        # 3. 设置TTP
+        if self.previous_high and self.swing_low and self.swing_low > self.entry_price:
+            pip = 0.0001 if current_price >= 100 else 0.001
+            new_ttp = self.swing_low - pip * 5
+            if self.ttp_level is None or new_ttp > self.ttp_level:
+                self.ttp_level = new_ttp
+        
+        # 4. 触发TTP
+        if self.ttp_level and current_price < self.ttp_level:
+            self.logger(f"🚀 触发TTP BUY @ ${current_price:.2f}")
+            self._close_buy(current_price)
+            self.trades[-1]['side'] = 'TTP_BUY'
+            self._reset_ttp()
+
+    def _check_ttp_sell(self, current_price):
+        """检查SELL持仓的TTP"""
+        floating_profit = (self.entry_price - current_price) / self.entry_price
+        
+        if floating_profit <= 0:
+            return  # 没有浮盈，不追踪
+        
+        # 1. 创新低
+        if self.low_since_entry is None or current_price < self.low_since_entry:
+            self.previous_low = self.low_since_entry
+            self.low_since_entry = current_price
+        
+        # 2. 更新反弹高点
+        if self.low_since_entry and current_price > self.low_since_entry and current_price < self.entry_price:
+            if self.swing_high is None or current_price > self.swing_high:
+                self.swing_high = current_price
+        
+        # 3. 设置TTP
+        if self.previous_low and self.swing_high and self.swing_high < self.entry_price:
+            pip = 0.0001 if current_price >= 100 else 0.001
+            new_ttp = self.swing_high + pip * 5
+            if self.ttp_level is None or new_ttp < self.ttp_level:
+                self.ttp_level = new_ttp
+        
+        # 4. 触发TTP
+        if self.ttp_level and current_price > self.ttp_level:
+            self.logger(f"🚀 触发TTP SELL @ ${current_price:.2f}")
+            self._close_sell(current_price)
+            self.trades[-1]['side'] = 'TTP_SELL'
+            self._reset_ttp()
+
+    def _buy(self, price):
+        """BUY: 开多"""
+        self.logger(f"🟢 BUY {self.coin} @ ${price:.2f}")
+        
+        # 计算仓位大小
+        balance = self.exchange.get_balance().get('USDT', 0)
+        margin = balance * 0.10  # 10%保证金（至少100）
+        if margin < 100:
+            margin = 100
+        
+        position_value = margin * 10  # 10倍杠杆
+        size = position_value / price  # 仓位大小
+        
+        order = OrderRequest(
+            coin=self.coin,
+            side=OrderSide.BUY,
+            size=round(size, 4)
+        )
+        
+        result = self.exchange.place_order(order)
+        
+        if result.success:
+            self.position = 'BUY'
+            self.entry_price = price
+            self.margin = margin  # 记录保证金
+            self.position_size = size  # 记录仓位大小
+            self.trades.append({
+                'date': datetime.now().strftime("%Y-%m-%d"),
+                'time': datetime.now().strftime("%H:%M:%S"),
+                'coin': self.coin,
+                'side': 'BUY',
+                'price': price,
+                'margin': margin,
+                'pnl': 0
+            })
+            self.logger(f"✅ BUY成功 | 保证金: {margin:.2f} USDT | 仓位: {size:.4f} {self.coin}")
+
+    def _sell(self, price):
+        """SELL: 开空"""
+        self.logger(f"🔴 SELL {self.coin} @ ${price:.2f}")
+        
+        # 计算仓位大小
+        balance = self.exchange.get_balance().get('USDT', 0)
+        margin = balance * 0.10  # 10%保证金（至少100）
+        if margin < 100:
+            margin = 100
+        
+        position_value = margin * 10  # 10倍杠杆
+        size = position_value / price  # 仓位大小
+        
+        order = OrderRequest(
+            coin=self.coin,
+            side=OrderSide.SELL,
+            size=round(size, 4)
+        )
+        
+        result = self.exchange.place_order(order)
+        
+        if result.success:
+            self.position = 'SELL'
+            self.entry_price = price
+            self.margin = margin  # 记录保证金
+            self.position_size = size  # 记录仓位大小
+            self.trades.append({
+                'date': datetime.now().strftime("%Y-%m-%d"),
+                'time': datetime.now().strftime("%H:%M:%S"),
+                'coin': self.coin,
+                'side': 'SELL',
+                'price': price,
+                'margin': margin,
+                'pnl': 0
+            })
+            self.logger(f"✅ SELL成功 | 保证金: {margin:.2f} USDT | 仓位: {size:.4f} {self.coin}")
+
+    def _close_buy(self, price):
+        """CLOSE_BUY: 平多"""
+        self.logger(f"🔴 CLOSE_BUY {self.coin} @ ${price:.2f}")
+        
+        order = OrderRequest(
+            coin=self.coin,
+            side=OrderSide.SELL,
+            size=1.0
+        )
+        
+        result = self.exchange.place_order(order)
+        
+        if result.success:
+            self.trades.append({
+                'date': datetime.now().strftime("%Y-%m-%d"),
+                'time': datetime.now().strftime("%H:%M:%S"),
+                'coin': self.coin,
+                'side': 'CLOSE_BUY',
+                'price': price,
+                'pnl': 0
+            })
+            self.position = None
+            self.entry_price = None
+            self.logger(f"✅ CLOSE_BUY成功")
+
+    def _close_sell(self, price):
+        """CLOSE_SELL: 平空"""
+        self.logger(f"🟢 CLOSE_SELL {self.coin} @ ${price:.2f}")
+        
+        order = OrderRequest(
+            coin=self.coin,
+            side=OrderSide.BUY,
+            size=1.0
+        )
+        
+        result = self.exchange.place_order(order)
+        
+        if result.success:
+            self.trades.append({
+                'date': datetime.now().strftime("%Y-%m-%d"),
+                'time': datetime.now().strftime("%H:%M:%S"),
+                'coin': self.coin,
+                'side': 'CLOSE_SELL',
+                'price': price,
+                'pnl': 0
+            })
+            self.position = None
+            self.entry_price = None
+            self.logger(f"✅ CLOSE_SELL成功")
+
+    def _close_buy_and_sell(self, price):
+        """平多 + 开空 (反手)"""
+        self.logger(f"🔄 CLOSE_BUY -> SELL {self.coin} @ ${price:.2f}")
+        
+        # 平多
+        self._close_buy(price)
+        # 开空
+        self._sell(price)
+        # 重置TTP
+        self._reset_ttp()
+
+    def _close_sell_and_buy(self, price):
+        """平空 + 开多 (反手)"""
+        self.logger(f"🔄 CLOSE_SELL -> BUY {self.coin} @ ${price:.2f}")
+        
+        # 平空
+        self._close_sell(price)
+        # 开多
+        self._buy(price)
+        # 重置TTP
+        self._reset_ttp()
+
+
+def main():
+    """主入口"""
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--strategy', '-s', default='ma')
+    parser.add_argument('--coin', '-c', default='BTC')
+    parser.add_argument('--interval', '-i', default='1h')
+    parser.add_argument('--mode', '-m', default='paper')
+    args = parser.parse_args()
+    
+    bot = AbbyBot({
+        'strategy': args.strategy,
+        'coin': args.coin,
+        'interval': args.interval,
+        'mode': args.mode
+    })
+    bot.run()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,34 @@
+   410→            entry_price=self.entry_price,
+   411→        )
+   412→    
+   413→    def _open_position(self, side: str):
+   414→        """开仓"""
+   415→        coin = self.config.get('coin', 'ETH')
+   416→        balance = self.exchange.get_balance().get('usdc', 0)
+   417→        
+   418→        # 计算仓位
+   419→        position_pct = self.config.get('position_pct', 0.1)
+   420→        trade_capital = balance * position_pct
+   421→        leverage = self.config.get('leverage', 10.0)
+   422→        current_price = self.exchange.get_price(coin)
+   423→        size = (trade_capital * leverage) / current_price
+   424→        
+   425→        # 下单
+   426→        order = OrderRequest(
+   427→            coin=coin,
+   428→            side=OrderSide.BUY if side == "BUY" else OrderSide.SELL,
+   429→            order_type=OrderType.MARKET,
+   430→            size=size,
+   431→        )
+   432→        result = self.exchange.place_order(order)
+   433→        
+   434→        if result.success:
+   435→            self.position = side
+   436→            self.entry_price = current_price
+   437→            self.logger.info(
+   438→                f"开仓: {side} {coin} @ ${current_price:.2f} "
+   439→                f"数量: {size:.4f}"
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

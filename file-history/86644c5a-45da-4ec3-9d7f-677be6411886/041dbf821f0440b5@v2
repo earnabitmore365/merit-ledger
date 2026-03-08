@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""
+Combined Risk Manager
+
+统一风险管理器
+同时处理止损和移动止盈
+"""
+
+import logging
+from dataclasses import dataclass
+from typing import Optional
+
+from .base import RiskManager, RiskConfig, RiskCheckResult
+from .stop_loss import StopLossManager, StopLossConfig
+from .ttp import TTPManager, TTPConfig
+
+
+# ==================== 配置类定义 ====================
+
+@dataclass
+class CombinedRiskConfig(RiskConfig):
+    """统一风险配置
+
+    同时包含止损和 TTP 配置
+    """
+    stop_loss_pct: float = 0.10  # 止损比例
+    trailing_stop_pct: float = 0.0  # 跟踪止损比例
+    ttp_enabled: bool = True  # 是否启用 TTP
+    ttp_buffer_pips: float = 5.0  # TTP 缓冲
+    ttp_trigger_pct: float = 0.01  # TTP 触发比例
+
+
+# ==================== 统一风险管理器 ====================
+
+class CombinedRiskManager(RiskManager):
+    """统一风险管理器
+
+    同时处理止损和 TTP
+
+    Usage:
+        config = CombinedRiskConfig(stop_loss_pct=0.10, ttp_enabled=True)
+        manager = CombinedRiskManager(config)
+
+        result = manager.check(position, current_price)
+    """
+
+    def __init__(self, config: CombinedRiskConfig = None):
+        """初始化
+
+        Args:
+            config: 统一风险配置
+        """
+        super().__init__(config)
+
+        # 创建止损管理器
+        sl_config = StopLossConfig(
+            stop_loss_pct=self.config.stop_loss_pct,
+            trailing_stop_pct=self.config.trailing_stop_pct,
+        )
+        self.stop_loss_mgr = StopLossManager(sl_config)
+
+        # 创建 TTP 管理器
+        ttp_config = TTPConfig(
+            ttp_enabled=self.config.ttp_enabled,
+            ttp_buffer_pips=self.config.ttp_buffer_pips,
+            ttp_trigger_pct=self.config.ttp_trigger_pct,
+        )
+        self.ttp_mgr = TTPManager(ttp_config)
+
+        # 日志
+        self.logger = logging.getLogger("CombinedRiskManager")
+
+    def check(
+        self,
+        position,
+        current_price: float,
+        position_side: str = None,
+        entry_price: float = None,
+    ) -> RiskCheckResult:
+        """风险检查
+
+        同时检查止损和 TTP
+
+        Args:
+            position: 持仓信息
+            current_price: 当前价格
+            position_side: 持仓方向
+            entry_price: 开仓价格
+
+        Returns:
+            RiskCheckResult: 检查结果
+        """
+        # 1. 先检查止损
+        sl_result = self.stop_loss_mgr.check(
+            position, current_price,
+            position_side=position_side,
+        )
+
+        if sl_result.should_close:
+            self.logger.info(f"止损触发: {sl_result.reason}")
+            return sl_result
+
+        # 2. 再检查 TTP
+        ttp_result = self.ttp_mgr.check(
+            position, current_price,
+            position_side=position_side,
+            entry_price=entry_price,
+        )
+
+        if ttp_result.should_close:
+            self.logger.info(f"TTP触发: {ttp_result.reason}")
+            return ttp_result
+
+        # 3. 没有触发任何风控
+        return RiskCheckResult()
+
+    def reset(self) -> None:
+        """重置状态"""
+        self.stop_loss_mgr.reset()
+        self.ttp_mgr.reset()
+
+    def __repr__(self) -> str:
+        return (
+            f"<CombinedRiskManager: "
+            f"stop_loss={self.config.stop_loss_pct}, "
+            f"ttp={self.config.ttp_enabled}>"
+        )

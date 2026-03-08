@@ -1,0 +1,9 @@
+2026-02-24T10:01:14.061Z [DEBUG] Failed to check enabledPlatforms: TypeError: undefined is not an object (evaluating 'pK.join')
+2026-02-24T10:01:14.098Z [DEBUG] [init] configureGlobalMTLS starting
+2026-02-24T10:01:14.098Z [DEBUG] [init] configureGlobalMTLS complete
+2026-02-24T10:01:14.098Z [DEBUG] [init] configureGlobalAgents starting
+2026-02-24T10:01:14.098Z [DEBUG] [init] configureGlobalAgents complete
+2026-02-24T10:01:14.126Z [DEBUG] Git remote URL: null
+2026-02-24T10:01:14.126Z [DEBUG] No git remote URL found
+2026-02-24T10:01:15.350Z [INFO] SSH not configured for GitHub, using HTTPS for nextlevelbuilder/ui-ux-pro-max-skill
+2026-02-24T10:01:15.354Z [WARN] git pull failed, will re-clone:

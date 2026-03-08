@@ -1,0 +1,14 @@
+2026-02-24 18:25:58,134 - HyperLiquidAdapter - INFO - 连接 HyperLiquid: https://api.hyperliquid-testnet.xyz
+2026-02-24 18:25:58,468 - HyperLiquidWebSocket - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:25:58,639 - HyperLiquidWebSocket - INFO - WebSocket 已连接: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:25:58,639 - HyperLiquidAdapter - INFO - WebSocket 已连接: 测试网
+2026-02-24 18:26:02,821 - TradingSystem - INFO - 开仓: BUY ETH @ $1823.70 数量: 0.4792
+2026-02-24 18:26:03,306 - HyperLiquidWebSocket - WARNING - WebSocket 连接关闭: sent 1000 (OK); no close frame received
+2026-02-24 18:26:03,307 - HyperLiquidWebSocket - INFO - WebSocket 已断开
+2026-02-24 18:26:03,307 - HyperLiquidAdapter - INFO - WebSocket 已断开
+2026-02-24 18:26:03,310 - HyperLiquidAdapter - INFO - 已断开 HyperLiquid 连接
+初始余额: 873.91
+当前持仓: None
+开仓后持仓: BUY
+开仓后余额: 873.56
+测试完成

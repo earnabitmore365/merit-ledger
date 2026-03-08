@@ -1,0 +1,42 @@
+⏺ 收到，开工。
+
+  先看一下 BTC 1h
+  数据，确认回看14天（336根K线）的可行性，然后打标签、更新DB、验证。
+
+⏺ Bash(python3 -c "
+      import json…)
+  ⎿  BTC 1h K线数: 70000
+     第一根: 1519869600000 → 2018-03-01 02:00
+     最后根: 1772182800000 → 2026-02-27 09:00
+     … +3 lines (ctrl+o to expand)
+
+⏺ Bash(python3 -c "
+      import json…)
+  ⎿  === BTC 1h 标签分布（14天回看，10%阈值）===
+     Bull:    14219 (20.4%)
+     Bear:    10399 (14.9%)
+     … +15 lines (ctrl+o to expand)
+
+⏺ 分布看着合理 — ranging 65%、bull 20%、bear 15%，符合真实市场（大部分时间震荡）
+  。年度分布也对得上：2018年熊市多、2020-2021牛市多、2022熊市多。
+
+  现在开始打标签和更新DB。
+
+⏺ Bash(python3 -c "
+      import sqlite3…)
+  ⎿  ('2022-03-02 10:55', 19, 1)
+     ('2022-03-05 06:50', 834, 1)
+     ('2022-03-09 16:15', 2099, 1)
+     … +10 lines (ctrl+o to expand)
+
+⏺ Bash(python3 -c "
+      import sqlite3…)
+  ⎿  ('2022-03-02 15:45', 'unknown', 'ADA', '15m', 'accumulationdistributio
+     n')
+     ('2022-03-05 06:15', 'bear', 'ADA', '15m', 'accumulationdistribution')
+     … +11 lines (ctrl+o to expand)
+
+  Bash(python3 << 'SCRIPT'
+      import json…)
+  ⎿  Running… (1m 27s · timeout 10m)
+     ctrl+b to run in background

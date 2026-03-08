@@ -1,0 +1,2 @@
+202:    def get_price(self, coin: str) -> float:
+406:    def get_price(self, coin: str) -> float:

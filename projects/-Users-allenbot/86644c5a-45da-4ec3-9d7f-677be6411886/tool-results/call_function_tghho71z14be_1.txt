@@ -1,0 +1,17 @@
+2026-02-24 18:43:43,397 - HyperLiquidAdapter - INFO - 连接 HyperLiquid: https://api.hyperliquid-testnet.xyz
+2026-02-24 18:43:43,733 - HyperLiquidWebSocket - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:43:43,903 - HyperLiquidWebSocket - INFO - WebSocket 已连接: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:43:43,903 - HyperLiquidAdapter - INFO - WebSocket 已连接: 测试网
+2026-02-24 18:43:45,451 - HyperLiquidWebSocket - WARNING - WebSocket 连接关闭: sent 1000 (OK); no close frame received
+2026-02-24 18:43:45,452 - HyperLiquidWebSocket - INFO - WebSocket 已断开
+2026-02-24 18:43:45,452 - HyperLiquidAdapter - INFO - WebSocket 已断开
+2026-02-24 18:43:45,454 - HyperLiquidAdapter - INFO - 已断开 HyperLiquid 连接
+当前持仓: BUY
+
+>>> 执行 run_once() >>>
+
+结果:
+  信号: SELL
+  操作: NONE
+  持仓: BUY
+  开仓价: 1823.7

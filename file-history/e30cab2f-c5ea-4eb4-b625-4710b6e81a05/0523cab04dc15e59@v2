@@ -1,0 +1,44 @@
+# CHECKPOINT — Auto-Trading 项目状态
+
+> 最后更新：2026-02-27
+
+## 任务历程
+
+1. ✅ 初始系统搭建 — v1.4，44策略、HyperLiquid适配器、回测引擎、curses UI
+2. ✅ UI 重构 — v1.5，BaseMenu组件库、trade_menu 7步流程、紧凑卡片面板
+3. ✅ 全矩阵回测 — 1521份报告，确定 proc+LINK+15m 为首选
+4. ✅ Regime Detection v1（MA+RSI）— 完成但效果不好，切换1680次/年，跑不过单proc
+5. ✅ 研究更好的判断方法 — 结论：ADX三层复合做主判断 + 链上指标辅助；regime当过滤器用而非切换器
+6. ✅ 建立指标库 src/indicators/ — 12个指标，12/12验证通过，MarketScore=0.684(buy)
+   - BGeometrics 限速8次/小时，用6h缓存解决
+7. ⬜ **整合指标进交易系统**（当前目标）
+
+## 当前任务：整合指标进交易系统
+
+### 目标
+让交易机器人和回测引擎能利用 MarketScore 综合打分来：
+- 更准确地判断市场趋势（替代 MA+RSI 的 Regime Detection）
+- 回测时验证指标有效性
+- 实盘时辅助决策（过滤信号、调整仓位、显示在面板上）
+
+### 关键决策
+- **过滤器而非切换器**：regime detection 用来过滤不利条件/降低仓位，不是在策略间来回跳
+- **ADX 是主判断**：ADX(14) 判趋势有无 → SMA(50)斜率判方向 → ATR%防暴涨暴跌
+- **MarketScore 是辅助**：链上+衍生品+情绪综合打分，辅助 ADX 决策
+- **滞后阈值**：进趋势 ADX>25 / 退趋势 ADX<18，最少停留12根K线
+- **回测约束**：不能实时调 API，必须用本地缓存或历史数据
+
+### 状态
+等待 Sonnet 出详细实施方案，确认后由 Opus 执行。
+
+### 相关文件
+- 指标库：`src/indicators/`（12个指标，已完成）
+- Regime v1：`src/trading/regime/`（待改进）
+- 研究笔记：`memory/regime_detection_research.md`
+- 指标研究：`memory/onchain_indicators_research.md`
+
+## 项目基本信息
+- 路径：`/Users/allenbot/project/auto-trading`
+- 版本：v1.6
+- 语言：Python 3.11+，中文注释和 UI
+- GitHub：`earnabitmore365/auto-trading` (private)

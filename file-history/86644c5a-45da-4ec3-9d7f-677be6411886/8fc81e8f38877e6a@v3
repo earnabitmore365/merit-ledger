@@ -1,0 +1,163 @@
+#!/bin/bash
+# Abby Auto Trading - 交易系统
+# 双击运行
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+cd "$PROJECT_DIR"
+
+python3 -c "
+import sys
+sys.path.insert(0, 'src')
+
+from core.strategy import list_strategies
+from exchange.hyperliquid.accounts import get_adapter_config
+
+print('=' * 60)
+print('🔷 Abby 交易系统')
+print('=' * 60)
+print()
+
+# 1. 选择网络
+print('📌 选择网络:')
+print('  1) 测试网 (Testnet)')
+print('  2) 主网 (Mainnet)')
+network_choice = input('请选择 (1-2) [默认: 1]: ').strip() or '1'
+network = 'testnet' if network_choice == '1' else 'mainnet'
+print(f'  ➜ 已选择: {network}')
+print()
+
+# 2. 选择账号
+print('📌 选择账号:')
+print('  1) default')
+account_choice = input('请选择 [默认: 1]: ').strip() or '1'
+account = 'default'
+print(f'  ➜ 已选择: {account}')
+print()
+
+# 3. 选择币种
+print('📌 选择交易币种:')
+print('  1) ETH')
+print('  2) BTC')
+print('  3) SOL')
+coin_choice = input('请选择 (1-3) [默认: 1]: ').strip() or '1'
+coins = {'1': 'ETH', '2': 'BTC', '3': 'SOL'}
+coin = coins.get(coin_choice, 'ETH')
+print(f'  ➜ 已选择: {coin}')
+print()
+
+# 4. 选择策略
+print('📌 选择策略:')
+strategies = list_strategies()
+for i, s in enumerate(strategies[:10], 1):
+    print(f'  {i}) {s}')
+if len(strategies) > 10:
+    print(f'  ... 共 {len(strategies)} 个策略')
+strategy_name = input('请输入策略名称 [默认: vwap]: ').strip() or 'vwap'
+strategy_name = strategy_name if strategy_name in strategies else 'vwap'
+print(f'  ➜ 已选择: {strategy_name}')
+print()
+
+# 5. 选择杠杆
+leverage = input('请输入杠杆倍数 [默认: 10]: ').strip() or '10'
+leverage = float(leverage)
+print(f'  ➜ 已选择: {leverage}x')
+print()
+
+# 6. 仓位比例
+position_pct = input('请输入仓位比例 (0.1 = 10%) [默认: 0.1]: ').strip() or '0.1'
+position_pct = float(position_pct)
+print(f'  ➜ 已选择: {position_pct*100:.0f}%')
+print()
+
+# 7. 止损比例
+stop_loss = input('请输入止损比例 (0.1 = 10%) [默认: 0.1]: ').strip() or '0.1'
+stop_loss = float(stop_loss)
+print(f'  ➜ 已选择: {stop_loss*100:.0f}%')
+print()
+
+# 8. 是否启用 TTP
+ttp_choice = input('是否启用移动止盈 (TTP)? (y/n) [默认: y]: ').strip() or 'y'
+enable_ttp = ttp_choice.lower() in ['y', 'yes']
+print(f'  ➜ 已选择: {\"启用\" if enable_ttp else \"禁用\"}')
+print()
+
+# 9. 运行模式
+print('📌 运行模式:')
+print('  1) 只运行一次')
+print('  2) 持续运行 (按 Ctrl+C 停止)')
+run_mode = input('请选择 (1-2) [默认: 1]: ').strip() or '1'
+print()
+
+print('=' * 60)
+print('🚀 启动交易系统...')
+print('=' * 60)
+print()
+
+from trading.system import TradingSystem
+from exchange.hyperliquid.adapter import HyperLiquidAdapter
+from core.strategy import get_strategy
+from core.risk import TTPManager
+
+# 获取账号配置
+config = get_adapter_config(account, network)
+config['testnet'] = (network == 'testnet')
+
+# 创建适配器
+adapter = HyperLiquidAdapter(config)
+adapter.connect()
+
+# 获取策略
+strategy = get_strategy(strategy_name)
+
+# 创建风险管理
+risk_mgr = None
+if enable_ttp:
+    from core.risk import TTPConfig
+    risk_mgr = TTPManager(TTPConfig())
+
+# 创建交易系统
+system = TradingSystem(
+    exchange=adapter,
+    strategy=strategy,
+    risk_manager=risk_mgr,
+    config={
+        'coin': coin,
+        'leverage': leverage,
+        'position_pct': position_pct,
+        'stop_loss_pct': stop_loss,
+    }
+)
+
+print(f'✅ 已连接: {adapter.get_exchange_name()}')
+balance = adapter.get_balance().get('usdc', 0)
+print(f'💰 余额: \${balance:.2f}')
+print(f'📈 策略: {strategy.name}')
+print(f'📊 持仓: {adapter.get_positions()}')
+print()
+
+if run_mode == '1':
+    # 运行一次
+    result = system.run_once()
+    print('-' * 40)
+    print(f'信号: {result.get(\"signal\")}')
+    print(f'操作: {result.get(\"action\")}')
+    print(f'持仓: {result.get(\"position\")}')
+    print(f'开仓价: {result.get(\"entry_price\")}')
+else:
+    # 持续运行
+    print('持续运行中... 按 Ctrl+C 停止')
+    print()
+    try:
+        system.run(interval_seconds=60)
+    except KeyboardInterrupt:
+        print()
+        print('收到停止信号')
+
+adapter.disconnect()
+print()
+print('✅ 交易系统已停止')
+"
+
+read -p "按回车键退出..."

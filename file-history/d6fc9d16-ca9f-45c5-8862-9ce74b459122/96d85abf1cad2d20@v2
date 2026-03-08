@@ -1,0 +1,17 @@
+#!/bin/bash
+# Abby Auto Trading - 推荐策略回测
+# 双击运行
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+cd "$PROJECT_DIR"
+
+python3 -c "
+import sys
+sys.path.insert(0, 'src')
+from backtest.run_recommended import run_all
+run_all()
+"
+
+read -p "按回车键退出..."

@@ -1,0 +1,6 @@
+WARNING:HyperLiquidWebSocket:WebSocket 连接关闭: sent 1000 (OK); no close frame received
+连接: True
+交易所: HyperLiquid (Testnet)
+当前持仓: [Position(coin='ETH', side='LONG', size=0.0279, entry_price=1933.4, unrealized_pnl=-0.4464)]
+平仓: ETH LONG 0.0279
+平仓结果: OrderResult(success=True, order_id='48980753840', message='平仓成交', filled_price=1917.5, filled_size=0.0279)

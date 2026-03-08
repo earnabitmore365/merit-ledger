@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""
+Research Strategy Workflow v2
+==============================
+监听新草稿策略 → 自动回测 → 评估 → 升级或放弃
+
+流程：
+  Abby 生成 strategy_draft_xxx.py → 放入 src/core/strategy/
+  ↓
+  本脚本检测到新文件 → 子进程跑回测（3币种 × 15m × 365天）
+  ↓
+  Sharpe ≥ 1.0 且 收益 ≥ 50% → 重命名为 strategy_xxx.py（升级）
+  亏损 ≤ -30%              → 翻转买卖逻辑，再观察一轮
+  其他                      → 删除（放弃）
+
+策略命名规范：
+  草稿：strategy_draft_{name}.py  （类名：Draft{Name} 或 Draft{Name}Strategy）
+  正式：strategy_{name}.py        （类名：{Name} 或 {Name}Strategy）
+
+更新于：2026-02-27（适配 v1.7 回测引擎）
+"""
+
+import os
+import sys
+import json
+import time
+import shutil
+import subprocess
+from datetime import datetime
+from pathlib import Path
+
+
+# ── 路径配置 ─────────────────────────────────────────────────────
+PROJECT   = Path('/Users/allenbot/project/auto-trading')
+SRC       = PROJECT / 'src'
+STRATEGY_DIR = SRC / 'core' / 'strategy'   # 策略目录（自动发现）
+REPORTS_DIR  = PROJECT / 'reports' / 'backtest'
+LOG_FILE     = PROJECT / 'logs' / 'research_workflow.log'
+
+# ── 回测参数 ──────────────────────────────────────────────────────
+TEST_COINS    = ['BTC', 'ETH', 'LINK']  # 用3个币快速验证（不用全跑10个）
+TEST_INTERVAL = '15m'
+TEST_DAYS     = 365
+LEVERAGE      = 10.0
+STOP_LOSS     = 0.1   # 10%
+
+# ── 评估阈值 ──────────────────────────────────────────────────────
+MIN_TRADES        = 30     # 交易次数太少 → 放弃
+PROMOTE_SHARPE    = 1.0    # Sharpe ≥ 1.0（调整风险后收益）
+PROMOTE_RETURN    = 50.0   # 收益 ≥ 50%
+REVERSE_THRESHOLD = -30.0  # 亏损超 30% → 尝试翻转逻辑
+
+# ── 反转冷却 ──────────────────────────────────────────────────────
+MAX_REVERSES = 1  # 每个策略最多翻转1次，翻了还亏就放弃
+
+
+# ── 日志 ─────────────────────────────────────────────────────────
+
+def log(msg: str):
+    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    line = f"[{ts}] {msg}"
+    print(line)
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        f.write(line + '\n')
+
+
+# ── 回测（子进程，避免模块缓存问题）────────────────────────────────
+
+BACKTEST_SCRIPT = """
+import sys, json
+sys.path.insert(0, '{src}')
+from backtest.backtest import BacktestEngine
+
+engine = BacktestEngine(
+    coin='{coin}',
+    interval='{interval}',
+    days={days},
+    fixed_bet=True,
+    stop_loss_pct={stop_loss},
+    leverage={leverage},
+)
+result = engine.run_backtest('{strategy_name}')
+if result:
+    print(json.dumps({{
+        'total_return':  result.total_return,
+        'sharpe_ratio':  result.sharpe_ratio,
+        'total_trades':  result.total_trades,
+        'win_rate':      result.win_rate,
+        'max_drawdown':  result.max_drawdown,
+    }}))
+else:
+    print('null')
+"""
+
+
+def run_backtest(strategy_name: str, coin: str) -> dict | None:
+    """在独立子进程中跑一次回测，返回指标 dict 或 None"""
+    script = BACKTEST_SCRIPT.format(
+        src=str(SRC),
+        coin=coin,
+        interval=TEST_INTERVAL,
+        days=TEST_DAYS,
+        stop_loss=STOP_LOSS,
+        leverage=LEVERAGE,
+        strategy_name=strategy_name,
+    )
+    try:
+        proc = subprocess.run(
+            ['python3', '-c', script],
+            capture_output=True, text=True, timeout=600
+        )
+        out = proc.stdout.strip()
+        if proc.returncode == 0 and out and out != 'null':
+            return json.loads(out)
+    except subprocess.TimeoutExpired:
+        log(f"  ⏰ 超时: {strategy_name} / {coin}")
+    except Exception as e:
+        log(f"  ❌ 子进程错误: {e}")
+    return None
+
+
+# ── 评估 ─────────────────────────────────────────────────────────
+
+def evaluate(results: list[dict | None]) -> tuple[str, str]:
+    """多组回测结果综合评估，返回 (决策, 原因)
+
+    决策:
+        PROMOTE  — 升级为正式策略
+        REVERSE  — 翻转买卖逻辑，再观察
+        ABANDON  — 放弃
+    """
+    valid = [r for r in results if r is not None]
+    if not valid:
+        return 'ABANDON', '全部回测失败或策略不存在'
+
+    avg_return = sum(r['total_return'] for r in valid) / len(valid)
+    avg_sharpe = sum(r['sharpe_ratio'] for r in valid) / len(valid)
+    avg_trades = sum(r['total_trades'] for r in valid) / len(valid)
+    avg_dd     = sum(r['max_drawdown']  for r in valid) / len(valid)
+
+    log(f"  📊 平均结果: 收益={avg_return:.1f}% Sharpe={avg_sharpe:.2f} "
+        f"交易={avg_trades:.0f} 回撤={avg_dd:.1f}%")
+
+    if avg_trades < MIN_TRADES:
+        return 'ABANDON', f'交易太少（均{avg_trades:.0f}次，需≥{MIN_TRADES}）'
+
+    if avg_sharpe >= PROMOTE_SHARPE and avg_return >= PROMOTE_RETURN:
+        return 'PROMOTE', (f'Sharpe={avg_sharpe:.2f} ≥ {PROMOTE_SHARPE}, '
+                           f'收益={avg_return:.1f}% ≥ {PROMOTE_RETURN}%')
+
+    if avg_return <= REVERSE_THRESHOLD:
+        return 'REVERSE', f'亏损={avg_return:.1f}% ≤ {REVERSE_THRESHOLD}%，尝试翻转'
+
+    return 'ABANDON', (f'表现不达标 Sharpe={avg_sharpe:.2f} 收益={avg_return:.1f}%')
+
+
+# ── 文件操作 ─────────────────────────────────────────────────────
+
+def promote_strategy(draft_path: Path) -> Path:
+    """草稿升级为正式策略: strategy_draft_xxx.py → strategy_xxx.py"""
+    new_name = draft_path.name.replace('strategy_draft_', 'strategy_')
+    dst = STRATEGY_DIR / new_name
+    shutil.move(str(draft_path), str(dst))
+    return dst
+
+
+def reverse_logic(draft_path: Path):
+    """翻转策略的 BUY/SELL 信号（字符串替换）
+
+    注意：只适合逻辑简单的策略。
+    翻转后文件名不变，下一轮检测会重新评估。
+    """
+    content = draft_path.read_text(encoding='utf-8')
+    content = content.replace('Signal.BUY',  '__TEMP_BUY__')
+    content = content.replace('Signal.SELL', 'Signal.BUY')
+    content = content.replace('__TEMP_BUY__', 'Signal.SELL')
+    draft_path.write_text(content, encoding='utf-8')
+
+
+def get_strategy_name_from_file(draft_path: Path) -> str:
+    """从文件名推断策略注册名
+
+    strategy_draft_myrsi.py → 类名 DraftMyrsi → 注册名 draftmyrsi
+    """
+    stem = draft_path.stem  # e.g. 'strategy_draft_myrsi'
+    # __init__.py 的自动注册逻辑：去掉 'Strategy' 后缀，转小写
+    # 所以文件里的类名如果是 DraftMyrsiStrategy → 注册为 draftmyrsi
+    # 或者类名 DraftMyrsi → 注册为 draftmyrsi
+    # 文件名 strategy_draft_myrsi → 模块名 strategy_draft_myrsi
+    # 我们直接从文件名推断：去掉 strategy_ 前缀
+    return stem.replace('strategy_', '')  # 'draft_myrsi'
+
+
+# ── 主流程 ───────────────────────────────────────────────────────
+
+def process_draft(draft_path: Path, reverse_count: dict):
+    """处理一个草稿策略文件"""
+    strategy_name = get_strategy_name_from_file(draft_path)
+
+    log(f"\n{'='*60}")
+    log(f"📄 发现草稿策略: {draft_path.name}")
+    log(f"   注册名: {strategy_name}")
+    log(f"   测试: {TEST_COINS} × {TEST_INTERVAL} × {TEST_DAYS}天")
+
+    # 跑多币回测
+    results = []
+    for coin in TEST_COINS:
+        log(f"  ⏳ {coin}/{TEST_INTERVAL} ...")
+        r = run_backtest(strategy_name, coin)
+        if r:
+            log(f"     收益={r['total_return']:.1f}% "
+                f"Sharpe={r['sharpe_ratio']:.2f} "
+                f"交易={r['total_trades']}")
+        else:
+            log(f"     ❌ 回测失败")
+        results.append(r)
+
+    # 评估
+    decision, reason = evaluate(results)
+    log(f"📋 决策: [{decision}] {reason}")
+
+    if decision == 'PROMOTE':
+        dst = promote_strategy(draft_path)
+        log(f"✅ 已升级: {dst.name}")
+        log(f"   （自动发现，下次启动即可使用）")
+
+    elif decision == 'REVERSE':
+        key = draft_path.name
+        count = reverse_count.get(key, 0)
+        if count < MAX_REVERSES:
+            reverse_logic(draft_path)
+            reverse_count[key] = count + 1
+            log(f"🔄 已翻转逻辑（第{count+1}次），下轮重新评估")
+        else:
+            draft_path.unlink()
+            log(f"🗑️ 翻转后仍不达标，放弃")
+            reverse_count.pop(key, None)
+
+    else:  # ABANDON
+        draft_path.unlink()
+        log(f"🗑️ 已放弃并删除")
+
+    log(f"{'='*60}\n")
+
+
+def main():
+    log(f"🚀 Research Workflow v2 启动")
+    log(f"   策略目录: {STRATEGY_DIR}")
+    log(f"   升级标准: Sharpe ≥ {PROMOTE_SHARPE} 且 收益 ≥ {PROMOTE_RETURN}%")
+
+    processed   = set()   # 已处理的文件路径
+    reverse_count = {}    # {文件名: 已翻转次数}
+
+    while True:
+        try:
+            # 扫描草稿策略（strategy_draft_*.py）
+            for draft in sorted(STRATEGY_DIR.glob('strategy_draft_*.py')):
+                # 用 (路径, 修改时间) 作为 key，处理翻转后重新评估的情况
+                key = (draft, draft.stat().st_mtime)
+                if key not in processed:
+                    processed.add(key)
+                    process_draft(draft, reverse_count)
+
+            time.sleep(30)  # 每 30 秒检查一次
+
+        except KeyboardInterrupt:
+            log("🛑 收到中断，停止运行")
+            break
+        except Exception as e:
+            log(f"❌ 主循环错误: {e}")
+            import traceback
+            log(traceback.format_exc())
+            time.sleep(60)
+
+
+if __name__ == '__main__':
+    main()

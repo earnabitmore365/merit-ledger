@@ -1,0 +1,9 @@
+{
+  "id": "4",
+  "subject": "阶段四：创建 utils/ 模块",
+  "description": "创建 utils/ 目录，包含 logger.py 和 metrics.py",
+  "activeForm": "创建工具模块",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

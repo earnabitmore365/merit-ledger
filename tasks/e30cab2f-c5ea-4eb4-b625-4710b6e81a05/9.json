@@ -1,0 +1,9 @@
+{
+  "id": "9",
+  "subject": "重写 detector.py — ADX 三层复合检测器",
+  "description": "实现 Wilder 标准 ADX 算法、归一化 SMA 斜率、ATR% 波动检测。detector 返回 naive_regime（无状态），滞后逻辑由 strategy 处理",
+  "activeForm": "重写 detector.py",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

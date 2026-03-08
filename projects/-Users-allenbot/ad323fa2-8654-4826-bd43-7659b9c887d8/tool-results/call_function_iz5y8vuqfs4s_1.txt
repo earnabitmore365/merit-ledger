@@ -1,0 +1,34 @@
+    90→        ma_long = self.calculate_ma(closes, self.config.long_ma)
+    91→        if closes[-1] > ma_short > ma_long:
+    92→            return "uptrend"
+    93→        elif closes[-1] < ma_short < ma_long:
+    94→            return "downtrend"
+    95→        return "ranging"
+    96→    
+    97→    def generate_signal(
+    98→        self, coin: str, candles: List[Dict] = None
+    99→    ) -> TradingSignal:
+   100→        """Generate Advanced Kline signal"""
+   101→        min_required = self.config.long_ma
+   102→        if not candles or len(candles) < min_required:
+   103→            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+   104→                timestamp=candles[-1]["time"] if candles else 0,
+   105→                metadata={"reason": "Insufficient candles"})
+   106→        closes = [c["close"] for c in candles]
+   107→        current = closes[-1]
+   108→        trend = self.get_trend(closes)
+   109→        bb = self.calculate_bollinger_bands(closes)
+   110→        macd = self.calculate_macd(closes)
+   111→        bb_signal = Signal.BUY if current < bb["lower"] else Signal.SELL if current > bb["upper"] else Signal.HOLD
+   112→        macd_signal = Signal.BUY if macd["histogram"] > 0 else Signal.SELL if macd["histogram"] < 0 else Signal.HOLD
+   113→        buy_count = sum(1 for s in [bb_signal, macd_signal] if s == Signal.BUY) + (1 if trend == "uptrend" else 0)
+   114→        sell_count = sum(1 for s in [bb_signal, macd_signal] if s == Signal.SELL) + (1 if trend == "downtrend" else 0)
+   115→        signal = Signal.BUY if buy_count >= 2 else Signal.SELL if sell_count >= 2 else Signal.HOLD
+   116→        return TradingSignal(signal=signal, confidence=0.6, coin=coin,
+   117→            timestamp=candles[-1]["time"],
+   118→            metadata={"trend": trend, "bb": bb, "macd": macd})
+   119→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

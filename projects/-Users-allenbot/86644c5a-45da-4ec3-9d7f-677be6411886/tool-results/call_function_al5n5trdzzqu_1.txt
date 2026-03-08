@@ -1,0 +1,22 @@
+     1→{
+     2→  "mcpServers": {
+     3→    "zapier": {
+     4→      "url": "https://mcp.zapier.com/xxxx-xxxx-xxxx",
+     5→      "transport": "http"
+     6→    },
+     7→    "filesystem": {
+     8→      "command": "npx",
+     9→      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/UUsers/allenbot/.openclaw/workspace"]
+    10→    },
+    11→    "google-drive": {
+    12→      "command": "npx",
+    13→      "args": ["-y", "@anthropic/mcp-google-drive"]
+    14→    }
+    15→  },
+    16→  "autoDiscover": true,          // 自动扫描 openclaw 已添加的 MCP
+    17→  "preferredServers": ["zapier"] // 可选：优先用哪个
+    18→}
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

@@ -1,0 +1,29 @@
+   488→                leverage = int(selections.get('杠杆', '10x').replace('x', ''))
+   489→                position_pct = int(selections.get('仓位', '10%').replace('%', '')) / 100
+   490→                stop_loss = int(selections.get('止损', '10%').replace('%', '')) / 100
+   491→                enable_ttp = selections.get('TTP', '关闭') == '开启'
+   492→                continuous = selections.get('模式', '执行一次') == '持续运行'
+   493→
+   494→                # 获取账号配置
+   495→                config = get_adapter_config(account, network)
+   496→                config['testnet'] = (network == 'testnet')
+   497→
+   498→                # 创建适配器
+   499→                adapter = HyperLiquidAdapter(config)
+   500→                adapter.connect()
+   501→
+   502→                # 获取策略
+   503→                strategy = get_strategy(strategy_name)
+   504→
+   505→                # 创建风险管理
+   506→                risk_mgr = None
+   507→                if enable_ttp:
+   508→                    from core.risk import TTPConfig
+   509→                    risk_mgr = TTPManager(TTPConfig())
+   510→
+   511→                # 创建交易系统
+   512→                system = TradingSystem(
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

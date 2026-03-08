@@ -1,0 +1,97 @@
+"""SMC — Smart Money Concepts（结构突破 + Order Block + FVG 综合）"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class SMCConfig:
+    swing_lookback: int = 10
+    fvg_min_gap_pct: float = 0.3
+
+
+class SMC(Strategy):
+    """Smart Money Concepts：BOS + Order Block + FVG"""
+
+    def __init__(self, exchange=None, config: Optional[SMCConfig] = None):
+        self.exchange = exchange
+        self.config = config or SMCConfig()
+
+    @property
+    def name(self) -> str:
+        return "smc_real"
+
+    def _find_swing_highs(self, klines, lb):
+        highs = []
+        for i in range(lb, len(klines) - 1):
+            h = klines[i]["high"]
+            if all(h >= klines[j]["high"] for j in range(i - lb, i)) and \
+               all(h >= klines[j]["high"] for j in range(i + 1, min(len(klines), i + lb + 1))):
+                highs.append((i, h))
+        return highs
+
+    def _find_swing_lows(self, klines, lb):
+        lows = []
+        for i in range(lb, len(klines) - 1):
+            l = klines[i]["low"]
+            if all(l <= klines[j]["low"] for j in range(i - lb, i)) and \
+               all(l <= klines[j]["low"] for j in range(i + 1, min(len(klines), i + lb + 1))):
+                lows.append((i, l))
+        return lows
+
+    def _detect_bos(self, klines, swing_highs, swing_lows):
+        """Break of Structure：价格突破前一个swing high/low"""
+        close = klines[-1]["close"]
+        if swing_highs and close > swing_highs[-1][1]:
+            return "bullish_bos"
+        if swing_lows and close < swing_lows[-1][1]:
+            return "bearish_bos"
+        return None
+
+    def _detect_fvg(self, klines):
+        """Fair Value Gap：三根K线中间有缺口"""
+        if len(klines) < 3:
+            return None
+        k1, k2, k3 = klines[-3], klines[-2], klines[-1]
+        # 看涨FVG：k1的高 < k3的低
+        if k1["high"] < k3["low"]:
+            gap_pct = (k3["low"] - k1["high"]) / k1["high"] * 100
+            if gap_pct >= self.config.fvg_min_gap_pct:
+                return "bullish_fvg"
+        # 看跌FVG：k1的低 > k3的高
+        if k1["low"] > k3["high"]:
+            gap_pct = (k1["low"] - k3["high"]) / k3["high"] * 100
+            if gap_pct >= self.config.fvg_min_gap_pct:
+                return "bearish_fvg"
+        return None
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        lb = self.config.swing_lookback
+        min_required = lb * 2 + 5
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        swing_highs = self._find_swing_highs(klines[:-1], lb)
+        swing_lows = self._find_swing_lows(klines[:-1], lb)
+
+        bos = self._detect_bos(klines, swing_highs, swing_lows)
+        fvg = self._detect_fvg(klines)
+
+        # BOS + FVG 同向确认 → 高置信度
+        if bos == "bullish_bos" and fvg == "bullish_fvg":
+            signal, confidence = Signal.BUY, 0.8
+        elif bos == "bearish_bos" and fvg == "bearish_fvg":
+            signal, confidence = Signal.SELL, 0.8
+        # 单独 BOS
+        elif bos == "bullish_bos":
+            signal, confidence = Signal.BUY, 0.6
+        elif bos == "bearish_bos":
+            signal, confidence = Signal.SELL, 0.6
+        else:
+            signal, confidence = Signal.HOLD, 0.0
+
+        return TradingSignal(signal=signal, confidence=confidence,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"bos": bos, "fvg": fvg})

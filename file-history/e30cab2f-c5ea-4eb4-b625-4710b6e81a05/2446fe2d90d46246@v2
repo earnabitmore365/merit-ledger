@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""
+Indicator Verification Script
+
+一键测试所有指标
+用法: python3 src/indicators/verify.py
+"""
+
+import sys
+import time
+from pathlib import Path
+
+# 确保 src/ 在 sys.path
+src_dir = str(Path(__file__).parent.parent)
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+from indicators.base import get_indicator, list_indicators, get_all_indicators, IndicatorResult
+
+
+def format_raw(raw_value) -> str:
+    """格式化原始值"""
+    if raw_value is None:
+        return "—"
+    if isinstance(raw_value, float):
+        if abs(raw_value) > 1_000_000:
+            return f"{raw_value:,.0f}"
+        return f"{raw_value:.4f}"
+    if isinstance(raw_value, dict):
+        # 提取关键字段
+        if "crossed" in raw_value:
+            return f"crossed={raw_value['crossed']}, gap={raw_value.get('gap_pct', '?')}%"
+        if "oi_usd" in raw_value:
+            return f"${raw_value['oi_usd']:,.0f} ({raw_value.get('change_24h_pct', 0):+.1f}%)"
+        if "value" in raw_value:
+            return f"{raw_value['value']} ({raw_value.get('classification', '')})"
+        if "supply_b" in raw_value:
+            return f"${raw_value['supply_b']}B ({raw_value.get('change_30d_pct', 0):+.1f}%)"
+        if "results" in raw_value:
+            return f"{len(raw_value['results'])}/{len(raw_value['results'])+len(raw_value.get('failed',[]))} ok"
+        # 通用 dict
+        parts = []
+        for k, v in raw_value.items():
+            if isinstance(v, float):
+                parts.append(f"{k}={v:.2f}")
+            else:
+                parts.append(f"{k}={v}")
+        return ", ".join(parts[:3])
+    return str(raw_value)[:40]
+
+
+def run_single(name: str, **kwargs) -> IndicatorResult:
+    """运行单个指标"""
+    indicator = get_indicator(name)
+    return indicator.evaluate(**kwargs)
+
+
+def run_all(**kwargs):
+    """运行所有指标（composite 除外，最后单独跑）"""
+    all_names = list_indicators()
+    # composite 最后
+    names = [n for n in all_names if n != "market_score"]
+
+    results = []
+    print()
+    print(f"{'Indicator':<22} {'Raw':<42} {'Score':>6}  {'Signal':<13} {'Source':<12}")
+    print("─" * 100)
+
+    for name in names:
+        t0 = time.time()
+        result = run_single(name, **kwargs)
+        elapsed = time.time() - t0
+
+        raw_str = format_raw(result.raw_value) if result.ok else f"ERROR: {result.error[:35]}"
+        signal_str = result.signal.value if result.ok else "—"
+        score_str = f"{result.score:.3f}" if result.ok else "—"
+
+        tag = ""
+        if elapsed > 2:
+            tag = f" ({elapsed:.1f}s)"
+
+        print(f"  {name:<20} {raw_str:<42} {score_str:>6}  {signal_str:<13} {result.source:<10}{tag}")
+        results.append(result)
+
+    # 综合打分
+    print("─" * 100)
+    if "market_score" in all_names:
+        t0 = time.time()
+        composite = run_single("market_score", **kwargs)
+        elapsed = time.time() - t0
+        raw_str = format_raw(composite.raw_value) if composite.ok else f"ERROR: {composite.error[:35]}"
+        score_str = f"{composite.score:.3f}" if composite.ok else "—"
+        signal_str = composite.signal.value if composite.ok else "—"
+        tag = f" ({elapsed:.1f}s)" if elapsed > 2 else ""
+        print(f"  {'market_score':<20} {raw_str:<42} {score_str:>6}  {signal_str:<13} {'composite':<10}{tag}")
+
+        if composite.ok and composite.info:
+            print(f"\n  综合: {composite.info}")
+
+        results.append(composite)
+
+    # 统计
+    ok_count = sum(1 for r in results if r.ok)
+    print(f"\n  结果: {ok_count}/{len(results)} 指标正常")
+
+    # 市场解读
+    if "market_score" in all_names and composite.ok:
+        s = composite.score
+        if s >= 0.8:
+            verdict = "深熊抄底区 — 极度恐惧，历史级机会"
+        elif s >= 0.6:
+            verdict = "早期复苏/牛市 — 可以建仓"
+        elif s >= 0.4:
+            verdict = "中性震荡 — 等待方向"
+        elif s >= 0.2:
+            verdict = "牛市后期/止盈区 — 逐步减仓"
+        else:
+            verdict = "狂热逃顶 — 极度贪婪，注意风险"
+        print(f"  判断: {verdict} (score={s:.3f})")
+
+    print()
+    return results
+
+
+def run_local_history():
+    """本地指标历史采样（AHR999 + Pi Cycle）"""
+    import json
+    from indicators.local import _load_btc_1h, _aggregate_daily, AHR999Indicator, PiCycleTopIndicator
+
+    print("\n历史趋势（每30天采样）:")
+    print(f"  {'日期':<14} {'BTC价格':>12} {'AHR999':>10} {'Pi Gap%':>10}")
+    print("  " + "─" * 50)
+
+    klines = _load_btc_1h()
+    daily = _aggregate_daily(klines)
+
+    if len(daily) < 350:
+        print(f"  数据不足 ({len(daily)}天 < 350天)")
+        return
+
+    ahr = AHR999Indicator()
+    pi = PiCycleTopIndicator()
+
+    # 从350天开始，每30天采样
+    step = 30
+    for i in range(350, len(daily), step):
+        subset = klines[:i * 24]  # 粗略：i天 × 24小时
+        if len(subset) < 200 * 24:
+            continue
+        try:
+            ahr_val = ahr.fetch(klines=subset)
+            pi_val = pi.fetch(klines=subset)
+            price = _aggregate_daily(subset)[-1]['close']
+            date = _aggregate_daily(subset)[-1]['date']
+            print(f"  {date:<14} ${price:>10,.0f} {ahr_val:>10.4f} {pi_val['gap_pct']:>9.1f}%")
+        except Exception:
+            continue
+
+    print()
+
+
+if __name__ == "__main__":
+    print("=" * 100)
+    print("  指标库验证 — src/indicators/")
+    print("=" * 100)
+
+    if "--local-only" in sys.argv:
+        # 仅测试本地指标（无网络）
+        print("\n[本地指标]")
+        for name in ["ahr999", "pi_cycle_top"]:
+            r = run_single(name)
+            print(f"  {name}: {r}")
+        run_local_history()
+    elif "--history" in sys.argv:
+        run_local_history()
+    else:
+        run_all()
+        if "--history" not in sys.argv:
+            print("  提示: 加 --history 查看本地指标历史趋势")
+            print("  提示: 加 --local-only 仅测试本地指标（无网络请求）")

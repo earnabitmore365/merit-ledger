@@ -1,0 +1,38 @@
+# Abby Auto Trading - 操作日志
+
+记录系统修改历史，方便查询和追溯。
+
+## 日志格式
+
+```
+[YYYY-MM-DD HH:MM] | 操作类型 | 操作内容 | 操作人
+```
+
+## 操作类型
+
+| 类型 | 说明 |
+|------|------|
+| ADD | 新增功能/文件 |
+| MOD | 修改功能/文件 |
+| DEL | 删除功能/文件 |
+| FIX | 修复问题 |
+| OPT | 优化性能/代码 |
+
+---
+
+## 2026-02-16
+
+### 回测系统修复
+[2026-02-16 16:53] | MOD | 整理文件夹结构：数据移到 src/backtest/data/，报告移到 src/backtest/reports/ | Abby
+[2026-02-16 16:54] | MOD | 简化路径设置：使用绝对路径替代 dirname 计算 | Abby
+
+### 框架清理
+[2026-02-16 17:01] | DEL | 删除一次性工具：migrate_strategies.py, migrate_research.py | Abby
+[2026-02-16 17:19] | DEL | 清理测试日志：删除 test.log, final_test.log | Abby
+
+### 文档更新
+[2026-02-16 17:03] | ADD | 更新 README.md：添加完整框架结构和文件夹作用速查表 | Abby
+[2026-02-16 17:17] | ADD | 添加 logs/ 到框架结构，创建 operation.log | Abby
+
+[2026-02-16 17:29] | ADD | 创建 for_dad/ 目录存放给爸爸用的工具 | Abby
+[2026-02-16 17:40] | MOD | 移除策略默认参数，现在运行必须指定策略 | Abby

@@ -1,0 +1,158 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→Risk Manager Base
+     4→
+     5→风险管理基类
+     6→所有风险管理模块都必须实现以下接口
+     7→"""
+     8→
+     9→from abc import ABC, abstractmethod
+    10→from dataclasses import dataclass, field
+    11→from typing import Dict, List, Optional
+    12→
+    13→
+    14→# ==================== 配置类定义 ====================
+    15→
+    16→@dataclass
+    17→class RiskConfig:
+    18→    """风险管理配置
+    19→    
+    20→    Attributes:
+    21→        stop_loss_pct: 止损比例（如 0.10 表示亏损 10% 平仓）
+    22→        ttp_enabled: 是否启用移动止盈
+    23→        ttp_buffer_pips: 移动止盈缓冲（pips）
+    24→        max_position_pct: 最大仓位比例
+    25→        trailing_stop_pct: 跟踪止损比例
+    26→    """
+    27→    stop_loss_pct: float = 0.10
+    28→    ttp_enabled: bool = True
+    29→    ttp_buffer_pips: float = 5.0
+    30→    max_position_pct: float = 0.5
+    31→    trailing_stop_pct: float = 0.0
+    32→
+    33→
+    34→# ==================== 结果类定义 ====================
+    35→
+    36→@dataclass
+    37→class RiskCheckResult:
+    38→    """风险检查结果
+    39→    
+    40→    Attributes:
+    41→        should_close: 是否应该平仓
+    42→        reason: 平仓原因
+    43→        confidence: 置信度 0-1
+    44→        ttp_level: 移动止盈触发价位
+    45→    """
+    46→    should_close: bool = False
+    47→    reason: str = ""
+    48→    confidence: float = 1.0
+    49→    ttp_level: Optional[float] = None
+    50→
+    51→
+    52→# ==================== 风险管理基类 ====================
+    53→
+    54→class RiskManager(ABC):
+    55→    """风险管理基类
+    56→    
+    57→    所有风险管理模块都必须继承此类
+    58→    负责检查持仓风险，判断是否需要平仓
+    59→    
+    60→    Usage:
+    61→        class StopLossManager(RiskManager):
+    62→            def check(self, position: Dict, current_price: float) -> RiskCheckResult:
+    63→                ...
+    64→    """
+    65→    
+    66→    def __init__(self, config: RiskConfig = None):
+    67→        """初始化
+    68→        
+    69→        Args:
+    70→            config: 风险管理配置
+    71→        """
+    72→        self.config = config or RiskConfig()
+    73→    
+    74→    @abstractmethod
+    75→    def check(
+    76→        self,
+    77→        position: Dict,
+    78→        current_price: float,
+    79→        **kwargs
+    80→    ) -> RiskCheckResult:
+    81→        """风险检查（子类必须实现）
+    82→        
+    83→        Args:
+    84→            position: 持仓信息
+    85→            current_price: 当前价格
+    86→            **kwargs: 附加参数
+    87→        
+    88→        Returns:
+    89→            RiskCheckResult: 检查结果
+    90→        """
+    91→        pass
+    92→    
+    93→    def reset(self) -> None:
+    94→        """重置状态"""
+    95→        pass
+    96→    
+    97→    def __repr__(self) -> str:
+    98→        """字符串表示"""
+    99→        return f"<{self.__class__.__name__}: stop_loss={self.config.stop_loss_pct}>"
+   100→
+   101→
+   102→# ==================== 风险管理工厂 ====================
+   103→
+   104→class RiskManagerFactory:
+   105→    """风险管理工厂
+   106→    
+   107→    用于创建风险管理实例
+   108→    """
+   109→    
+   110→    _managers = {}
+   111→    
+   112→    @classmethod
+   113→    def register(cls, name: str, manager_class: type):
+   114→        """注册风险管理类
+   115→        
+   116→        Args:
+   117→            name: 名称
+   118→            manager_class: 管理类
+   119→        """
+   120→        cls._managers[name.lower()] = manager_class
+   121→    
+   122→    @classmethod
+   123→    def create(cls, name: str, config: RiskConfig = None) -> RiskManager:
+   124→        """创建风险管理实例
+   125→        
+   126→        Args:
+   127→            name: 风险管理类型
+   128→            config: 配置
+   129→        
+   130→        Returns:
+   131→            RiskManager: 风险管理实例
+   132→        """
+   133→        name_lower = name.lower()
+   134→        if name_lower in cls._managers:
+   135→            return cls._managers[name_lower](config)
+   136→        raise ValueError(f"Unknown risk manager: {name}")
+   137→    
+   138→    @classmethod
+   139→    def list_managers(cls) -> List[str]:
+   140→        """列出所有可用的风险管理类型"""
+   141→        return list(cls._managers.keys())
+   142→
+   143→
+   144→# ==================== 预定义风险管理类 ====================
+   145→
+   146→from .stop_loss import StopLossManager
+   147→from .ttp import TTPManager
+   148→
+   149→RiskManagerFactory.register('stop_loss', StopLossManager)
+   150→RiskManagerFactory.register('stop', StopLossManager)
+   151→RiskManagerFactory.register('sl', StopLossManager)
+   152→RiskManagerFactory.register('ttp', TTPManager)
+   153→RiskManagerFactory.register('trailing', TTPManager)
+   154→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

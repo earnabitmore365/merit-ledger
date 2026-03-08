@@ -1,0 +1,135 @@
+     1→{
+     2→  "meta": {
+     3→    "lastTouchedVersion": "2026.2.19-2",
+     4→    "lastTouchedAt": "2026-02-21T15:53:05.372Z"
+     5→  },
+     6→  "wizard": {
+     7→    "lastRunAt": "2026-02-21T12:49:06.057Z",
+     8→    "lastRunVersion": "2026.2.19-2",
+     9→    "lastRunCommand": "configure",
+    10→    "lastRunMode": "local"
+    11→  },
+    12→  "auth": {
+    13→    "profiles": {
+    14→      "minimax:default": {
+    15→        "provider": "minimax",
+    16→        "mode": "api_key"
+    17→      }
+    18→    }
+    19→  },
+    20→  "models": {
+    21→    "mode": "merge",
+    22→    "providers": {
+    23→      "minimax": {
+    24→        "baseUrl": "https://api.minimax.io/anthropic",
+    25→        "apiKey": "sk-cp-AVjcKaazYE7p76PAn7u6xcY_0VVJIjic1SPGwddHh4F2qPMVANl927ioUmmv88o-cUZvkAlFD8stFxBQCK_22swW3zeDE4L2ZNYtXa8xn1EIs2P9ygxedvI",
+    26→        "api": "anthropic-messages",
+    27→        "models": [
+    28→          {
+    29→            "id": "MiniMax-M2.5",
+    30→            "name": "MiniMax M2.5",
+    31→            "reasoning": true,
+    32→            "input": [
+    33→              "text"
+    34→            ],
+    35→            "cost": {
+    36→              "input": 15,
+    37→              "output": 60,
+    38→              "cacheRead": 2,
+    39→              "cacheWrite": 10
+    40→            },
+    41→            "contextWindow": 200000,
+    42→            "maxTokens": 12800
+    43→          }
+    44→        ]
+    45→      }
+    46→    }
+    47→  },
+    48→  "agents": {
+    49→    "defaults": {
+    50→      "model": {
+    51→        "primary": "minimax/MiniMax-M2.5"
+    52→      },
+    53→      "models": {
+    54→        "minimax/MiniMax-M2.5": {
+    55→          "alias": "Minimax"
+    56→        }
+    57→      },
+    58→      "workspace": "/Users/allenbot/.openclaw/workspace",
+    59→      "contextPruning": {
+    60→        "mode": "cache-ttl",
+    61→        "ttl": "1h",
+    62→        "softTrim": {
+    63→          "maxChars": 12000
+    64→        }
+    65→      },
+    66→      "compaction": {
+    67→        "mode": "safeguard",
+    68→        "reserveTokensFloor": 24000,
+    69→        "memoryFlush": {
+    70→          "enabled": true
+    71→        }
+    72→      },
+    73→      "maxConcurrent": 8,
+    74→      "subagents": {
+    75→        "maxConcurrent": 8
+    76→      }
+    77→    }
+    78→  },
+    79→  "tools": {
+    80→    "web": {
+    81→      "search": {
+    82→        "enabled": true,
+    83→        "apiKey": "BSACf8LaQnJcZit-BhDhXWYl6Jvwmik"
+    84→      },
+    85→      "fetch": {
+    86→        "enabled": true
+    87→      }
+    88→    },
+    89→    "sessions": {
+    90→      "visibility": "agent"
+    91→    }
+    92→  },
+    93→  "messages": {
+    94→    "ackReactionScope": "group-mentions"
+    95→  },
+    96→  "commands": {
+    97→    "native": "auto",
+    98→    "nativeSkills": "auto",
+    99→    "restart": true
+   100→  },
+   101→  "channels": {
+   102→    "telegram": {
+   103→      "enabled": true,
+   104→      "dmPolicy": "allowlist",
+   105→      "botToken": "8550969879:AAGk2YPzinvcfES8CJD6ehaoDw5fPJnLv38",
+   106→      "allowFrom": [
+   107→        "6506412244"
+   108→      ],
+   109→      "groupPolicy": "allowlist",
+   110→      "streamMode": "partial"
+   111→    }
+   112→  },
+   113→  "gateway": {
+   114→    "mode": "local",
+   115→    "auth": {
+   116→      "mode": "token",
+   117→      "token": "aba5486e8f745aa24a757d4744816acbcc5b478505b1d297"
+   118→    }
+   119→  },
+   120→  "plugins": {
+   121→    "entries": {
+   122→      "telegram": {
+   123→        "enabled": true
+   124→      },
+   125→      "whatsapp": {
+   126→        "enabled": true
+   127→      }
+   128→    }
+   129→  }
+   130→}
+   131→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

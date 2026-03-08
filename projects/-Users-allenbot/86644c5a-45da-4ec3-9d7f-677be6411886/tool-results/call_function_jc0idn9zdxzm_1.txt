@@ -1,0 +1,1 @@
+/Users/allenbot/project/auto-trading/user_interface/trade.command

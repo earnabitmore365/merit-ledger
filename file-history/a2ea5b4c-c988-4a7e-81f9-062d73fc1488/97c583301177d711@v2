@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""
+组考（组队）— 按短/中/长期分三队，各自从专考成绩单里挑候选
+输入: gate2_{interval}.json ×10
+输出: gate3_short.json / gate3_mid.json / gate3_long.json
+"""
+import json
+import os
+
+OUT_DIR = os.path.join(os.path.dirname(__file__), 'results')
+
+TEAMS = {
+    'short': ['1m', '5m', '15m', '30m'],
+    'mid':   ['1h', '2h', '4h'],
+    'long':  ['8h', '12h', '1d'],
+}
+
+DIMENSIONS = ['all', 'bull', 'bear', 'ranging']
+TOP_N = 5
+MIN_TRADES = 10
+
+
+def load_scorecard(interval):
+    path = os.path.join(OUT_DIR, f'gate2_{interval}.json')
+    with open(path) as f:
+        return json.load(f)
+
+
+def select_candidates(intervals):
+    """从多个周期的成绩单中，4维度各取TOP5，合并去重"""
+    # 加载所有周期数据
+    all_records = []
+    for iv in intervals:
+        all_records.extend(load_scorecard(iv))
+
+    by_regime = {}
+    all_candidates = {}  # key=(strategy, coin) → best record
+
+    for dim in DIMENSIONS:
+        if dim == 'all':
+            # 全程：按 all.pnl 排序，取trade_count >= MIN_TRADES的
+            eligible = [r for r in all_records if r['all']['trades'] >= MIN_TRADES]
+            eligible.sort(key=lambda x: x['all']['pnl'], reverse=True)
+        else:
+            # regime维度：排除insufficient_data
+            eligible = [r for r in all_records
+                        if not r[dim].get('insufficient_data')
+                        and r[dim]['trades'] >= MIN_TRADES]
+            eligible.sort(key=lambda x: x[dim]['pnl'], reverse=True)
+
+        top = eligible[:TOP_N]
+        by_regime[dim] = [{
+            'combo_id': r['combo_id'],
+            'strategy': r['strategy'],
+            'coin': r['coin'],
+            'interval': r['interval'],
+            'pnl': r[dim]['pnl'] if dim != 'all' else r['all']['pnl'],
+            'trades': r[dim]['trades'] if dim != 'all' else r['all']['trades'],
+        } for r in top]
+
+        # 加入候选池
+        for r in top:
+            key = (r['strategy'], r['coin'])
+            if key not in all_candidates:
+                all_candidates[key] = r
+            else:
+                # 同(strategy, coin)跨周期，保留all_pnl最高的
+                if r['all']['pnl'] > all_candidates[key]['all']['pnl']:
+                    all_candidates[key] = r
+
+    # 最终候选列表
+    final = list(all_candidates.values())
+    final.sort(key=lambda x: x['all']['pnl'], reverse=True)
+
+    return by_regime, final
+
+
+def main():
+    for team_name, intervals in TEAMS.items():
+        print(f"组考 {team_name}队 ({'/'.join(intervals)})...", end=' ', flush=True)
+
+        by_regime, candidates = select_candidates(intervals)
+
+        result = {
+            'group': team_name,
+            'intervals': intervals,
+            'candidate_count': len(candidates),
+            'by_regime': by_regime,
+            'all_candidates': [{
+                'combo_id': c['combo_id'],
+                'strategy': c['strategy'],
+                'coin': c['coin'],
+                'interval': c['interval'],
+                'all_pnl': c['all']['pnl'],
+                'all_trades': c['all']['trades'],
+                'all_win_rate': c['all']['win_rate'],
+            } for c in candidates],
+        }
+
+        out_path = os.path.join(OUT_DIR, f'gate3_{team_name}.json')
+        with open(out_path, 'w') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+
+        print(f"{len(candidates)} 个候选 → gate3_{team_name}.json")
+
+    print("\n组考完成")
+
+
+if __name__ == '__main__':
+    main()

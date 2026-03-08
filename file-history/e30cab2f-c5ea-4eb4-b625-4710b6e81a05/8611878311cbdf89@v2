@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""
+Indicator Base
+
+指标基类、缓存混入、注册表、结果数据类
+"""
+
+import json
+import time
+import os
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+
+# ==================== 枚举定义 ====================
+
+class MarketSignal(Enum):
+    """市场信号"""
+    STRONG_BUY = "strong_buy"
+    BUY = "buy"
+    NEUTRAL = "neutral"
+    SELL = "sell"
+    STRONG_SELL = "strong_sell"
+
+
+# ==================== 数据类 ====================
+
+@dataclass
+class IndicatorResult:
+    """指标计算结果
+
+    Attributes:
+        name: 指标名称
+        raw_value: 原始值
+        score: 归一化分数 0-1（0=极看空, 1=极看多）
+        signal: 市场信号
+        source: 数据来源
+        info: 补充说明
+        error: 错误信息（失败时）
+        timestamp: 计算时间戳
+    """
+    name: str
+    raw_value: Any = None
+    score: float = 0.5
+    signal: MarketSignal = MarketSignal.NEUTRAL
+    source: str = ""
+    info: str = ""
+    error: str = ""
+    timestamp: float = field(default_factory=time.time)
+
+    @property
+    def ok(self) -> bool:
+        return not self.error
+
+    def __repr__(self) -> str:
+        if self.error:
+            return f"<{self.name}: ERROR {self.error}>"
+        return f"<{self.name}: {self.raw_value} score={self.score:.3f} {self.signal.value}>"
+
+
+# ==================== 缓存混入 ====================
+
+CACHE_DIR = Path(__file__).parent / "cache"
+
+
+class CacheMixin:
+    """JSON 文件缓存"""
+
+    def _cache_path(self, key: str) -> Path:
+        CACHE_DIR.mkdir(exist_ok=True)
+        return CACHE_DIR / f"{key}.json"
+
+    def _read_cache(self, key: str, ttl: int) -> Optional[Any]:
+        """读缓存，未过期则返回数据，否则 None"""
+        path = self._cache_path(key)
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text())
+            if time.time() - data.get("fetched_at", 0) < ttl:
+                return data.get("data")
+        except (json.JSONDecodeError, KeyError):
+            pass
+        return None
+
+    def _read_cache_stale(self, key: str) -> Optional[Any]:
+        """读过期缓存（429时降级用）"""
+        path = self._cache_path(key)
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text())
+            return data.get("data")
+        except (json.JSONDecodeError, KeyError):
+            return None
+
+    def _write_cache(self, key: str, data: Any, ttl: int):
+        """写缓存"""
+        path = self._cache_path(key)
+        path.write_text(json.dumps({
+            "fetched_at": time.time(),
+            "ttl": ttl,
+            "data": data,
+        }, ensure_ascii=False))
+
+
+# ==================== 指标基类 ====================
+
+class BaseIndicator(ABC, CacheMixin):
+    """指标基类
+
+    子类必须实现 fetch / score / signal 方法
+    """
+
+    name: str = ""
+    source: str = ""
+
+    @abstractmethod
+    def fetch(self, **kwargs) -> Any:
+        """获取原始值"""
+        ...
+
+    @abstractmethod
+    def score(self, raw_value: Any) -> float:
+        """归一化 0-1（0=极看空, 1=极看多）"""
+        ...
+
+    def signal(self, score_value: float) -> MarketSignal:
+        """分数转信号"""
+        if score_value >= 0.8:
+            return MarketSignal.STRONG_BUY
+        elif score_value >= 0.6:
+            return MarketSignal.BUY
+        elif score_value >= 0.4:
+            return MarketSignal.NEUTRAL
+        elif score_value >= 0.2:
+            return MarketSignal.SELL
+        else:
+            return MarketSignal.STRONG_SELL
+
+    def evaluate(self, **kwargs) -> IndicatorResult:
+        """一次性获取：fetch → score → signal"""
+        try:
+            raw = self.fetch(**kwargs)
+            s = self.score(raw)
+            sig = self.signal(s)
+            return IndicatorResult(
+                name=self.name,
+                raw_value=raw,
+                score=s,
+                signal=sig,
+                source=self.source,
+            )
+        except Exception as e:
+            return IndicatorResult(
+                name=self.name,
+                score=0.5,
+                signal=MarketSignal.NEUTRAL,
+                source=self.source,
+                error=str(e),
+            )
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}: {self.name}>"
+
+
+# ==================== 注册表 ====================
+
+_INDICATOR_REGISTRY: Dict[str, type] = {}
+
+
+def register_indicator(name: str, cls: type):
+    """注册指标"""
+    _INDICATOR_REGISTRY[name.lower()] = cls
+
+
+def get_indicator(name: str) -> BaseIndicator:
+    """获取指标实例"""
+    name_lower = name.lower()
+    if name_lower in _INDICATOR_REGISTRY:
+        return _INDICATOR_REGISTRY[name_lower]()
+    raise ValueError(f"Unknown indicator: {name}")
+
+
+def list_indicators() -> List[str]:
+    """列出所有已注册指标"""
+    return list(_INDICATOR_REGISTRY.keys())
+
+
+def get_all_indicators() -> List[BaseIndicator]:
+    """获取所有指标实例"""
+    return [cls() for cls in _INDICATOR_REGISTRY.values()]
+
+
+__all__ = [
+    'MarketSignal', 'IndicatorResult', 'CacheMixin',
+    'BaseIndicator', 'register_indicator', 'get_indicator',
+    'list_indicators', 'get_all_indicators',
+]

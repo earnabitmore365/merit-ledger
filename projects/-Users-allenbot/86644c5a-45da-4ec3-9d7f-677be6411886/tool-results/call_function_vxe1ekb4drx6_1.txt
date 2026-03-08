@@ -1,0 +1,403 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→Trading System
+     4→
+     5→交易系统主控
+     6→整合策略、风险管理、交易所适配器
+     7→"""
+     8→
+     9→import logging
+    10→from typing import Dict, List, Optional
+    11→from datetime import datetime
+    12→
+    13→from core.strategy.base import Strategy, Signal
+    14→from core.risk.base import RiskManager, RiskCheckResult
+    15→from exchange.base import ExchangeAdapter, OrderRequest, OrderSide, OrderType
+    16→
+    17→
+    18→# ==================== 日志配置 ====================
+    19→
+    20→def setup_logger(name: str = "trading") -> logging.Logger:
+    21→    """设置日志
+    22→    
+    23→    Args:
+    24→        name: 日志名称
+    25→    
+    26→    Returns:
+    27→        Logger: 日志实例
+    28→    """
+    29→    logger = logging.getLogger(name)
+    30→    logger.setLevel(logging.INFO)
+    31→    
+    32→    # 控制台处理器
+    33→    handler = logging.StreamHandler()
+    34→    handler.setLevel(logging.INFO)
+    35→    
+    36→    # 格式化
+    37→    formatter = logging.Formatter(
+    38→        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    39→    )
+    40→    handler.setFormatter(formatter)
+    41→    
+    42→    if not logger.handlers:
+    43→        logger.addHandler(handler)
+    44→    
+    45→    return logger
+    46→
+    47→
+    48→# ==================== 交易系统主控 ====================
+    49→
+    50→class TradingSystem:
+    51→    """交易系统主控
+    52→    
+    53→    整合策略、风险管理、交易所适配器
+    54→    实现完整的自动交易逻辑
+    55→    
+    56→    Usage:
+    57→        # 创建交易所适配器
+    58→        adapter = HyperLiquidAdapter(config)
+    59→        
+    60→        # 创建策略
+    61→        strategy = VWAPStrategy()
+    62→        
+    63→        # 创建风险管理
+    64→        risk_mgr = StopLossManager()
+    65→        
+    66→        # 创建交易系统
+    67→        system = TradingSystem(
+    68→            exchange=adapter,
+    69→            strategy=strategy,
+    70→            risk_manager=risk_mgr,
+    71→        )
+    72→        
+    73→        # 运行
+    74→        system.run()
+    75→    """
+    76→    
+    77→    def __init__(
+    78→        self,
+    79→        exchange: ExchangeAdapter,
+    80→        strategy: Strategy,
+    81→        risk_manager: RiskManager = None,
+    82→        config: Dict = None
+    83→    ):
+    84→        """初始化
+    85→        
+    86→        Args:
+    87→            exchange: 交易所适配器
+    88→            strategy: 策略
+    89→            risk_manager: 风险管理（可选）
+    90→            config: 附加配置
+    91→        """
+    92→        self.exchange = exchange
+    93→        self.strategy = strategy
+    94→        self.risk_manager = risk_manager
+    95→        self.config = config or {}
+    96→        
+    97→        # 状态
+    98→        self.position = None
+    99→        self.entry_price = 0.0
+   100→        self.running = False
+   101→        
+   102→        # 日志
+   103→        self.logger = setup_logger("TradingSystem")
+   104→    
+   105→    # ==================== 核心方法 ====================
+   106→    
+   107→    def run(self, interval_seconds: int = 60, max_iterations: int = None):
+   108→        """运行交易系统
+   109→        
+   110→        Args:
+   111→            interval_seconds: 执行间隔（秒）
+   112→            max_iterations: 最大执行次数（None=无限）
+   113→        """
+   114→        self.running = True
+   115→        self.logger.info("=" * 50)
+   116→        self.logger.info("交易系统启动")
+   117→        self.logger.info(f"交易所: {self.exchange.get_exchange_name()}")
+   118→        self.logger.info(f"策略: {self.strategy.name}")
+   119→        self.logger.info(f"币种: {self.config.get('coin', 'ETH')}")
+   120→        self.logger.info("=" * 50)
+   121→        
+   122→        try:
+   123→            iteration = 0
+   124→            while self.running:
+   125→                iteration += 1
+   126→                
+   127→                # 检查是否达到最大次数
+   128→                if max_iterations and iteration > max_iterations:
+   129→                    self.logger.info(f"达到最大执行次数: {max_iterations}")
+   130→                    break
+   131→                
+   132→                self.run_once()
+   133→                
+   134→                # 休眠
+   135→                self._sleep(interval_seconds)
+   136→        
+   137→        except KeyboardInterrupt:
+   138→            self.logger.info("收到停止信号 (Ctrl+C)")
+   139→        finally:
+   140→            self.stop()
+   141→    
+   142→    def run_once(self) -> Dict:
+   143→        """执行一次交易检查
+   144→        
+   145→        Returns:
+   146→            Dict: 执行结果
+   147→        """
+   148→        result = {
+   149→            'timestamp': datetime.now().isoformat(),
+   150→            'signal': None,
+   151→            'action': None,
+   152→            'position': self.position,
+   153→            'entry_price': self.entry_price,
+   154→        }
+   155→        
+   156→        try:
+   157→            coin = self.config.get('coin', 'ETH')
+   158→            
+   159→            # 1. 获取 K 线数据
+   160→            klines = self._get_klines()
+   161→            if not klines:
+   162→                self.logger.warning("无法获取 K 线数据")
+   163→                return result
+   164→            
+   165→            # 2. 生成信号
+   166→            signal = self._generate_signal(klines)
+   167→            result['signal'] = signal.value
+   168→            
+   169→            # 3. 同步持仓状态
+   170→            self._sync_position()
+   171→            
+   172→            # 4. 风险管理检查
+   173→            risk_result = None
+   174→            if self.position and self.risk_manager:
+   175→                risk_result = self._check_risk()
+   176→                if risk_result.should_close:
+   177→                    self._close_position(risk_result.reason)
+   178→                    result['action'] = risk_result.reason
+   179→                    self.logger.info(f"[{result['timestamp']}] {result['action']} | 持仓: {result['position']}")
+   180→                    return result
+   181→            
+   182→            # 5. 执行交易
+   183→            if signal == Signal.BUY and not self.position:
+   184→                self._open_position("BUY")
+   185→                result['action'] = "OPEN_LONG"
+   186→                self.logger.info(f"[{result['timestamp']}] {result['action']} | 信号: {signal.value}")
+   187→            
+   188→            elif signal == Signal.SELL and not self.position:
+   189→                self._open_position("SELL")
+   190→                result['action'] = "OPEN_SHORT"
+   191→                self.logger.info(f"[{result['timestamp']}] {result['action']} | 信号: {signal.value}")
+   192→            
+   193→            else:
+   194→                self.logger.debug(f"[{result['timestamp']}] 持仓: {self.position} | 信号: {signal.value}")
+   195→        
+   196→        except Exception as e:
+   197→            self.logger.error(f"执行错误: {e}", exc_info=True)
+   198→        
+   199→        return result
+   200→    
+   201→    def stop(self):
+   202→        """停止交易系统"""
+   203→        self.running = False
+   204→        self.logger.info("交易系统已停止")
+   205→        self.logger.info("=" * 50)
+   206→    
+   207→    # ==================== 配置方法 ====================
+   208→    
+   209→    def set_coin(self, coin: str):
+   210→        """设置交易币种
+   211→        
+   212→        Args:
+   213→            coin: 币种名称
+   214→        """
+   215→        self.config['coin'] = coin.upper()
+   216→        self.logger.info(f"设置交易币种: {self.config['coin']}")
+   217→    
+   218→    def set_leverage(self, leverage: float):
+   219→        """设置杠杆
+   220→        
+   221→        Args:
+   222→            leverage: 杠杆倍数
+   223→        """
+   224→        self.config['leverage'] = leverage
+   225→        self.logger.info(f"设置杠杆: {leverage}x")
+   226→    
+   227→    def set_position_pct(self, pct: float):
+   228→        """设置仓位比例
+   229→        
+   230→        Args:
+   231→            pct: 仓位比例 (0.1 = 10%)
+   232→        """
+   233→        self.config['position_pct'] = pct
+   234→        self.logger.info(f"设置仓位: {pct*100:.0f}%")
+   235→    
+   236→    # ==================== 状态查询 ====================
+   237→    
+   238→    def get_status(self) -> Dict:
+   239→        """获取当前状态
+   240→        
+   241→        Returns:
+   242→            Dict: 系统状态
+   243→        """
+   244→        return {
+   245→            'running': self.running,
+   246→            'position': self.position,
+   247→            'entry_price': self.entry_price,
+   248→            'strategy': self.strategy.name,
+   249→            'coin': self.config.get('coin', 'ETH'),
+   250→            'leverage': self.config.get('leverage', 10.0),
+   251→        }
+   252→    
+   253→    def get_position_info(self) -> Dict:
+   254→        """获取持仓信息
+   255→        
+   256→        Returns:
+   257→            Dict: 持仓信息
+   258→        """
+   259→        if not self.position:
+   260→            return {'has_position': False}
+   261→        
+   262→        coin = self.config.get('coin', 'ETH')
+   263→        current_price = self.exchange.get_price(coin)
+   264→        
+   265→        if self.position == "BUY":
+   266→            pnl_pct = (current_price - self.entry_price) / self.entry_price * 100
+   267→        else:
+   268→            pnl_pct = (self.entry_price - current_price) / self.entry_price * 100
+   269→        
+   270→        return {
+   271→            'has_position': True,
+   272→            'coin': coin,
+   273→            'side': self.position,
+   274→            'entry_price': self.entry_price,
+   275→            'current_price': current_price,
+   276→            'pnl_pct': pnl_pct,
+   277→        }
+   278→    
+   279→    # ==================== 私有方法 ====================
+   280→    
+   281→    def _get_klines(self) -> List[Dict]:
+   282→        """获取 K 线数据"""
+   283→        coin = self.config.get('coin', 'ETH')
+   284→        interval = self.config.get('interval', '1h')
+   285→        limit = self.config.get('kline_limit', 100)
+   286→        return self.exchange.get_klines(coin, interval, limit)
+   287→    
+   288→    def _generate_signal(self, klines: List[Dict]) -> Signal:
+   289→        """生成信号"""
+   290→        coin = self.config.get('coin', 'ETH')
+   291→        return self.strategy.generate_signal(coin, klines)
+   292→    
+   293→    def _sync_position(self):
+   294→        """同步持仓状态"""
+   295→        coin = self.config.get('coin', 'ETH')
+   296→        positions = self.exchange.get_positions()
+   297→        
+   298→        if positions:
+   299→            pos = positions[0]
+   300→            if pos['side'] == "LONG":
+   301→                self.position = "BUY"
+   302→            elif pos['side'] == "SHORT":
+   303→                self.position = "SELL"
+   304→            self.entry_price = pos.get('entry_price', 0.0)
+   305→        else:
+   306→            self.position = None
+   307→    
+   308→    def _check_risk(self) -> RiskCheckResult:
+   309→        """风险管理检查"""
+   310→        coin = self.config.get('coin', 'ETH')
+   311→        position = self.exchange.get_position(coin)
+   312→        current_price = self.exchange.get_price(coin)
+   313→        
+   314→        return self.risk_manager.check(
+   315→            position,
+   316→            current_price,
+   317→            position_side=self.position,
+   318→            entry_price=self.entry_price,
+   319→        )
+   320→    
+   321→    def _open_position(self, side: str):
+   322→        """开仓"""
+   323→        coin = self.config.get('coin', 'ETH')
+   324→        balance = self.exchange.get_balance().get('usdc', 0)
+   325→        
+   326→        # 计算仓位
+   327→        position_pct = self.config.get('position_pct', 0.1)
+   328→        trade_capital = balance * position_pct
+   329→        leverage = self.config.get('leverage', 10.0)
+   330→        current_price = self.exchange.get_price(coin)
+   331→        size = (trade_capital * leverage) / current_price
+   332→        
+   333→        # 下单
+   334→        order = OrderRequest(
+   335→            coin=coin,
+   336→            side=OrderSide.BUY if side == "BUY" else OrderSide.SELL,
+   337→            order_type=OrderType.MARKET,
+   338→            size=size,
+   339→        )
+   340→        result = self.exchange.place_order(order)
+   341→        
+   342→        if result.success:
+   343→            self.position = side
+   344→            self.entry_price = current_price
+   345→            self.logger.info(
+   346→                f"开仓: {side} {coin} @ ${current_price:.2f} "
+   347→                f"数量: {size:.4f}"
+   348→            )
+   349→        else:
+   350→            self.logger.error(f"开仓失败: {result.message}")
+   351→    
+   352→    def _close_position(self, reason: str = "CLOSE"):
+   353→        """平仓"""
+   354→        if not self.position:
+   355→            return
+   356→        
+   357→        coin = self.config.get('coin', 'ETH')
+   358→        result = self.exchange.close_position(coin)
+   359→        
+   360→        if result.success:
+   361→            self.position = None
+   362→            self.logger.info(f"平仓: {reason} {coin}")
+   363→        else:
+   364→            self.logger.error(f"平仓失败: {result.message}")
+   365→    
+   366→    def _sleep(self, seconds: int):
+   367→        """休眠"""
+   368→        import time
+   369→        time.sleep(seconds)
+   370→    
+   371→    def __repr__(self) -> str:
+   372→        """字符串表示"""
+   373→        return (
+   374→            f"<TradingSystem: "
+   375→            f"{self.exchange.get_exchange_name() if hasattr(self.exchange, 'get_exchange_name') else 'Exchange'}, "
+   376→            f"{self.strategy.name}, "
+   377→            f"{self.config.get('coin', 'ETH')}>"
+   378→        )
+   379→
+   380→
+   381→# ==================== 主程序 ====================
+   382→
+   383→def main():
+   384→    """主程序入口"""
+   385→    import argparse
+   386→    
+   387→    parser = argparse.ArgumentParser(description='Abby Auto Trading System')
+   388→    parser.add_argument('--coin', type=str, default='ETH', help='交易币种')
+   389→    parser.add_argument('--strategy', type=str, default='vwap', help='策略名称')
+   390→    parser.add_argument('--interval', type=int, default=60, help='执行间隔（秒）')
+   391→    args = parser.parse_args()
+   392→    
+   393→    # 这里应该是完整的初始化逻辑
+   394→    print(f"启动交易系统: {args.coin} / {args.strategy}")
+   395→
+   396→
+   397→if __name__ == "__main__":
+   398→    main()
+   399→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

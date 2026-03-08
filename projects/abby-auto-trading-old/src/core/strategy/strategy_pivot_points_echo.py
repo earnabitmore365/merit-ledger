@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""
+Pivot Points Strategy
+
+Pivot point trading strategy.
+
+Features:
+- Pivot calculation
+- Trend filter
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from src.core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class PivotPointsConfig:
+    """Pivot Points configuration"""
+    short_ma: int = 20
+    long_ma: int = 50
+
+
+class PivotPoints(Strategy):
+    """Pivot Points trading strategy"""
+    
+    def __init__(self, exchange=None, config: Optional[PivotPointsConfig] = None):
+        """Initialize Pivot Points strategy"""
+        self.exchange = exchange
+        self.config = config or PivotPointsConfig()
+    
+    @property
+    def name(self) -> str:
+        return "pivot_points_echo"
+    
+    def calculate_ma(self, closes: List[float], period: int) -> float:
+        """Calculate Moving Average"""
+        if len(closes) < period:
+            return sum(closes) / len(closes) if closes else 0.0
+        return sum(closes[-period:]) / period
+    
+    def calculate_trend(self, closes: List[float]) -> str:
+        """Determine trend direction"""
+        if len(closes) < self.config.long_ma:
+            return "neutral"
+        
+        ma_short = self.calculate_ma(closes, self.config.short_ma)
+        ma_long = self.calculate_ma(closes, self.config.long_ma)
+        
+        if ma_short > ma_long:
+            return "bullish"
+        elif ma_short < ma_long:
+            return "bearish"
+        else:
+            return "neutral"
+    
+    def calculate_pivot(self, candle: Dict) -> float:
+        """Calculate Pivot Point"""
+        high = candle["high"]
+        low = candle["low"]
+        close = candle["close"]
+        return (high + low + close) / 3
+    
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        """Generate Pivot Points signal"""
+        min_required = self.config.long_ma
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        closes = [k["close"] for k in klines]
+        current = klines[-1]["close"]
+        trend = self.calculate_trend(closes)
+        pivot = self.calculate_pivot(klines[-1])
+        
+        if trend == "bullish":
+            if current > pivot:
+                signal = Signal.BUY
+            elif current < pivot * 0.98:
+                signal = Signal.SELL
+            else:
+                signal = Signal.HOLD
+        elif trend == "bearish":
+            if current < pivot:
+                signal = Signal.SELL
+            if current > pivot * 1.02:
+                signal = Signal.BUY
+            else:
+                signal = Signal.HOLD
+        else:
+            signal = Signal.HOLD
+        
+        return TradingSignal(
+            signal=signal,
+            confidence=0.6,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={"pivot": pivot, "trend": trend},
+        )

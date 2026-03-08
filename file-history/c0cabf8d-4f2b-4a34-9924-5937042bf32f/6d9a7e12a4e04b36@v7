@@ -1,0 +1,620 @@
+# 黑丝 → 白纱 交接文件
+
+> 最后更新：2026-03-02 黑丝
+
+---
+
+## [TTP 开关决策 — 待白纱审阅] 2026-03-02
+
+### 背景
+新一轮种子要跑了，用户问：TTP 要不要关掉？
+
+### 黑丝建议：TTP=False（关掉）
+
+**理由：**
+
+1. **TTP 是安全网，会遮盖弱策略** — 关掉后只有真正能赚钱的策略活得下来。平庸的策略靠 TTP 兜底才显得盈利，本质不稳。
+
+2. **_2yi 是修复版，应该裸跑验证** — 修复目的是让逻辑更正确。如果修完还得靠 TTP 才能盈利，说明修复本身没什么价值。
+
+3. **反向只会更好** — 裸跑（无TTP）就赚钱的策略，上线后加 TTP 只会更安全。但反过来不成立：靠 TTP 才赚钱的策略，实盘也不会稳。
+
+4. **旧版本还在库里可对比** — 原版策略 + TTP=True 的 2236 组种子没删。新种子（_2yi + TTP=False）进库后，Gate 管线自然会交叉比较。如果新版裸跑还赢旧版带安全网，才是真本事。
+
+**关于公平性：**
+- 新旧种子 TTP 设定不同，但 Gate 比的是最终表现（d2d、WF 通过率、MC 翻倍率），不是比 TTP 开没开
+- 23 个全新策略 + 6 个新周期根本没有旧数据对照，不存在混淆
+- 10 个 _2yi 有原版对照（同策略名不同后缀），对比更直观
+
+**影响范围：**
+
+| 类别 | 组合数 | TTP 设定 |
+|------|--------|----------|
+| 旧种子（不动） | ~2196 组 | TTP=True（已有） |
+| _2yi × 旧周期 (1m/5m/15m/1h) | 10×13×4 = 520 组 | TTP=False（新跑） |
+| 23新策略 × 全10周期 | 23×13×10 = 2990 组 | TTP=False（新跑） |
+| 旧策略 × 6新周期 | ~76×13×6 = ~5928 组 | TTP=False（新跑） |
+
+**请白纱审阅，有异议提出，无异议用户确认后开跑。**
+
+---
+
+## [差生策略修复 — _2yi 执行完毕] 2026-03-02
+
+> **当前状态**：lab/src/core/strategy/ 里 10 个差生策略全是原版，修复代码已丢失。
+> **方案**：不动原版，新建 10 个 `_2yi` 文件作为修复版，与原版并存作对照。
+> **命名规则**：文件 `strategy_xxx_2yi.py`，class 加 `2yi`，`name` 属性返回 `"xxx_2yi"`。
+> **工作路径**：`lab/src/core/strategy/`（沙箱，完成后由用户决定是否覆盖回 src/）
+
+---
+
+### 第零步：删除 lab 里的 lstm 和 cci 原版
+
+```bash
+rm lab/src/core/strategy/strategy_lstm.py
+rm lab/src/core/strategy/strategy_cci.py
+```
+
+- lstm：代码是 `close > MA(20) → BUY` 的占位符，毫无意义
+- cci：逆势均值回归，已有 cci_long / cci_short 替代，那两个不能删
+
+删完跑验证：
+```bash
+cd /Users/allenbot/project/auto-trading/lab
+python3 -c "import sys; sys.path.insert(0, 'src'); from core.strategy import load_all_strategies; strats = load_all_strategies(); print(f'加载成功: {len(strats)} 个策略')"
+```
+
+---
+
+### 第一步：小修类 — 新建 6 个 _2yi 文件
+
+**操作方式**：复制原文件到新名字，然后按规格修改 class 名、name 属性、核心逻辑。
+
+---
+
+**1.1 `strategy_ultimate_oscillator_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_ultimate_oscillator.py lab/src/core/strategy/strategy_ultimate_oscillator_2yi.py`
+
+修改：
+- class 名：`UltimateOscillator` → `UltimateOscillator2yi`
+- config class 名：`UltimateOscillatorConfig` → `UltimateOscillatorConfig2yi`（可选，或保留原名）
+- `name` 属性：返回 `"ultimate_oscillator_2yi"`
+- 核心修改：删掉 `generate_signal` 里的50穿越两段
+
+删掉这4行（约第158-163行）：
+```python
+# 删掉：
+elif prev_uo < 50 and current_uo >= 50:
+    signal = Signal.BUY
+    trend = "cross_up_50"
+elif prev_uo >= 50 and current_uo < 50:
+    signal = Signal.SELL
+    trend = "cross_down_50"
+```
+只保留 30/70 穿越逻辑。
+
+---
+
+**1.2 `strategy_candlestick_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_candlestick.py lab/src/core/strategy/strategy_candlestick_2yi.py`
+
+修改：
+- class 名：`CandlestickPatterns` → `CandlestickPatterns2yi`
+- `name` 属性：返回 `"candlestick_2yi"`
+- 核心修改：`generate_signal` 里的信号生成部分加趋势背景过滤
+
+把（约第154-165行）：
+```python
+if pattern in bullish_patterns:
+    signal = Signal.BUY
+    confidence = 0.6
+elif pattern in bearish_patterns:
+    signal = Signal.SELL
+    confidence = 0.6
+else:
+    signal = Signal.HOLD
+    confidence = 0.3
+```
+改成：
+```python
+trend = self.get_trend(klines)
+
+bullish_reversal = ["hammer", "inverted_hammer"]
+bearish_reversal = ["shooting_star", "hanging_man"]
+
+if pattern in bullish_reversal and trend == "downtrend":
+    signal = Signal.BUY
+    confidence = 0.7
+elif pattern in bearish_reversal and trend == "uptrend":
+    signal = Signal.SELL
+    confidence = 0.7
+elif pattern == "doji":
+    if trend == "downtrend":
+        signal = Signal.BUY
+        confidence = 0.5
+    elif trend == "uptrend":
+        signal = Signal.SELL
+        confidence = 0.5
+    else:
+        signal = Signal.HOLD
+        confidence = 0.2
+elif pattern == "strong_bullish" and trend in ["uptrend", "ranging"]:
+    signal = Signal.BUY
+    confidence = 0.6
+elif pattern == "strong_bearish" and trend in ["downtrend", "ranging"]:
+    signal = Signal.SELL
+    confidence = 0.6
+else:
+    signal = Signal.HOLD
+    confidence = 0.1
+```
+
+---
+
+**1.3 `strategy_heikin_ashi_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_heikin_ashi.py lab/src/core/strategy/strategy_heikin_ashi_2yi.py`
+
+修改：
+- class 名：`HeikinAshi` → `HeikinAshi2yi`
+- `name` 属性：返回 `"heikin_ashi_2yi"`
+- 核心修改：从2根连续改为4根连续 + 无影线判定
+
+把（约第129-143行）：
+```python
+if prev_bullish and curr_bullish:
+    signal = Signal.BUY
+    confidence = 0.7
+    trend = "uptrend"
+elif prev_bearish and curr_bearish:
+    signal = Signal.SELL
+    confidence = 0.7
+    trend = "downtrend"
+```
+改成：
+```python
+if len(ha_klines) < 4:
+    signal = Signal.HOLD
+    confidence = 0.0
+    trend = "insufficient"
+else:
+    all_bull = all(ha_klines[-i]["close"] > ha_klines[-i]["open"] for i in range(1, 5))
+    all_bear = all(ha_klines[-i]["close"] < ha_klines[-i]["open"] for i in range(1, 5))
+    last = ha_klines[-1]
+    no_lower = last["open"] <= last["low"] + (last["high"] - last["low"]) * 0.05
+    no_upper = last["close"] >= last["high"] - (last["high"] - last["low"]) * 0.05
+
+    if all_bull and no_lower:
+        signal = Signal.BUY
+        confidence = 0.75
+        trend = "strong_uptrend"
+    elif all_bear and no_upper:
+        signal = Signal.SELL
+        confidence = 0.75
+        trend = "strong_downtrend"
+    elif all_bull:
+        signal = Signal.BUY
+        confidence = 0.55
+        trend = "uptrend"
+    elif all_bear:
+        signal = Signal.SELL
+        confidence = 0.55
+        trend = "downtrend"
+    else:
+        signal = Signal.HOLD
+        confidence = 0.1
+        trend = "consolidation"
+```
+
+---
+
+**1.4 `strategy_momentum_echo_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_momentum_echo.py lab/src/core/strategy/strategy_momentum_echo_2yi.py`
+
+修改：
+- class 名：`MomentumEcho` → `MomentumEcho2yi`
+- `name` 属性：返回 `"momentum_echo_2yi"`
+- 核心修改：只留零轴穿越 + MA(20)方向过滤
+
+把（约第107-118行）：
+```python
+if prev_momentum < 0 and momentum >= 0:
+    signal = Signal.BUY
+    trend = "momentum_reversal_up"
+elif prev_momentum >= 0 and momentum < 0:
+    signal = Signal.SELL
+    trend = "momentum_reversal_down"
+elif momentum_pct > self.config.threshold:
+    signal = Signal.BUY
+    trend = "strong_momentum_up"
+elif momentum_pct < -self.config.threshold:
+    signal = Signal.SELL
+    trend = "strong_momentum_down"
+else:
+    signal = Signal.HOLD
+    trend = "neutral"
+```
+改成：
+```python
+ma_period = 20
+ma = sum(prices[-ma_period:]) / ma_period if len(prices) >= ma_period else sum(prices) / len(prices)
+trend_up = prices[-1] > ma
+
+if prev_momentum < 0 and momentum >= 0 and trend_up:
+    signal = Signal.BUY
+    trend = "momentum_cross_up"
+elif prev_momentum >= 0 and momentum < 0 and not trend_up:
+    signal = Signal.SELL
+    trend = "momentum_cross_down"
+else:
+    signal = Signal.HOLD
+    trend = "neutral"
+```
+
+---
+
+**1.5 `strategy_rsi_divergence_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_rsi_divergence.py lab/src/core/strategy/strategy_rsi_divergence_2yi.py`
+
+修改：
+- class 名：`RSIDivergence` → `RSIDivergence2yi`
+- `name` 属性：返回 `"rsi_divergence_2yi"`
+- 核心修改：lookback 3 → 10，搜索窗口 30 → 50
+
+两处改动：
+```python
+# 1. 窗口（约第105行）：
+klines = klines[-30:]  →  klines = klines[-50:]
+
+# 2. find_peaks/find_troughs（约第108-109行）：
+peaks = self.find_peaks(recent_prices, 3)    →  peaks = self.find_peaks(recent_prices, 10)
+troughs = self.find_troughs(recent_prices, 3) →  troughs = self.find_troughs(recent_prices, 10)
+```
+
+---
+
+**1.6 `strategy_vroc_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_vroc.py lab/src/core/strategy/strategy_vroc_2yi.py`
+
+修改：
+- class 名：`VROC` → `VROC2yi`
+- `name` 属性：返回 `"vroc_2yi"`
+- 核心修改：改用真正VROC + 价格方向组合
+
+把（约第94-105行）：
+```python
+if volumes[-1] > volumes[0] * self.config.threshold:
+    signal = Signal.BUY
+    trend = "volume_increase"
+elif volumes[-1] < volumes[0] * (2 - self.config.threshold):
+    signal = Signal.SELL
+    trend = "volume_decrease"
+else:
+    signal = Signal.HOLD
+    trend = "normal_volume"
+```
+改成：
+```python
+closes = [c["close"] for c in klines]
+price_up = closes[-1] > closes[-2]
+vroc_threshold = 30.0
+
+if vroc > vroc_threshold and price_up:
+    signal = Signal.BUY
+    trend = "volume_surge_up"
+elif vroc < -vroc_threshold and not price_up:
+    signal = Signal.SELL
+    trend = "volume_surge_down"
+else:
+    signal = Signal.HOLD
+    trend = "normal_volume"
+```
+
+---
+
+### 第二步：大改类 — 新建 4 个 _2yi 文件
+
+---
+
+**2.1 `strategy_aroon_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_aroon.py lab/src/core/strategy/strategy_aroon_2yi.py`
+
+修改：
+- class 名：`Aroon` → `Aroon2yi`
+- `name` 属性：返回 `"aroon_2yi"`
+- 核心修改：`calculate_aroon` 改用 highs/lows
+
+替换方法签名和实现：
+```python
+def calculate_aroon(self, highs: List[float], lows: List[float]) -> tuple:
+    """Calculate Aroon using highs for Aroon Up and lows for Aroon Down"""
+    period = self.config.period
+    if len(highs) < period or len(lows) < period:
+        return 0.0, 0.0, 0.0
+    high_lookback = highs[-period:]
+    low_lookback = lows[-period:]
+    highest = max(high_lookback)
+    lowest = min(low_lookback)
+    days_since_high = period - 1 - high_lookback[::-1].index(highest)
+    days_since_low = period - 1 - low_lookback[::-1].index(lowest)
+    aroon_up = ((period - days_since_high) / period) * 100
+    aroon_down = ((period - days_since_low) / period) * 100
+    aroon_osc = aroon_up - aroon_down
+    return aroon_up, aroon_down, aroon_osc
+```
+
+修改 `generate_signal` 里的调用：
+```python
+# 原来：
+closes = [c["close"] for c in klines]
+aroon_up, aroon_down, aroon_osc = self.calculate_aroon(closes)
+
+# 改成：
+highs = [c["high"] for c in klines]
+lows = [c["low"] for c in klines]
+aroon_up, aroon_down, aroon_osc = self.calculate_aroon(highs, lows)
+```
+
+---
+
+**2.2 `strategy_parabolic_sar_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_parabolic_sar.py lab/src/core/strategy/strategy_parabolic_sar_2yi.py`
+
+修改：
+- class 名：`ParabolicSAR` → `ParabolicSAR2yi`
+- config class 名：`ParabolicSARConfig` → `ParabolicSARConfig2yi`（可选）
+- `name` 属性：返回 `"parabolic_sar_2yi"`
+- 核心修改：完整替换 `calculate_sar` 为真正的 Welles Wilder SAR
+
+替换 `calculate_sar` 方法（把原来的 SMA 伪装版完整替换）：
+```python
+def calculate_sar(self, klines: list) -> tuple:
+    """Calculate real Parabolic SAR with acceleration factor
+
+    Returns:
+        (sar_value, is_bull) where is_bull=True means price above SAR
+    """
+    step = 0.02
+    max_step = 0.2
+
+    if len(klines) < 3:
+        return klines[-1]["close"], True
+
+    bull = klines[1]["close"] >= klines[0]["close"]
+    if bull:
+        sar = klines[0]["low"]
+        ep = klines[0]["high"]
+    else:
+        sar = klines[0]["high"]
+        ep = klines[0]["low"]
+    af = step
+
+    for i in range(1, len(klines)):
+        high = klines[i]["high"]
+        low = klines[i]["low"]
+
+        if bull:
+            new_sar = sar + af * (ep - sar)
+            new_sar = min(new_sar, klines[i-1]["low"])
+            if i >= 2:
+                new_sar = min(new_sar, klines[i-2]["low"])
+
+            if low < new_sar:
+                bull = False
+                sar = ep
+                ep = low
+                af = step
+            else:
+                sar = new_sar
+                if high > ep:
+                    ep = high
+                    af = min(af + step, max_step)
+        else:
+            new_sar = sar + af * (ep - sar)
+            new_sar = max(new_sar, klines[i-1]["high"])
+            if i >= 2:
+                new_sar = max(new_sar, klines[i-2]["high"])
+
+            if high > new_sar:
+                bull = True
+                sar = ep
+                ep = high
+                af = step
+            else:
+                sar = new_sar
+                if low < ep:
+                    ep = low
+                    af = min(af + step, max_step)
+
+    return sar, bull
+```
+
+修改 `generate_signal`（原来用 `sar` 数值做比较，现在改为直接用 `is_bull` 判断方向）：
+```python
+def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+    min_required = 10
+    if not klines or len(klines) < min_required:
+        return TradingSignal(
+            signal=Signal.HOLD, confidence=0.0, coin=coin,
+            timestamp=klines[-1]["time"] if klines else 0,
+            metadata={"reason": "Insufficient klines"})
+
+    sar, is_bull = self.calculate_sar(klines)
+    current = klines[-1]["close"]
+
+    if is_bull:
+        signal = Signal.BUY
+        trend = "uptrend"
+    else:
+        signal = Signal.SELL
+        trend = "downtrend"
+
+    return TradingSignal(
+        signal=signal, confidence=0.65, coin=coin,
+        timestamp=klines[-1]["time"],
+        metadata={"sar": sar, "current": current, "trend": trend})
+```
+
+---
+
+**2.3 `strategy_elder_ray_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_elder_ray.py lab/src/core/strategy/strategy_elder_ray_2yi.py`
+
+修改：
+- class 名：`ElderRay` → `ElderRay2yi`
+- `name` 属性：返回 `"elder_ray_2yi"`
+- 核心修改：EMA方向过滤 + power方向进场时机
+
+在 `generate_signal` 里：
+
+1. 先把取 closes 那行改为全量（约第88行）：
+```python
+closes = [c["close"] for c in klines]   # 原来是 klines[-20:]，改为全量让EMA收敛
+```
+
+2. 把信号判断部分（约第98-108行）改成：
+```python
+ema_prev = self.calculate_ema([c["close"] for c in klines[:-1]])
+ema_rising = ema > ema_prev
+
+if len(klines) >= 2:
+    prev_high = klines[-2]["high"]
+    prev_low = klines[-2]["low"]
+    prev_bull_power = prev_high - ema_prev
+    prev_bear_power = prev_low - ema_prev
+else:
+    prev_bull_power = bull_power
+    prev_bear_power = bear_power
+
+if ema_rising and bear_power < 0 and bear_power > prev_bear_power:
+    signal = Signal.BUY
+    trend = "bullish_setup"
+elif not ema_rising and bull_power > 0 and bull_power < prev_bull_power:
+    signal = Signal.SELL
+    trend = "bearish_setup"
+else:
+    signal = Signal.HOLD
+    trend = "neutral"
+```
+
+注意：`ema` 变量是 `self.calculate_ema(closes)` 的结果，确认原文件里 ema 是怎么赋值的，对照确保引用正确。
+
+---
+
+**2.4 `strategy_vwap_2yi.py`**
+
+基础：`cp lab/src/core/strategy/strategy_vwap.py lab/src/core/strategy/strategy_vwap_2yi.py`
+
+修改：
+- class 名：`VWAP` → `VWAP2yi`
+- `name` 属性：返回 `"vwap_2yi"`
+- 核心修改：从"相对位置"改为"穿越信号"
+
+在 `generate_signal` 里，把原来的：
+```python
+vwap = self.calculate_vwap(klines)
+current_price = klines[-1]["close"]
+
+if current_price > vwap:
+    return TradingSignal(signal=Signal.BUY, ...)
+elif current_price < vwap:
+    return TradingSignal(signal=Signal.SELL, ...)
+```
+改成：
+```python
+if len(klines) < 2:
+    return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                         timestamp=klines[-1]["time"] if klines else 0,
+                         metadata={"reason": "Insufficient klines"})
+
+vwap_now = self.calculate_vwap(klines)
+vwap_prev = self.calculate_vwap(klines[:-1])
+
+price_now = klines[-1]["close"]
+price_prev = klines[-2]["close"]
+
+if price_prev <= vwap_prev and price_now > vwap_now:
+    return TradingSignal(
+        signal=Signal.BUY, confidence=0.65, coin=coin,
+        timestamp=klines[-1]["time"],
+        metadata={"vwap": vwap_now, "price": price_now, "trend": "cross_up"})
+elif price_prev >= vwap_prev and price_now < vwap_now:
+    return TradingSignal(
+        signal=Signal.SELL, confidence=0.65, coin=coin,
+        timestamp=klines[-1]["time"],
+        metadata={"vwap": vwap_now, "price": price_now, "trend": "cross_down"})
+return TradingSignal(
+    signal=Signal.HOLD, confidence=0.0, coin=coin,
+    timestamp=klines[-1]["time"],
+    metadata={"vwap": vwap_now, "price": price_now, "trend": "no_cross"})
+```
+
+---
+
+### 第三步：验证
+
+每新建一个文件后跑：
+```bash
+cd /Users/allenbot/project/auto-trading/lab
+python3 -c "
+import sys; sys.path.insert(0, 'src')
+import json
+with open('src/backtest/data/historical/BTC/1h.json') as f:
+    data = json.load(f)
+klines = data[-500:]
+from core.strategy.strategy_XXX_2yi import XXX2yi
+s = XXX2yi()
+sig = s.generate_signal('BTC', klines)
+print(f'{s.name}: {sig.signal} conf={sig.confidence:.2f}')
+"
+```
+
+全部完成后跑整体导入验证：
+```bash
+cd /Users/allenbot/project/auto-trading/lab
+python3 -c "
+import sys; sys.path.insert(0, 'src')
+from core.strategy import load_all_strategies
+strats = load_all_strategies()
+names = [s.name for s in strats]
+twoy = [n for n in names if '_2yi' in n]
+print(f'总策略数: {len(strats)}')
+print(f'_2yi 策略数: {len(twoy)}')
+print('_2yi 列表:', sorted(twoy))
+"
+```
+
+期望：10 个 `_2yi` 策略全部出现在列表中。
+
+---
+
+### 执行结果
+
+## 黑丝执行结果 — 2026-03-02
+
+| 策略 | 处置 | 验证 | 信号分布（BTC/1h/450根） |
+|------|------|------|--------------------------|
+| lstm | 删除 | ✅ | — |
+| cci | 删除 | ✅ | — |
+| cci_long | 自包含改造 | ✅ | 内联CCI计算，不再依赖cci.py |
+| cci_short | 自包含改造 | ✅ | 内联CCI计算，不再依赖cci.py |
+| ultimate_oscillator_2yi | 新建 | ✅ | BUY=2 SELL=3 HOLD=445 |
+| klinestick_2yi | 新建 | ✅ | BUY=47 SELL=45 HOLD=358 |
+| heikin_ashi_2yi | 新建 | ✅ | BUY=78 SELL=90 HOLD=282 |
+| momentum_echo_2yi | 新建 | ✅ | BUY=20 SELL=24 HOLD=406 |
+| rsi_divergence_2yi | 新建 | ✅ | BUY=10 SELL=4 HOLD=436 |
+| vroc_2yi | 新建 | ✅ | BUY=76 SELL=72 HOLD=302 |
+| aroon_2yi | 新建 | ✅ | BUY=289 SELL=161 HOLD=0 |
+| parabolic_sar_2yi | 新建 | ✅ | BUY=197 SELL=253 HOLD=0 |
+| elder_ray_2yi | 新建 | ✅ | BUY=57 SELL=43 HOLD=350 |
+| vwap_2yi | 新建 | ✅ | BUY=24 SELL=24 HOLD=402 |
+
+整体导入验证：86 个策略，10 个 _2yi 全部到位。lstm/cci 已删除，cci_long/cci_short 自包含正常。

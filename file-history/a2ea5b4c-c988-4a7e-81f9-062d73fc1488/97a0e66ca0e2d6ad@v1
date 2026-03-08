@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""
+Strategy Base
+
+策略基类
+所有策略都必须继承此类
+"""
+
+from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+
+
+# ==================== 枚举定义 ====================
+
+class Signal(Enum):
+    """交易信号
+
+    Attributes:
+        BUY: 买入信号
+        SELL: 卖出信号
+        HOLD: 持有/观望
+    """
+    BUY = "BUY"
+    SELL = "SELL"
+    HOLD = "HOLD"
+
+
+# ==================== 数据类定义 ====================
+
+@dataclass
+class TradingSignal:
+    """带信息的交易信号
+
+    Attributes:
+        signal: 信号类型
+        confidence: 置信度 0-1
+        info: 信号说明
+        coin: 币种名称
+        timestamp: 时间戳
+        metadata: 附加信息
+    """
+    signal: Signal
+    confidence: float = 1.0
+    info: str = ""
+    coin: str = ""
+    timestamp: int = 0
+    metadata: Dict = None
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+        if self.timestamp == 0:
+            import time
+            self.timestamp = int(time.time())
+
+    @property
+    def name(self) -> str:
+        """信号名称"""
+        return self.signal.value
+
+
+# ==================== 策略基类 ====================
+
+class Strategy:
+    """策略基类
+
+    所有策略都必须继承此类并实现 generate_signal 方法
+    负责根据 K 线数据生成交易信号
+
+    Usage:
+        class VWAPStrategy(Strategy):
+            def __init__(self):
+                super().__init__("vwap")
+
+            def generate_signal(self, coin: str, klines: List[Dict]) -> TradingSignal:
+                ...
+    """
+
+    def __init__(self, name: str = "base"):
+        """初始化
+
+        Args:
+            name: 策略名称
+        """
+        self.name = name
+
+    def generate_signal(
+        self,
+        coin: str,
+        klines: List[Dict]
+    ) -> TradingSignal:
+        """生成交易信号（子类必须实现）
+
+        Args:
+            coin: 币种名称
+            klines: K 线数据
+
+        Returns:
+            TradingSignal: 带信息的交易信号
+        """
+        signal = Signal.HOLD
+        return TradingSignal(
+            signal=signal,
+            confidence=0.0,
+            coin=coin,
+            info=f"{self.name} strategy",
+        )
+
+    def generate_trading_signal(
+        self,
+        coin: str,
+        klines: List[Dict]
+    ) -> TradingSignal:
+        """生成带信息的交易信号
+
+        Args:
+            coin: 币种名称
+            klines: K 线数据
+
+        Returns:
+            TradingSignal: 带信息的交易信号
+        """
+        signal = self.generate_signal(coin, klines)
+        return TradingSignal(
+            signal=signal,
+            coin=coin,
+            info=f"{self.name} strategy signal",
+        )
+
+    def get_params(self) -> Dict:
+        """获取策略参数
+
+        Returns:
+            Dict: 策略参数字典
+        """
+        return {}
+
+    def set_params(self, **params):
+        """设置策略参数
+
+        Args:
+            **params: 参数键值对
+        """
+        pass
+
+    def validate_klines(self, klines: List[Dict]) -> bool:
+        """验证 K 线数据
+
+        Args:
+            klines: K 线数据
+
+        Returns:
+            bool: 数据是否有效
+        """
+        if not klines or len(klines) < 10:
+            return False
+        return True
+
+    def __repr__(self) -> str:
+        """字符串表示"""
+        return f"<{self.__class__.__name__}: {self.name}>"
+
+
+# ==================== 策略注册表 ====================
+
+_STRATEGY_REGISTRY = {}
+
+
+def register_strategy(name: str, strategy_class: type):
+    """注册策略
+
+    Args:
+        name: 策略名称
+        strategy_class: 策略类
+    """
+    _STRATEGY_REGISTRY[name.lower()] = strategy_class
+
+
+def get_strategy(name: str) -> Strategy:
+    """获取策略实例
+
+    Args:
+        name: 策略名称
+
+    Returns:
+        Strategy: 策略实例
+    """
+    name_lower = name.lower().replace('strategy', '').replace('_', '').strip()
+    if name_lower in _STRATEGY_REGISTRY:
+        return _STRATEGY_REGISTRY[name_lower]()
+    raise ValueError(f"Unknown strategy: {name}")
+
+
+def list_strategies() -> List[str]:
+    """列出所有可用策略
+
+    Returns:
+        List[str]: 策略名称列表
+    """
+    return list(_STRATEGY_REGISTRY.keys())
+
+
+# 导出 Signal 供其他模块使用
+__all__ = ['Signal', 'TradingSignal', 'Strategy', 'register_strategy', 'get_strategy', 'list_strategies']

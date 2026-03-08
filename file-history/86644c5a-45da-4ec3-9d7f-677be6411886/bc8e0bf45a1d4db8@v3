@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""
+Trading System Test
+
+测试交易系统的开仓、平仓、反手功能
+"""
+
+import sys
+import time
+
+# 添加 src 到路径
+sys.path.insert(0, '/Users/allenbot/project/auto-trading/src')
+
+from exchange.hyperliquid.adapter import HyperLiquidAdapter
+from exchange.hyperliquid.accounts import get_adapter_config
+
+
+def test_adapter():
+    """测试适配器基本功能"""
+    print("=" * 60)
+    print("测试 1: 适配器连接和基本信息")
+    print("=" * 60)
+
+    # 获取账号配置
+    config = get_adapter_config("default", "testnet")
+    config['testnet'] = True
+
+    # 创建适配器
+    adapter = HyperLiquidAdapter(config)
+    adapter.connect()
+
+    print(f"连接状态: {adapter.is_connected()}")
+    print(f"交易所: {adapter.get_exchange_name()}")
+    print(f"钱包地址: {adapter.wallet_address}")
+
+    # 获取余额
+    balance = adapter.get_balance()
+    print(f"余额: ${balance.get('usdc', 0):.2f}")
+
+    # 获取 ETH 价格
+    price = adapter.get_price("ETH")
+    print(f"ETH 价格: ${price:.2f}")
+
+    # 获取持仓
+    positions = adapter.get_positions()
+    print(f"当前持仓: {positions}")
+
+    return adapter
+
+
+def test_open_position(adapter):
+    """测试开仓"""
+    print("\n" + "=" * 60)
+    print("测试 2: 开仓 (买入 ETH)")
+    print("=" * 60)
+
+    from exchange.base import OrderRequest, OrderSide, OrderType
+
+    # 获取当前价格
+    current_price = adapter.get_price("ETH")
+    print(f"当前 ETH 价格: ${current_price:.2f}")
+
+    # 计算仓位：使用 10% 余额，10x 杠杆
+    balance = adapter.get_balance().get('usdc', 0)
+    position_pct = 0.1
+    leverage = 10.0
+    trade_capital = balance * position_pct
+    size = (trade_capital * leverage) / current_price
+
+    print(f"余额: ${balance:.2f}")
+    print(f"仓位比例: {position_pct * 100}%")
+    print(f"交易资金: ${trade_capital:.2f}")
+    print(f"杠杆: {leverage}x")
+    print(f"开仓数量: {size:.4f} ETH")
+
+    # 下单
+    order = OrderRequest(
+        coin="ETH",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        size=size,
+    )
+
+    result = adapter.place_order(order)
+    print(f"\n开仓结果:")
+    print(f"  成功: {result.success}")
+    print(f"  订单ID: {result.order_id}")
+    print(f"  消息: {result.message}")
+    print(f"  成交价格: ${result.filled_price:.2f}" if result.filled_price else "")
+
+    # 确认持仓
+    print("\n等待 3 秒后检查持仓...")
+    time.sleep(3)
+
+    # 打印原始数据
+    try:
+        user_state = adapter._info.user_state(adapter.wallet_address)
+        print(f"原始 user_state: {user_state}")
+    except Exception as e:
+        print(f"查询 user_state 失败: {e}")
+
+    positions = adapter.get_positions()
+    print(f"开仓后持仓: {positions}")
+
+    return result.success
+
+
+def test_close_position(adapter):
+    """测试平仓"""
+    print("\n" + "=" * 60)
+    print("测试 3: 平仓")
+    print("=" * 60)
+
+    # 检查是否有持仓
+    position = adapter.get_position("ETH")
+    if not position:
+        print("没有持仓，跳过平仓测试")
+        return False
+
+    print(f"当前持仓: {position.side} {position.size} ETH @ ${position.entry_price:.2f}")
+
+    # 平仓
+    result = adapter.close_position("ETH")
+
+    print(f"\n平仓结果:")
+    print(f"  成功: {result.success}")
+    print(f"  消息: {result.message}")
+
+    # 确认持仓
+    time.sleep(2)
+    positions = adapter.get_positions()
+    print(f"\n平仓后持仓: {positions}")
+
+    return result.success
+
+
+def test_reverse_position(adapter):
+    """测试反手"""
+    print("\n" + "=" * 60)
+    print("测试 4: 反手")
+    print("=" * 60)
+
+    # 检查是否有持仓
+    position = adapter.get_position("ETH")
+    if not position:
+        print("没有持仓，先开仓...")
+        # 先开多仓
+        from exchange.base import OrderRequest, OrderSide, OrderType
+
+        current_price = adapter.get_price("ETH")
+        balance = adapter.get_balance().get('usdc', 0)
+        size = (balance * 0.1 * 10) / current_price
+
+        order = OrderRequest(
+            coin="ETH",
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
+            size=size,
+        )
+        adapter.place_order(order)
+        time.sleep(2)
+
+        position = adapter.get_position("ETH")
+        if not position:
+            print("开仓失败，无法测试反手")
+            return False
+
+    print(f"当前持仓: {position.side} {position.size} ETH @ ${position.entry_price:.2f}")
+
+    # 反手
+    result = adapter.reverse_position("ETH")
+
+    print(f"\n反手结果:")
+    print(f"  成功: {result.success}")
+    print(f"  消息: {result.message}")
+    print(f"  成交价格: ${result.filled_price:.2f}" if result.filled_price else "")
+    print(f"  成交数量: {result.filled_size:.4f}" if result.filled_size else "")
+
+    # 确认持仓
+    time.sleep(2)
+    new_position = adapter.get_position("ETH")
+    print(f"\n反手后持仓: {new_position}")
+
+    return result.success
+
+
+def main():
+    """主测试函数"""
+    print("\n" + "=" * 60)
+    print("HyperLiquid 交易系统测试")
+    print("=" * 60)
+
+    try:
+        # 测试适配器
+        adapter = test_adapter()
+
+        if not adapter.is_connected():
+            print("\n连接失败，请检查网络和配置")
+            return
+
+        # 测试开仓
+        test_open_position(adapter)
+
+        # 等待一下
+        time.sleep(2)
+
+        # 测试平仓
+        test_close_position(adapter)
+
+        # 等待一下
+        time.sleep(2)
+
+        # 测试反手
+        test_reverse_position(adapter)
+
+        # 断开连接
+        adapter.disconnect()
+
+        print("\n" + "=" * 60)
+        print("测试完成")
+        print("=" * 60)
+
+    except Exception as e:
+        print(f"\n测试出错: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,64 @@
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+██░▄▄▄░██░▄▄░██░▄▄▄██░▀██░██░▄▄▀██░████░▄▄▀██░███░██
+██░███░██░▀▀░██░▄▄▄██░█░█░██░█████░████░▀▀░██░█░█░██
+██░▀▀▀░██░█████░▀▀▀██░██▄░██░▀▀▄██░▀▀░█░██░██▄▀▄▀▄██
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+                  🦞 OPENCLAW 🦞                    
+ 
+┌  OpenClaw doctor
+│
+◇  State integrity ────────────────────────────────────────────────────────╮
+│                                                                          │
+│  - Config file is group/world readable (~/.openclaw/openclaw.json).      │
+│    Recommend chmod 600.                                                  │
+│  - Multiple state directories detected. This can split session history.  │
+│    - /Users/allen/.openclaw                                              │
+│    Active state dir: ~/.openclaw                                         │
+│                                                                          │
+├──────────────────────────────────────────────────────────────────────────╯
+│
+◇  Session locks ──────────────────────────────────────────────────────────────╮
+│                                                                              │
+│  - Found 1 session lock file.                                                │
+│  - ~/.openclaw/agents/main/sessions/e625788c-b9db-4d9e-bfde-3453217cf22b-to  │
+│  pic-5548.jsonl.lock                                                         │
+│    pid=14678 (alive) age=8s stale=no                                         │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────╯
+│
+◇  Security ─────────────────────────────────╮
+│                                            │
+│  - No channel security warnings detected.  │
+│  - Run: openclaw security audit --deep     │
+│                                            │
+├────────────────────────────────────────────╯
+│
+◇  Skills status ────────────╮
+│                            │
+│  Eligible: 33              │
+│  Missing requirements: 39  │
+│  Blocked by allowlist: 0   │
+│                            │
+├────────────────────────────╯
+│
+◇  Plugins ──────╮
+│                │
+│  Loaded: 6     │
+│  Disabled: 30  │
+│  Errors: 0     │
+│                │
+├────────────────╯
+Telegram: ok (@MyAbby_AI_bot) (1143ms)
+WhatsApp: linked (auth age 0m)
+Web Channel: +61439013021 (jid 61439013021:17@s.whatsapp.net)
+Agents: main (default)
+Heartbeat interval: 30m (main)
+Session store (main): /Users/allenbot/.openclaw/agents/main/sessions/sessions.json (21 entries)
+- agent:main:main:thread:5548 (0m ago)
+- agent:main:main (0m ago)
+- agent:main:main:thread:6677 (13m ago)
+- agent:main:main:thread:6672 (15m ago)
+- agent:598cf47e-5ea3-490e-b1b5-e30f2daa8a11-topic-5181 (548m ago)
+Run "openclaw doctor --fix" to apply changes.
+│
+└  Doctor complete.

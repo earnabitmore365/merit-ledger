@@ -1,0 +1,123 @@
+# 白纱 → 黑丝 交接文件
+
+> 黑丝：每次完成任务后，把结果写到这里覆盖。白纱需要看结果时会来读这个文件。
+
+---
+
+## [策略规格] 3 个新短周期策略 — 2026-03-02
+
+> 白纱根据中文在线搜索整理。接口规范参考已有的20个新策略，直接放进 `lab/src/core/strategy/`。
+
+---
+
+### 1. `strategy_grid.py` — 网格交易（Grid Trading）
+
+**核心思路**：在震荡市里，价格每跌一格买入，每涨一格卖出。因为我们的回测只支持单仓，简化成"跌一格开多，回弹一格平仓"。
+
+**参数**：
+- `grid_pct`：网格间距（价格变动百分比），默认 `1.5`（即1.5%一格）
+- `lookback`：参考高点回看窗口，默认 `20`（20根K线内的最高收盘价作为参考）
+
+**进场逻辑**（做多）：
+```
+reference_price = max(close[-lookback:])  # 近N根最高收盘价
+drop_pct = (reference_price - close) / reference_price * 100
+if drop_pct >= grid_pct and no_position:
+    LONG  # 从高点跌了一格，开多
+```
+
+**出场逻辑**：
+```
+# 交给 TTP + stop_loss 处理（backtester 自动）
+# 目标：价格回弹一格（约 grid_pct%）自然 TTP 跟踪平仓
+```
+
+**方向**：Long only（盘整市下跌买入，等回弹）
+
+**适合周期**：5m / 15m / 1h
+
+---
+
+### 2. `strategy_orb.py` — 开盘区间突破（Opening Range Breakout）
+
+**核心思路**：每天 UTC 0 点后，取前 N 根 K 线形成"开盘区间"，价格突破上沿做多，跌破下沿做空。
+
+**参数**：
+- `range_bars`：定义开盘区间用多少根 K 线，默认 `12`（5m 周期 = 前1小时；15m = 前3小时）
+
+**进场逻辑**：
+```
+# 判断当前是否在每日第 range_bars 根之后
+# 开盘区间高点 = max(high of first range_bars bars of UTC day)
+# 开盘区间低点 = min(low of first range_bars bars of UTC day)
+
+if close > orb_high and no_position:
+    LONG   # 突破上沿做多
+if close < orb_low and no_position:
+    SHORT  # 跌破下沿做空
+```
+
+**出场逻辑**：TTP + stop_loss（backtester 自动）
+
+**参考换算**（range_bars 默认值建议）：
+- 1m：60根（前1小时）
+- 5m：12根（前1小时）
+- 15m：4根（前1小时）
+- 1h：1根（前1小时）
+
+**方向**：双向（Long + Short）
+
+**实现注意**：需要追踪每根 K 线的 UTC 日期，识别"每天第几根"。`candle_time_ms` 字段可以用来算 UTC 日期和当日序号。
+
+---
+
+### 3. `strategy_chandelier.py` — Chandelier Exit 策略
+
+**核心思路**：用 ATR 动态计算追踪止损线，价格穿越止损线时换方向。专为短周期设计，乘数比标准版小。
+
+**参数**：
+- `atr_period`：ATR 计算周期，默认 `10`（短周期用10比标准14更灵敏）
+- `multiplier`：ATR 乘数，默认 `2.0`（短周期用2.0，标准是3.0）
+
+**计算公式**：
+```
+atr = ATR(atr_period)
+highest_high = max(high[-atr_period:])
+lowest_low = min(low[-atr_period:])
+
+chandelier_long_stop = highest_high - atr * multiplier   # 做多时的追踪止损线
+chandelier_short_stop = lowest_low + atr * multiplier    # 做空时的追踪止损线
+```
+
+**进场/换向逻辑**：
+```
+# 从空/无仓 → 做多：价格上穿 chandelier_short_stop
+if close > chandelier_short_stop and prev_close <= prev_chandelier_short_stop:
+    LONG
+
+# 从多/无仓 → 做空：价格下穿 chandelier_long_stop
+if close < chandelier_long_stop and prev_close >= prev_chandelier_long_stop:
+    SHORT
+```
+
+**方向**：双向（Long + Short）
+
+**适合周期**：1m / 5m / 15m（短周期最有效）
+
+---
+
+## 黑丝执行结果 — 2026-03-02
+
+**3/3 全部完成**，import + 实战数据测试通过。
+
+| 策略 | 注册名 | 信号测试 | 备注 |
+|------|--------|----------|------|
+| Grid Trading | grid | OK | Long only，drop_pct 跟 grid_pct 比较 |
+| ORB | orb | OK | 双向，需要 UTC 日期边界识别 |
+| Chandelier Exit | chandelier | OK | 双向，ATR 追踪止损线交叉 |
+
+**放置位置**：`src/core/strategy/`（与前 31 个新策略一致，auto-scanning 自动注册）
+
+**策略库总数**：43 → **78 个**（+35：白纱方案 20 + 网搜英文 11 + 白纱交接 3 + 原有 1 个 HMA 与现有重名但逻辑不同）
+
+**数据下载**：后台运行中（30m 完成约 50%，后续 2h/4h/8h/12h/1d 待跑）

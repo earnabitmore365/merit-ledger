@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""
+初考（门槛）— 刷掉交易次数不足的组合
+输入: seed_v3.db
+输出: lab/results/gate1.json
+"""
+import json
+import sqlite3
+import os
+
+DB_PATH = os.path.join(os.path.dirname(__file__), 'reports', 'seed_v3.db')
+OUT_PATH = os.path.join(os.path.dirname(__file__), 'results', 'gate1.json')
+
+X_MAP = {
+    '1m': 500, '5m': 500, '15m': 500, '30m': 500,
+    '1h': 350, '2h': 350, '4h': 350,
+    '8h': 200, '12h': 200, '1d': 200,
+}
+
+def main():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    # 1. 查每个(coin, interval)的K线数
+    kline_counts = {}
+    rows = conn.execute('''
+        SELECT coin, interval, COUNT(*) as cnt
+        FROM regime_timeline
+        WHERE coin NOT LIKE '%_COIN%'
+        GROUP BY coin, interval
+    ''').fetchall()
+    for r in rows:
+        kline_counts[(r['coin'], r['interval'])] = r['cnt']
+
+    # 2. 查所有合约combo（排除币本位）
+    combos = conn.execute('''
+        SELECT id, strategy, coin, interval, total_trades
+        FROM combo_summary
+        WHERE coin NOT LIKE '%_COIN%'
+        ORDER BY interval, strategy, coin
+    ''').fetchall()
+
+    passed = []
+    failed = []
+    by_interval = {}
+
+    for c in combos:
+        interval = c['interval']
+        coin = c['coin']
+        combo_id = c['id']
+        trades = c['total_trades']
+
+        klines = kline_counts.get((coin, interval), 0)
+        x = X_MAP.get(interval)
+        if x is None:
+            continue
+
+        threshold = klines // x
+        is_pass = trades >= threshold
+
+        entry = {
+            'combo_id': combo_id,
+            'strategy': c['strategy'],
+            'coin': coin,
+            'interval': interval,
+            'total_trades': trades,
+            'klines': klines,
+            'threshold': threshold,
+        }
+
+        if is_pass:
+            passed.append(entry)
+        else:
+            failed.append(entry)
+
+        # 按周期统计
+        if interval not in by_interval:
+            by_interval[interval] = {'total': 0, 'passed': 0, 'failed': 0, 'thresholds': []}
+        by_interval[interval]['total'] += 1
+        by_interval[interval]['thresholds'].append(threshold)
+        if is_pass:
+            by_interval[interval]['passed'] += 1
+        else:
+            by_interval[interval]['failed'] += 1
+
+    # 3. 汇总
+    interval_summary = {}
+    for iv in sorted(by_interval.keys(), key=lambda x: list(X_MAP.keys()).index(x)):
+        info = by_interval[iv]
+        thresholds = info['thresholds']
+        interval_summary[iv] = {
+            'total': info['total'],
+            'passed': info['passed'],
+            'failed': info['failed'],
+            'pass_rate': round(info['passed'] / info['total'] * 100, 1) if info['total'] else 0,
+            'threshold_min': min(thresholds),
+            'threshold_max': max(thresholds),
+            'x_value': X_MAP[iv],
+        }
+
+    result = {
+        'summary': {
+            'total': len(passed) + len(failed),
+            'passed': len(passed),
+            'failed': len(failed),
+            'pass_rate': round(len(passed) / (len(passed) + len(failed)) * 100, 1),
+            'by_interval': interval_summary,
+        },
+        'passed_ids': [p['combo_id'] for p in passed],
+    }
+
+    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+    with open(OUT_PATH, 'w') as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+
+    # 打印汇总
+    total = result['summary']['total']
+    p = result['summary']['passed']
+    print(f"初考（门槛）完成: {p}/{total} 通过 ({result['summary']['pass_rate']}%)")
+    print()
+    print(f"{'周期':>4s}  {'总数':>4s}  {'通过':>4s}  {'淘汰':>4s}  {'通过率':>6s}  {'门槛范围':>12s}  X值")
+    print("-" * 60)
+    for iv, info in interval_summary.items():
+        print(f"{iv:>4s}  {info['total']:>4d}  {info['passed']:>4d}  {info['failed']:>4d}  "
+              f"{info['pass_rate']:>5.1f}%  {info['threshold_min']:>5d}~{info['threshold_max']:<5d}  {info['x_value']}")
+
+    conn.close()
+    print(f"\n输出: {OUT_PATH}")
+    return result
+
+
+if __name__ == '__main__':
+    main()

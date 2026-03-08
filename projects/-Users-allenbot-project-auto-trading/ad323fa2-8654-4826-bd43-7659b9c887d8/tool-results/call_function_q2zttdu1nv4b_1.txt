@@ -1,0 +1,2 @@
+174:def get_strategy(name: str) -> Strategy:
+199:__all__ = ['Signal', 'TradingSignal', 'Strategy', 'register_strategy', 'get_strategy', 'list_strategies']

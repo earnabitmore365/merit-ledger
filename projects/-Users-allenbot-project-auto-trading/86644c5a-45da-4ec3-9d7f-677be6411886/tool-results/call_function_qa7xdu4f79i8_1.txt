@@ -1,0 +1,19 @@
+   523→
+   524→                # 显示初始状态
+   525→                balance = adapter.get_balance().get('usdc', 0)
+   526→                status = {
+   527→                    "网络": network,
+   528→                    "账号": account,
+   529→                    "币种": coin,
+   530→                    "策略": strategy_name,
+   531→                    "杠杆": f"{leverage}x",
+   532→                    "余额": f"${balance:.2f}",
+   533→                    "持仓": str(adapter.get_positions()),
+   534→                }
+   535→
+   536→                show_continue = menu.show_status(status)
+   537→                if not show_continue:
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

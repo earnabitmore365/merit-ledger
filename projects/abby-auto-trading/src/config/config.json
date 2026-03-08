@@ -1,0 +1,29 @@
+{
+  "name": "Abby Auto Trading",
+  "version": "1.0.0",
+  "mode": "backtest",
+  "trading": {
+    "leverage": 10.0,
+    "position_size_pct": 0.1,
+    "max_positions": 3,
+    "stop_loss_pct": 0.1,
+    "take_profit_pct": 0.2
+  },
+  "ttp": {
+    "enabled": true,
+    "trailing_pips": 5.0,
+    "min_profit_pips": 10.0,
+    "swing_lookback": 5
+  },
+  "exchange": {
+    "name": "hyperliquid",
+    "testnet": true
+  },
+  "backtest": {
+    "initial_capital": 10000.0,
+    "fee_pct": 0.001,
+    "slippage_pct": 0.001,
+    "use_local_data": true
+  },
+  "log_level": "INFO"
+}

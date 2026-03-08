@@ -1,0 +1,10 @@
+total 32
+drwxr-xr-x   9 allenbot  staff    288 Feb 22 13:38 .
+drwxr-xr-x  33 allenbot  staff   1056 Feb 22 03:44 ..
+-rw-r--r--@  1 allenbot  staff  14340 Feb 21 05:03 .DS_Store
+drwxr-xr-x  11 allenbot  staff    352 Feb 20 15:39 abby-auto-trading
+drwxr-xr-x   3 allenbot  staff     96 Feb 22 04:51 funding-arbitrage-sim
+drwxr-xr-x   7 allenbot  staff    224 Feb 22 13:39 market-news-digest
+drwxr-xr-x  16 allenbot  staff    512 Feb 21 15:40 openclaw-auto-arbitrage
+drwxr-xr-x   3 allenbot  staff     96 Feb 22 04:59 spot-futures-arbitrage
+drwxr-xr-x   3 allenbot  staff     96 Feb 22 05:00 triangular-arbitrage

@@ -1,0 +1,20 @@
+Last login: Wed Feb 25 07:20:57 on ttys001
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3685: command not found: compdef
+/Users/allenbot/project/auto-trading/user_interface/trade.command ; exit;       
+allenbot@Echo ~ % /Users/allenbot/project/auto-trading/user_interface/trade.command ; exit;
+Traceback (most recent call last):
+  File "<string>", line 6, in <module>
+  File "/opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python3.11/curses/__init__.py", line 94, in wrapper
+    return func(stdscr, *args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/trading/trade_menu.py", line 559, in main
+    result = menu.navigate_options(networks, "选择网络", selections=selections)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/trading/trade_menu.py", line 188, in navigate_options
+    key = self.stdscr.getch()
+          ^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+allenbot@Echo ~ % 
+
+现在是按ESC后不会直接崩溃，会返回首页。不过返回首页过后，按ctrl + C 过后就出现这个

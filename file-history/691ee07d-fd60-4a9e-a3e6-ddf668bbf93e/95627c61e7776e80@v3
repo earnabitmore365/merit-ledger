@@ -1,0 +1,64 @@
+"""Ehlers Instantaneous Trendline — Hilbert变换趋势线"""
+import math
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class EhlersITLConfig:
+    alpha: float = 0.07
+
+
+class EhlersITL(Strategy):
+    def __init__(self, exchange=None, config: Optional[EhlersITLConfig] = None):
+        self.exchange = exchange
+        self.config = config or EhlersITLConfig()
+
+    @property
+    def name(self) -> str:
+        return "ehlers_itl"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        if not klines or len(klines) < 12:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0)
+
+        prices = [(c["high"] + c["low"]) / 2 for c in klines]
+        itl = self._calc_itl(prices)
+
+        if len(itl) < 5:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"])
+
+        current = itl[-1]
+        lag = itl[-3]
+        prev_current = itl[-2]
+        prev_lag = itl[-4]
+
+        if current > lag and prev_current <= prev_lag:
+            signal = Signal.BUY
+        elif current < lag and prev_current >= prev_lag:
+            signal = Signal.SELL
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(signal=signal, confidence=0.7,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"itl": current, "itl_lag": lag})
+
+    def _calc_itl(self, prices):
+        a = self.config.alpha
+        n = len(prices)
+        itl = [0.0] * n
+
+        for i in range(n):
+            if i < 7:
+                itl[i] = prices[i]
+            else:
+                itl[i] = (a - a * a / 4) * prices[i] + \
+                         0.5 * a * a * prices[i - 1] - \
+                         (a - 0.75 * a * a) * prices[i - 2] + \
+                         2 * (1 - a) * itl[i - 1] - \
+                         (1 - a) ** 2 * itl[i - 2]
+        return itl

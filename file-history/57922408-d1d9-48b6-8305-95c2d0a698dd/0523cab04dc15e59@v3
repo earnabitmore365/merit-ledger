@@ -1,0 +1,169 @@
+# CHECKPOINT — Auto-Trading 项目状态
+
+> 最后更新：2026-02-27
+
+## 任务历程
+
+1. ✅ 初始系统搭建 — v1.4，44策略、HyperLiquid适配器、回测引擎、curses UI
+2. ✅ UI 重构 — v1.5，BaseMenu组件库、trade_menu 7步流程、紧凑卡片面板
+3. ✅ 全矩阵回测 v1 — 1521份报告（复利注码），确定 proc+LINK+15m 为首选
+4. ✅ Regime Detection v1（MA+RSI）— 完成但效果不好，1680次切换/年
+5. ✅ 研究更好的判断方法 — 结论：ADX三层复合 + 滞后阈值；regime当过滤器而非切换器
+6. ✅ 建立指标库 src/indicators/ — 12个指标，MarketScore=0.684(buy)
+7. ✅ 整合指标进交易系统 — Regime v2：ADX(28)+SMA(50)+ATR(14) 三层复合，滞后阈值进25/退18，切换频率 950→273次/年
+8. ✅ 全矩阵回测 v2 — 1720组（43策略×10币种×4周期），固定注码模式，新增翻倍时间指标
+9. ✅ 种子报告 v1 — 1720组/12.4M配对交易/2.17GB SQLite（已完成但被误删，需重跑）
+10. ✅ v2 代码升级 — 专业字段(fees/MFE/MAE/ATR/volume) + $1固定注码(Van Tharp) + 精确时间戳
+11. ✅ 恢复协议修复 — 5步强制恢复表格（见 ~/.claude/CLAUDE.md）
+12. ⬜ **补充 K 线数据 + 重跑 v2 种子**（当前目标）
+
+---
+
+## 当前任务：补充 K 线数据 + 重跑 v2 种子报告
+
+### 前因
+用户原话（02-27 05:18）：
+> "4年是一个周期，但是跨周期应该是2个4年。所以。。。。。搞个8年的数据库吗？"
+
+用户原话（02-27 04:58）：
+> "趁我睡觉的时候再补，连同5m 15m 1h的都补好"
+
+用户原话（02-27 05:56）：
+> "嗯嗯，那就跟着专业人士走，等下补好所有的数据就按这个跑。一晚上应该跑的完吧？"
+
+### 第一步：补充 K 线数据
+
+**目标**：扩展历史数据覆盖范围，从 1 年扩展到尽可能长。
+
+**数据覆盖方案**（AI 建议，用户已同意）：
+
+| 周期 | 当前 | 目标 | 说明 |
+|------|------|------|------|
+| 1m | 526K条/币（1年） | 保持 1-2 年 | 交易所通常只保留 1-2 年 1m 数据 |
+| 5m | 200K条/币（1年） | 4年+ | 需要补充 |
+| 15m | 100K条/币（1年） | 4年+ | 需要补充 |
+| 1h | 30K条/币（1年） | 8年（~70K条/币） | 数据量小，可拉满 |
+
+**币种历史限制**：
+- ✅ 8年+：BTC(2009), ETH(2015), XRP(2013), BNB(2017), ADA(2017), TRX(2017), LINK(2017)
+- ⚠️ ~6年：SOL(2020), AVAX(2020), DOT(2020) — 有多少拉多少
+
+**空间估算**：K 线 ~3.1 GB + 种子 DB ~9 GB = 总计 ~12 GB（硬盘 228GB 剩 133GB，完全够）
+
+**数据源**：HyperLiquid REST API（现有 `download_1m_data.py` 可参考改造）
+
+**⚠️ 待确认**：5m/15m 具体目标年数（当时讨论中 AI 建议 4 年+，但没有像 1h→8年 那样精确定论），下载脚本具体实现方案。
+
+### 第二步：重跑 v2 种子报告
+
+**v2 种子 vs v1 的变化**：
+- 固定注码 $1（Van Tharp R-Multiple 框架，PnL = R 值，可缩放到任意本金）
+- 初始本金保持 $500（安全缓冲）
+- 新增交易成本：taker fee 0.035%/side + slippage 0.02%/side + funding rate 0.01%/8h
+- 新增分析字段：MFE/MAE、开仓 ATR%、开仓 volume、funding_count
+- 精确时间戳 `'%Y-%m-%d %H:%M'`（不需要单独 open_hour/open_weekday）
+- 汇总新增：CAGR、max_daily_dd、reward_risk、max_consec_loss_amt、total_fees
+
+**v2 数据库 Schema**：
+```sql
+-- 汇总表
+combo_summary: id, strategy, coin, interval, total_return, final_balance,
+    max_drawdown, sharpe_ratio, sortino_ratio, calmar_ratio,
+    total_trades, winning_trades, losing_trades, win_rate, avg_win_pct, avg_loss_pct,
+    profit_factor, ttp_count, double_count, fastest_double_days, avg_double_days,
+    daily_open_positions,
+    -- v2 新增
+    cagr, max_daily_dd, reward_risk, max_consec_loss_amt, total_fees
+
+-- 配对交易表
+paired_trades: id, combo_id, open_candle_idx, close_candle_idx,
+    open_time, close_time, holding_bars, direction, entry_price, exit_price,
+    capital, position_size, pnl, r_value, balance_after,
+    close_type, regime_at_open,
+    -- v2 新增
+    fee, funding_cost, slippage_cost, mfe, mae, open_atr_pct, open_volume, funding_count
+
+-- Regime 时间线
+regime_timeline: coin, interval, candle_idx, candle_time_ms, regime, adx, sma_direction
+
+-- 运行元数据
+run_metadata: key, value
+```
+
+### 关键文件
+| 文件 | 说明 | 状态 |
+|------|------|------|
+| `src/backtest/backtest.py` | 回测引擎 | **已改**：candles参数 + candle_idx追踪 + $1注码 + 交易成本 + MFE/MAE + 精确时间戳（需验证） |
+| `src/backtest/generate_seed.py` | 种子生成脚本 | **已改**：v2 schema + 新字段 + 断点恢复（需验证） |
+| `src/backtest/data/historical/` | K 线数据 | **待补**：扩展 5m/15m/1h 时间范围 |
+| `download_1m_data.py` | 数据下载脚本 | **参考**：改造为多周期下载脚本 |
+
+### 架构说明（从 v1 继承，未变）
+
+**交易配对算法**：
+```
+open_trade = None
+for trade, idx in zip(trades, candle_indices):
+    if trade.order_type in (BUY, SELL) → open_trade = (trade, idx)
+    elif CLOSE/TTP/LIQUIDATION → 配对 open_trade + close_trade → paired_trades
+```
+
+**平仓类型判定**：
+- `TTP_CLOSE_*` → 'ttp'
+- `LIQUIDATION` → 'liquidation'
+- `CLOSE_*` 且 pnl ≈ -capital → 'stop_loss'
+- 其他 `CLOSE_*` → 'signal'
+- 回测结束平仓 → 'end_of_data'
+
+**Regime 时间线**（独立函数）：
+1. detector.detect_with_details(window) → ADX + SMA方向
+2. 滞后阈值：趋势中 ADX<18 才退出，ranging中 ADX>25 才进入
+3. 禁止 bull↔bear 直接翻转
+4. min_dwell_bars=48, confirm_bars=6
+5. ADX 周期按 interval 缩放：1m→48, 5m→32, 15m→28, 1h→14
+
+**循环顺序**：
+```
+for coin(10) → for interval(4):
+    candles = load_once()
+    regime = compute_once()  # 写入 regime_timeline
+    for strategy(43):
+        engine = BacktestEngine(candles=candles, ...)
+        result = engine.run_backtest(strategy)
+        pair_trades(result) → 写入 paired_trades + combo_summary
+    db.commit()
+```
+
+### 验证标准
+1. v2 代码验证：先读 backtest.py 和 generate_seed.py 确认所有 v2 改动已就位
+2. 数据补充验证：检查每个 (coin, interval) 的 K 线条数是否达到目标
+3. 种子完成后：`SELECT COUNT(*) FROM paired_trades` → 数据量应大于 v1 的 12.4M（因为数据更长）
+4. 抽查 combo：paired_trades 汇总 vs combo_summary 指标一致
+5. 新字段验证：fee/funding_cost/slippage_cost 非零，MFE ≥ pnl，MAE ≤ 0
+
+### 种子报告能回答的问题
+- 每个策略在 bull/bear/ranging 下的表现 → **数据驱动 regime_map**
+- 不同注码方式（固定/复利/Kelly）的模拟 → 从 R 值重算（$1 = 1R，乘以倍数即可）
+- TTP 有效性分析（MFE vs 实际平仓价，按 regime/策略/持仓时长）
+- 真实交易成本影响（手续费 + 资金费 + 滑点）
+- Prop Firm 考核模拟（CAGR、日回撤<5%、总回撤<10%）
+- 持仓时间与收益关系、波动率与收益关系
+
+### 执行顺序
+1. **验证 v2 代码**：读 backtest.py 和 generate_seed.py，确认改动完整正确
+2. **写数据下载脚本**：参考 download_1m_data.py，支持多周期、断点续传
+3. **补充数据**：10 币 × 3 周期（5m/15m/1h）
+4. **跑 v2 种子**：`python3 src/backtest/generate_seed.py`（有断点恢复，安全重跑）
+
+---
+
+## 项目基本信息
+- 路径：`/Users/allenbot/project/auto-trading`
+- 版本：v1.7
+- 语言：Python 3.11+，中文注释和 UI
+- macOS 上用 `python3`（不是 `python`）
+- GitHub：`earnabitmore365/auto-trading` (private)
+- 10币种：BTC, ETH, XRP, BNB, SOL, ADA, TRX, AVAX, LINK, DOT
+- K线数据（当前）：1m(526K条/币·1年), 5m(200K条/币·1年), 15m(100K条/币·1年), 1h(30K条/币·1年)
+- K线数据（目标）：1m(保持), 5m(4年+), 15m(4年+), 1h(8年)
+- 数据路径：`src/backtest/data/historical/{COIN}/{interval}.json`

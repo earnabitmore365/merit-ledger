@@ -1,0 +1,553 @@
+2026-02-21T10:27:14.135Z [DEBUG] [init] configureGlobalMTLS starting
+2026-02-21T10:27:14.135Z [DEBUG] [init] configureGlobalMTLS complete
+2026-02-21T10:27:14.135Z [DEBUG] [init] configureGlobalAgents starting
+2026-02-21T10:27:14.135Z [DEBUG] [init] configureGlobalAgents complete
+2026-02-21T10:27:14.140Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-02-21T10:27:14.140Z [DEBUG] [ToolSearch:optimistic] mode=standard, ENABLE_TOOL_SEARCH=undefined, result=false
+2026-02-21T10:27:14.140Z [DEBUG] [STARTUP] Running setup()...
+2026-02-21T10:27:14.140Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+2026-02-21T10:27:14.141Z [DEBUG] Loading skills from: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/allenbot/.claude/skills, project=[]
+2026-02-21T10:27:14.147Z [DEBUG] Error log sink initialized
+2026-02-21T10:27:14.150Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
+2026-02-21T10:27:14.150Z [DEBUG] Total plugin skills loaded: 0
+2026-02-21T10:27:14.150Z [DEBUG] Total plugin commands loaded: 0
+2026-02-21T10:27:14.150Z [DEBUG] Registered 0 hooks from 0 plugins
+2026-02-21T10:27:14.153Z [DEBUG] Loaded 13 unique skills (managed: 0, user: 13, project: 0, legacy commands: 0)
+2026-02-21T10:27:14.153Z [DEBUG] [STARTUP] setup() completed in 13ms
+2026-02-21T10:27:14.153Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-02-21T10:27:14.153Z [DEBUG] getSkills returning: 13 skill dir commands, 0 plugin skills, 1 bundled skills
+2026-02-21T10:27:14.154Z [DEBUG] Total plugin agents loaded: 0
+2026-02-21T10:27:14.154Z [DEBUG] [STARTUP] Commands and agents loaded in 1ms
+2026-02-21T10:27:14.154Z [DEBUG] [STARTUP] Running showSetupScreens()...
+2026-02-21T10:27:14.163Z [DEBUG] [render] initLayout starting
+2026-02-21T10:27:14.164Z [DEBUG] Layout engine: yoga
+2026-02-21T10:27:14.166Z [DEBUG] [Claude in Chrome] Found chrome profiles: Default
+2026-02-21T10:27:14.166Z [DEBUG] Acquired PID lock for 2.1.29 (PID 58256)
+2026-02-21T10:27:14.166Z [DEBUG] Acquired PID lock on running version: /Users/allenbot/.local/share/claude/versions/2.1.29
+2026-02-21T10:27:14.169Z [DEBUG] [render] initLayout complete
+2026-02-21T10:27:14.170Z [DEBUG] [render] first ink render: 527ms since process start
+2026-02-21T10:27:14.170Z [DEBUG] [Claude in Chrome] Found brave profiles: Default
+2026-02-21T10:27:14.183Z [DEBUG] [keybindings] KeybindingSetup initialized with 99 bindings, 0 warnings
+2026-02-21T10:27:14.202Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:14.216Z [DEBUG] [keybindings] Watching for changes to /Users/allenbot/.claude/keybindings.json
+2026-02-21T10:27:14.216Z [DEBUG] [Claude in Chrome] Extension not found in any browser
+2026-02-21T10:27:14.237Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:14.281Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669634281
+2026-02-21T10:27:14.281Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:27:14.281Z [DEBUG] Temp file written successfully, size: 1116 bytes
+2026-02-21T10:27:14.281Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:27:14.281Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669634281 to /Users/allenbot/.claude.json
+2026-02-21T10:27:14.281Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:27:17.112Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:17.145Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:17.145Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:17.440Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:17.473Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:17.474Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:18.201Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:18.233Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:18.233Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:18.913Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:18.948Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:18.948Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:20.244Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:20.279Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:20.279Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:20.561Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:20.596Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:20.596Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:20.865Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:20.897Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:20.898Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:21.159Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:21.190Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:21.190Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:22.744Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:22.778Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:22.778Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:23.539Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:23.573Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:23.573Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:24.057Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:24.093Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:24.093Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:25.859Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:25.890Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:25.890Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:27.428Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:27.460Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:27.460Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:29.438Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:29.467Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:29.467Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:29.626Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:29.658Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:29.658Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:29.945Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:29.979Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:29.979Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:30.139Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:30.169Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:30.169Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:30.801Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:30.835Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:30.835Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:35.139Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:35.175Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:35.175Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:35.313Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:35.346Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:35.346Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:38.906Z [DEBUG] High write ratio: blit=0, write=1809 (100.0% writes), screen=36x140
+2026-02-21T10:27:38.941Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:38.941Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:39.679Z [DEBUG] High write ratio: blit=0, write=1799 (100.0% writes), screen=36x140
+2026-02-21T10:27:39.714Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:39.714Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:40.401Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:40.433Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:40.433Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:40.945Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:40.978Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:40.979Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:41.600Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:41.633Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:41.633Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:42.096Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:42.128Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:42.128Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:44.888Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:44.920Z [DEBUG] High write ratio: blit=0, write=1797 (100.0% writes), screen=36x140
+2026-02-21T10:27:44.920Z [DEBUG] Full reset (scrollback changes): scrollbackRows=13, firstChangeY=0
+  prev: "Welcome to Claude Code v2.1.29                                                                                                              "
+  next: "Welcome to Claude Code v2.1.29                                                                                                              "
+2026-02-21T10:27:52.478Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669672478
+2026-02-21T10:27:52.478Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:27:52.478Z [DEBUG] Temp file written successfully, size: 1141 bytes
+2026-02-21T10:27:52.478Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:27:52.478Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669672478 to /Users/allenbot/.claude.json
+2026-02-21T10:27:52.479Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:27:52.481Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669672481
+2026-02-21T10:27:52.481Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:27:52.481Z [DEBUG] Temp file written successfully, size: 1141 bytes
+2026-02-21T10:27:52.481Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:27:52.481Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669672481 to /Users/allenbot/.claude.json
+2026-02-21T10:27:52.481Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:27:52.489Z [DEBUG] High write ratio: blit=0, write=1160 (100.0% writes), screen=28x140
+2026-02-21T10:27:59.840Z [DEBUG] High write ratio: blit=0, write=1163 (100.0% writes), screen=26x140
+2026-02-21T10:28:23.921Z [DEBUG] High write ratio: blit=0, write=1164 (100.0% writes), screen=26x140
+2026-02-21T10:28:23.946Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669703946
+2026-02-21T10:28:23.946Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:23.946Z [DEBUG] Temp file written successfully, size: 1278 bytes
+2026-02-21T10:28:23.946Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:23.946Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669703946 to /Users/allenbot/.claude.json
+2026-02-21T10:28:23.946Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:23.995Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669703995
+2026-02-21T10:28:23.995Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:23.996Z [DEBUG] Temp file written successfully, size: 1279 bytes
+2026-02-21T10:28:23.996Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:23.996Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669703995 to /Users/allenbot/.claude.json
+2026-02-21T10:28:23.996Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:23.996Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669703996
+2026-02-21T10:28:23.996Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:23.996Z [DEBUG] Temp file written successfully, size: 1315 bytes
+2026-02-21T10:28:23.996Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:23.996Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669703996 to /Users/allenbot/.claude.json
+2026-02-21T10:28:23.997Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:23.997Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669703997
+2026-02-21T10:28:23.997Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:23.997Z [DEBUG] Temp file written successfully, size: 1386 bytes
+2026-02-21T10:28:23.997Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:23.997Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669703997 to /Users/allenbot/.claude.json
+2026-02-21T10:28:23.997Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:23.998Z [DEBUG] [render] initLayout starting
+2026-02-21T10:28:23.998Z [DEBUG] [render] initLayout complete
+2026-02-21T10:28:23.998Z [DEBUG] [render] first ink render: 70355ms since process start
+2026-02-21T10:28:23.999Z [DEBUG] [keybindings] KeybindingSetup initialized with 99 bindings, 0 warnings
+2026-02-21T10:28:35.012Z [DEBUG] [Perfetto] initializePerfettoTracing called, env value: undefined
+2026-02-21T10:28:35.016Z [DEBUG] [STARTUP] showSetupScreens() completed in 80862ms
+2026-02-21T10:28:35.017Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-02-21T10:28:35.017Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-02-21T10:28:35.017Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-02-21T10:28:35.018Z [DEBUG] Total LSP servers loaded: 0
+2026-02-21T10:28:35.018Z [DEBUG] [STARTUP] MCP configs loaded in 80878ms
+2026-02-21T10:28:35.022Z [DEBUG] [Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)
+2026-02-21T10:28:35.023Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715023
+2026-02-21T10:28:35.023Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.024Z [DEBUG] Temp file written successfully, size: 1406 bytes
+2026-02-21T10:28:35.024Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.024Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715023 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.024Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.025Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-02-21T10:28:35.025Z [DEBUG] LSP manager initialized with 0 servers
+2026-02-21T10:28:35.025Z [DEBUG] installed_plugins.json doesn't exist, returning empty V2 object
+2026-02-21T10:28:35.025Z [DEBUG] Initialized versioned plugins system with 0 plugins
+2026-02-21T10:28:35.026Z [DEBUG] Getting matching hook commands for SessionStart with query: startup
+2026-02-21T10:28:35.026Z [DEBUG] Found 0 hook matchers in settings
+2026-02-21T10:28:35.026Z [DEBUG] Matched 0 unique hooks for query "startup" (0 before deduplication)
+2026-02-21T10:28:35.026Z [DEBUG] LSP server manager initialized successfully
+2026-02-21T10:28:35.026Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-02-21T10:28:35.027Z [DEBUG] [render] initLayout starting
+2026-02-21T10:28:35.027Z [DEBUG] [render] initLayout complete
+2026-02-21T10:28:35.027Z [DEBUG] [render] first ink render: 81384ms since process start
+2026-02-21T10:28:35.051Z [DEBUG] [keybindings] KeybindingSetup initialized with 99 bindings, 0 warnings
+2026-02-21T10:28:35.145Z [DEBUG] High write ratio: blit=0, write=1047 (100.0% writes), screen=19x140
+2026-02-21T10:28:35.146Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715146
+2026-02-21T10:28:35.146Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.147Z [DEBUG] Temp file written successfully, size: 1463 bytes
+2026-02-21T10:28:35.147Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.147Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715146 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.147Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.147Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715147
+2026-02-21T10:28:35.147Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.147Z [DEBUG] Temp file written successfully, size: 1536 bytes
+2026-02-21T10:28:35.147Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.147Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715147 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.147Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.147Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715147
+2026-02-21T10:28:35.147Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.147Z [DEBUG] Temp file written successfully, size: 1584 bytes
+2026-02-21T10:28:35.147Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.147Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715147 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.147Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.148Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715148
+2026-02-21T10:28:35.148Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.148Z [DEBUG] Temp file written successfully, size: 1617 bytes
+2026-02-21T10:28:35.148Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.148Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715148 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.148Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.148Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715148
+2026-02-21T10:28:35.148Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.148Z [DEBUG] Temp file written successfully, size: 1650 bytes
+2026-02-21T10:28:35.148Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.148Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715148 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.148Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.151Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715151
+2026-02-21T10:28:35.151Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.151Z [DEBUG] Temp file written successfully, size: 1682 bytes
+2026-02-21T10:28:35.151Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.151Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715151 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.151Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.151Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-21T10:28:35.151Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-21T10:28:35.227Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-21T10:28:35.229Z [DEBUG] Git remote URL: null
+2026-02-21T10:28:35.229Z [DEBUG] No git remote URL found
+2026-02-21T10:28:35.229Z [DEBUG] Not in a GitHub repository, skipping path mapping update
+2026-02-21T10:28:35.234Z [ERROR] Error: Error: 404 404 page not found
+    at generate (/$bunfs/root/claude:343:8803)
+    at makeRequest (/$bunfs/root/claude:360:5435)
+    at processTicksAndRejections (native:7:39)
+2026-02-21T10:28:35.234Z [DEBUG] countTokensWithFallback: API returned null, trying haiku fallback (20 tools)
+2026-02-21T10:28:35.234Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-21T10:28:35.234Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-21T10:28:35.234Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-21T10:28:35.234Z [DEBUG] Watching for changes in skill/command directories: /Users/allenbot/.claude/skills, /Users/allenbot/.claude/skills...
+2026-02-21T10:28:35.236Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715236
+2026-02-21T10:28:35.236Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.236Z [DEBUG] Temp file written successfully, size: 1718 bytes
+2026-02-21T10:28:35.236Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.236Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715236 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.236Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.236Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715236
+2026-02-21T10:28:35.236Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.236Z [DEBUG] Temp file written successfully, size: 2130 bytes
+2026-02-21T10:28:35.236Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.236Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715236 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.236Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.237Z [DEBUG] [REPL:mount] REPL mounted, disabled=false
+2026-02-21T10:28:35.238Z [DEBUG] performStartupChecks called
+2026-02-21T10:28:35.238Z [DEBUG] Starting background plugin installations
+2026-02-21T10:28:35.238Z [DEBUG] performBackgroundPluginInstallations called
+2026-02-21T10:28:35.242Z [DEBUG] High write ratio: blit=0, write=1047 (100.0% writes), screen=19x140
+2026-02-21T10:28:35.245Z [DEBUG] [claudeai-mcp] Checking gate (cached)...
+2026-02-21T10:28:35.245Z [DEBUG] [claudeai-mcp] Gate returned: false
+2026-02-21T10:28:35.245Z [DEBUG] [claudeai-mcp] Disabled via gate
+2026-02-21T10:28:35.246Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715246
+2026-02-21T10:28:35.246Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.246Z [DEBUG] Temp file written successfully, size: 2170 bytes
+2026-02-21T10:28:35.246Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.246Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715246 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.246Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.246Z [DEBUG] Setting installation status: 0 marketplaces, 0 installable plugins, 0 uninstallable plugins
+2026-02-21T10:28:35.247Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715247
+2026-02-21T10:28:35.247Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.247Z [DEBUG] Temp file written successfully, size: 2213 bytes
+2026-02-21T10:28:35.247Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.247Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715247 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.247Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.247Z [DEBUG] Attempting to auto-install official marketplace
+2026-02-21T10:28:35.249Z [DEBUG] Loaded plugins - Enabled: 0, Disabled: 0, Commands: 0, Agents: 0, Errors: 0
+2026-02-21T10:28:35.249Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-21T10:28:35.253Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715253
+2026-02-21T10:28:35.253Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.253Z [DEBUG] Temp file written successfully, size: 2394 bytes
+2026-02-21T10:28:35.253Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.253Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715253 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.253Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.256Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669715256
+2026-02-21T10:28:35.256Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:35.256Z [DEBUG] Temp file written successfully, size: 2394 bytes
+2026-02-21T10:28:35.256Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:35.256Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669715256 to /Users/allenbot/.claude.json
+2026-02-21T10:28:35.256Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:35.258Z [DEBUG] countTokensWithFallback: haiku fallback failed: 400 {"type":"error","error":{"type":"invalid_request_error","message":"\"nomic-embed-text\" does not support chat"},"request_id":"req_9f7dfe62392fa6b25b99ac4b"}
+2026-02-21T10:28:35.258Z [ERROR] Error: Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"\"nomic-embed-text\" does not support chat"},"request_id":"req_9f7dfe62392fa6b25b99ac4b"}
+    at generate (/$bunfs/root/claude:343:8698)
+    at makeRequest (/$bunfs/root/claude:360:5435)
+    at processTicksAndRejections (native:7:39)
+2026-02-21T10:28:35.258Z [DEBUG] countToolDefinitionTokens returned null for 20 tools: Task, TaskOutput, Bash, Glob, Grep, ExitPlanMode, Read, Edit, Write, NotebookEdit, WebFetch, WebSear...
+2026-02-21T10:28:35.961Z [DEBUG] Checking for native installer update to version 2.1.50
+2026-02-21T10:28:35.962Z [DEBUG] Downloading native installer version 2.1.50
+2026-02-21T10:28:36.446Z [INFO] SSH not configured for GitHub, using HTTPS for anthropics/claude-plugins-official
+2026-02-21T10:28:38.131Z [DEBUG] Added marketplace source: claude-plugins-official
+2026-02-21T10:28:38.131Z [DEBUG] Successfully auto-installed official marketplace
+2026-02-21T10:28:38.132Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669718132
+2026-02-21T10:28:38.132Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:28:38.132Z [DEBUG] Temp file written successfully, size: 2489 bytes
+2026-02-21T10:28:38.132Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:28:38.132Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669718132 to /Users/allenbot/.claude.json
+2026-02-21T10:28:38.132Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:28:38.132Z [DEBUG] Showing marketplace installation success notification
+2026-02-21T10:29:05.570Z [DEBUG] Atomically installed binary to /Users/allenbot/.local/share/claude/versions/2.1.50
+2026-02-21T10:29:05.573Z [DEBUG] Created directory /Users/allenbot/.local/bin for symlink
+2026-02-21T10:29:05.574Z [DEBUG] Atomically updated symlink /Users/allenbot/.local/bin/claude -> /Users/allenbot/.local/share/claude/versions/2.1.50
+2026-02-21T10:29:05.574Z [DEBUG] Successfully updated to version 2.1.50
+2026-02-21T10:29:18.611Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-21T10:29:18.611Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-21T10:29:18.612Z [DEBUG] Sending 14 skills via attachment (initial, 14 total sent)
+2026-02-21T10:29:18.612Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-21T10:29:18.612Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-21T10:29:18.619Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758619
+2026-02-21T10:29:18.619Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.619Z [DEBUG] Temp file written successfully, size: 2527 bytes
+2026-02-21T10:29:18.619Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.619Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758619 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.619Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.620Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-02-21T10:29:18.620Z [DEBUG] Found 0 hook matchers in settings
+2026-02-21T10:29:18.620Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-21T10:29:18.621Z [DEBUG] FileHistory: Added snapshot for f5d9a535-5997-4d98-b1e9-c6e4fc38acd0, tracking 0 files
+2026-02-21T10:29:18.645Z [DEBUG] High write ratio: blit=0, write=1041 (100.0% writes), screen=23x140
+2026-02-21T10:29:18.649Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-21T10:29:18.650Z [DEBUG] Created empty session index
+2026-02-21T10:29:18.650Z [DEBUG] Writing to temp file: /Users/allenbot/.claude/todos/9de60301-b5bc-4429-9ca1-8054e001674c-agent-9de60301-b5bc-4429-9ca1-8054e001674c.json.tmp.58256.1771669758650
+2026-02-21T10:29:18.650Z [DEBUG] Temp file written successfully, size: 2 bytes
+2026-02-21T10:29:18.650Z [DEBUG] Renaming /Users/allenbot/.claude/todos/9de60301-b5bc-4429-9ca1-8054e001674c-agent-9de60301-b5bc-4429-9ca1-8054e001674c.json.tmp.58256.1771669758650 to /Users/allenbot/.claude/todos/9de60301-b5bc-4429-9ca1-8054e001674c-agent-9de60301-b5bc-4429-9ca1-8054e001674c.json
+2026-02-21T10:29:18.650Z [DEBUG] File /Users/allenbot/.claude/todos/9de60301-b5bc-4429-9ca1-8054e001674c-agent-9de60301-b5bc-4429-9ca1-8054e001674c.json written atomically
+2026-02-21T10:29:18.653Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-21T10:29:18.654Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758654
+2026-02-21T10:29:18.654Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.654Z [DEBUG] Temp file written successfully, size: 2594 bytes
+2026-02-21T10:29:18.654Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.654Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758654 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.654Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.654Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.29.dc4; cc_entrypoint=cli;
+2026-02-21T10:29:18.655Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-21T10:29:18.655Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-21T10:29:18.655Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758655
+2026-02-21T10:29:18.655Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.655Z [DEBUG] Temp file written successfully, size: 2641 bytes
+2026-02-21T10:29:18.655Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.655Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758655 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.655Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.656Z [DEBUG] Total plugin output styles loaded: 0
+2026-02-21T10:29:18.656Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758656
+2026-02-21T10:29:18.656Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.656Z [DEBUG] Temp file written successfully, size: 2680 bytes
+2026-02-21T10:29:18.656Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.656Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758656 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.656Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.656Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758656
+2026-02-21T10:29:18.656Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.657Z [DEBUG] Temp file written successfully, size: 2708 bytes
+2026-02-21T10:29:18.657Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.657Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758656 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.657Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.657Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-21T10:29:18.665Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758665
+2026-02-21T10:29:18.665Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.665Z [DEBUG] Temp file written successfully, size: 2739 bytes
+2026-02-21T10:29:18.665Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.665Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758665 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.665Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.667Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758667
+2026-02-21T10:29:18.667Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.667Z [DEBUG] Temp file written successfully, size: 2777 bytes
+2026-02-21T10:29:18.667Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.667Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758667 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.667Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.668Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758668
+2026-02-21T10:29:18.668Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.668Z [DEBUG] Temp file written successfully, size: 2822 bytes
+2026-02-21T10:29:18.668Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.668Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758668 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.668Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.668Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-21T10:29:18.670Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-21T10:29:18.670Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-21T10:29:18.670Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-21T10:29:18.672Z [DEBUG] Stats cache does not exist, returning empty cache
+2026-02-21T10:29:18.672Z [DEBUG] Stats cache empty, processing all historical data in background
+2026-02-21T10:29:18.675Z [ERROR] API error (attempt 1/11): 400 400 {"type":"error","error":{"type":"invalid_request_error","message":"\"nomic-embed-text\" does not support chat"},"request_id":"req_777ee0f2cc81a83e69c28e37"}
+2026-02-21T10:29:18.676Z [ERROR] Error in non-streaming fallback: 400 {"type":"error","error":{"type":"invalid_request_error","message":"\"nomic-embed-text\" does not support chat"},"request_id":"req_777ee0f2cc81a83e69c28e37"}
+2026-02-21T10:29:18.676Z [ERROR] Error: Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"\"nomic-embed-text\" does not support chat"},"request_id":"req_777ee0f2cc81a83e69c28e37"}
+    at generate (/$bunfs/root/claude:343:8698)
+    at makeRequest (/$bunfs/root/claude:360:5435)
+    at processTicksAndRejections (native:7:39)
+2026-02-21T10:29:18.676Z [ERROR] SyntaxError: SyntaxError: JSON Parse error: Unexpected identifier "API"
+    at <parse> (:0)
+    at parse (unknown)
+    at <anonymous> (/$bunfs/root/claude:69:855)
+    at A (/$bunfs/root/claude:11:7244)
+    at MW_ (/$bunfs/root/claude:763:91355)
+    at processTicksAndRejections (native:7:39)
+2026-02-21T10:29:18.688Z [ERROR] API error (attempt 1/11): 400 400 {"type":"error","error":{"type":"invalid_request_error","message":"\"nomic-embed-text\" does not support chat"},"request_id":"req_ad9369462365f14009d16ab5"}
+2026-02-21T10:29:18.688Z [ERROR] Error in non-streaming fallback: 400 {"type":"error","error":{"type":"invalid_request_error","message":"\"nomic-embed-text\" does not support chat"},"request_id":"req_ad9369462365f14009d16ab5"}
+2026-02-21T10:29:18.688Z [ERROR] Error: Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"\"nomic-embed-text\" does not support chat"},"request_id":"req_ad9369462365f14009d16ab5"}
+    at generate (/$bunfs/root/claude:343:8698)
+    at makeRequest (/$bunfs/root/claude:360:5435)
+    at processTicksAndRejections (native:7:39)
+2026-02-21T10:29:18.690Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758690
+2026-02-21T10:29:18.690Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.690Z [DEBUG] Temp file written successfully, size: 2857 bytes
+2026-02-21T10:29:18.690Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.690Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758690 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.690Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.690Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-02-21T10:29:18.690Z [DEBUG] Found 0 hook matchers in settings
+2026-02-21T10:29:18.690Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-21T10:29:18.691Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758691
+2026-02-21T10:29:18.691Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.691Z [DEBUG] Temp file written successfully, size: 2903 bytes
+2026-02-21T10:29:18.691Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.691Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758691 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.691Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.698Z [DEBUG] High write ratio: blit=0, write=1206 (100.0% writes), screen=23x140
+2026-02-21T10:29:18.698Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-21T10:29:18.711Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758711
+2026-02-21T10:29:18.711Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.711Z [DEBUG] Temp file written successfully, size: 2952 bytes
+2026-02-21T10:29:18.711Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.711Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758711 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.711Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:18.714Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669758714
+2026-02-21T10:29:18.714Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:18.714Z [DEBUG] Temp file written successfully, size: 2990 bytes
+2026-02-21T10:29:18.714Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:18.714Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669758714 to /Users/allenbot/.claude.json
+2026-02-21T10:29:18.714Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:19.305Z [DEBUG] Successfully refreshed marketplace: claude-plugins-official
+2026-02-21T10:29:19.306Z [DEBUG] Plugin autoupdate: checking installed plugins
+2026-02-21T10:29:27.911Z [DEBUG] High write ratio: blit=0, write=1206 (100.0% writes), screen=23x140
+2026-02-21T10:29:27.933Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669767933
+2026-02-21T10:29:27.933Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:29:27.933Z [DEBUG] Temp file written successfully, size: 3015 bytes
+2026-02-21T10:29:27.933Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:29:27.933Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669767933 to /Users/allenbot/.claude.json
+2026-02-21T10:29:27.933Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:29:58.993Z [DEBUG] High write ratio: blit=0, write=1536 (100.0% writes), screen=31x140
+2026-02-21T10:30:18.564Z [DEBUG] Writing to temp file: /Users/allenbot/.claude/settings.json.tmp.58256.1771669818564
+2026-02-21T10:30:18.565Z [DEBUG] Temp file written successfully, size: 3 bytes
+2026-02-21T10:30:18.565Z [DEBUG] Renaming /Users/allenbot/.claude/settings.json.tmp.58256.1771669818564 to /Users/allenbot/.claude/settings.json
+2026-02-21T10:30:18.565Z [DEBUG] File /Users/allenbot/.claude/settings.json written atomically
+2026-02-21T10:30:18.572Z [DEBUG] FileHistory: Making snapshot for message 5adf1cd1-754a-4b0c-a275-82c6d96e6bdb
+2026-02-21T10:30:18.573Z [DEBUG] FileHistory: Added snapshot for 5adf1cd1-754a-4b0c-a275-82c6d96e6bdb, tracking 0 files
+2026-02-21T10:30:18.592Z [DEBUG] High write ratio: blit=0, write=1330 (100.0% writes), screen=29x140
+2026-02-21T10:30:18.597Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-21T10:30:18.603Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-21T10:30:18.612Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-21T10:30:18.615Z [DEBUG] High write ratio: blit=0, write=1279 (100.0% writes), screen=26x140
+2026-02-21T10:30:18.636Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669818636
+2026-02-21T10:30:18.636Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:30:18.637Z [DEBUG] Temp file written successfully, size: 3039 bytes
+2026-02-21T10:30:18.637Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:30:18.637Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669818636 to /Users/allenbot/.claude.json
+2026-02-21T10:30:18.637Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:30:18.639Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669818639
+2026-02-21T10:30:18.639Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:30:18.639Z [DEBUG] Temp file written successfully, size: 3061 bytes
+2026-02-21T10:30:18.639Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:30:18.639Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669818639 to /Users/allenbot/.claude.json
+2026-02-21T10:30:18.639Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:30:19.912Z [DEBUG] Checking for native installer update to version 2.1.50
+2026-02-21T10:30:19.913Z [DEBUG] Version 2.1.50 already installed, updating symlink
+2026-02-21T10:30:19.913Z [DEBUG] Created directory /Users/allenbot/.local/bin for symlink
+2026-02-21T10:30:19.913Z [DEBUG] Successfully updated to version 2.1.50
+2026-02-21T10:30:48.526Z [DEBUG] High write ratio: blit=0, write=1649 (100.0% writes), screen=44x140
+2026-02-21T10:30:48.550Z [DEBUG] High write ratio: blit=0, write=1649 (100.0% writes), screen=44x140
+2026-02-21T10:30:54.349Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-21T10:30:54.357Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-21T10:30:54.367Z [DEBUG] High write ratio: blit=0, write=1297 (100.0% writes), screen=29x140
+2026-02-21T10:30:54.368Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-21T10:30:54.394Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669854394
+2026-02-21T10:30:54.394Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:30:54.394Z [DEBUG] Temp file written successfully, size: 3084 bytes
+2026-02-21T10:30:54.394Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:30:54.394Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669854394 to /Users/allenbot/.claude.json
+2026-02-21T10:30:54.394Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:30:54.395Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.58256.1771669854395
+2026-02-21T10:30:54.395Z [DEBUG] Preserving file permissions: 100600
+2026-02-21T10:30:54.395Z [DEBUG] Temp file written successfully, size: 3121 bytes
+2026-02-21T10:30:54.395Z [DEBUG] Applied original permissions to temp file
+2026-02-21T10:30:54.395Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.58256.1771669854395 to /Users/allenbot/.claude.json
+2026-02-21T10:30:54.395Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-21T10:30:54.768Z [DEBUG] Checking for native installer update to version 2.1.50
+2026-02-21T10:30:54.769Z [DEBUG] Version 2.1.50 already installed, updating symlink
+2026-02-21T10:30:54.770Z [DEBUG] Created directory /Users/allenbot/.local/bin for symlink
+2026-02-21T10:30:54.770Z [DEBUG] Successfully updated to version 2.1.50
+2026-02-21T10:31:00.438Z [DEBUG] Getting matching hook commands for SessionEnd with query: prompt_input_exit
+2026-02-21T10:31:00.438Z [DEBUG] Found 0 hook matchers in settings
+2026-02-21T10:31:00.438Z [DEBUG] Matched 0 unique hooks for query "prompt_input_exit" (0 before deduplication)

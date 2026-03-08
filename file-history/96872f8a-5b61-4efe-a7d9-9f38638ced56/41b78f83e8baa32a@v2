@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""
+StateStore — 持仓状态持久化
+
+进程重启后能恢复持仓状态，避免重复开仓。
+存储路径：lab/state/{coin}_{interval}.json
+"""
+
+import os
+import json
+import tempfile
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class StateStore:
+    """持仓状态持久化"""
+
+    def __init__(self, coin: str, interval: str, base_dir: str = None):
+        if base_dir is None:
+            # 默认 lab/state/
+            base_dir = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), '..', '..', 'state'
+            )
+        self._dir = os.path.abspath(base_dir)
+        os.makedirs(self._dir, exist_ok=True)
+        self._path = os.path.join(self._dir, f"{coin}_{interval}.json")
+
+    def save(self, position: str, entry_price: float,
+             regime: str, last_kline_time: int) -> None:
+        """原子写入状态（先写临时文件再 rename，防崩溃损坏）"""
+        data = {
+            "position": position,
+            "entry_price": entry_price,
+            "regime": regime,
+            "last_kline_time": last_kline_time,
+        }
+        fd, tmp_path = tempfile.mkstemp(dir=self._dir, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(data, f)
+            os.rename(tmp_path, self._path)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
+
+    def load(self) -> dict:
+        """读取状态，文件不存在返回空 dict"""
+        if not os.path.exists(self._path):
+            return {}
+        try:
+            with open(self._path) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"状态文件损坏: {self._path}: {e}")
+            return {}
+
+    def clear(self) -> None:
+        """删除状态文件"""
+        if os.path.exists(self._path):
+            os.remove(self._path)

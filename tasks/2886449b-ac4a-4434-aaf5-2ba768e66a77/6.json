@@ -1,0 +1,9 @@
+{
+  "id": "6",
+  "subject": "Step 3 v2: 加 trades_per_day + days_to_double, 按翻倍速度排序",
+  "description": "纯趋势段数据 × 无爆仓 combo 交集，bull/bear/ranging 各取 avg_r Top 3，用户选定",
+  "activeForm": "三方向找 Top 3 策略",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,73 @@
+"""Ulcer Index — 真正的胃溃疡指数（回撤深度指标）"""
+import math
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class UlcerIndexConfig:
+    period: int = 14
+    threshold: float = 1.5  # UI低于此值=低波动=趋势稳定
+
+
+class UlcerIndex(Strategy):
+    """Ulcer Index：衡量回撤痛苦程度，UI低=稳定趋势，UI高=剧烈波动"""
+
+    def __init__(self, exchange=None, config: Optional[UlcerIndexConfig] = None):
+        self.exchange = exchange
+        self.config = config or UlcerIndexConfig()
+
+    @property
+    def name(self) -> str:
+        return "ulcer_index"
+
+    def _calc_ui(self, closes: List[float]) -> float:
+        """Ulcer Index = sqrt(mean(pct_drawdown^2))"""
+        p = self.config.period
+        if len(closes) < p:
+            return 0.0
+        window = closes[-p:]
+        peak = window[0]
+        sq_sum = 0.0
+        for c in window:
+            if c > peak:
+                peak = c
+            dd_pct = (c - peak) / peak * 100 if peak != 0 else 0
+            sq_sum += dd_pct ** 2
+        return math.sqrt(sq_sum / p)
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        p = self.config.period
+        if not klines or len(klines) < p + 10:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        closes = [c["close"] for c in klines]
+        ui_now = self._calc_ui(closes)
+        ui_prev = self._calc_ui(closes[:-1])
+
+        # 趋势方向用简单MA判断
+        ma = sum(closes[-p:]) / p
+        trend_up = closes[-1] > ma
+
+        # UI从高跌到低（波动收敛）+ 有方向 → 趋势确立
+        if ui_prev > self.config.threshold and ui_now <= self.config.threshold:
+            if trend_up:
+                signal = Signal.BUY
+            else:
+                signal = Signal.SELL
+        # UI从低涨到高（波动扩大）→ 趋势可能反转
+        elif ui_prev <= self.config.threshold and ui_now > self.config.threshold:
+            if trend_up:
+                signal = Signal.SELL  # 上涨中波动突增=见顶
+            else:
+                signal = Signal.BUY  # 下跌中波动突增=见底
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(signal=signal, confidence=0.6,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"ulcer_index": ui_now, "prev_ui": ui_prev,
+                                        "threshold": self.config.threshold})

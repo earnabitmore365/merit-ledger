@@ -1,0 +1,26 @@
+2026-02-24 18:47:19,718 - HyperLiquidAdapter - INFO - 连接 HyperLiquid: https://api.hyperliquid-testnet.xyz
+2026-02-24 18:47:20,055 - HyperLiquidWebSocket - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:47:20,224 - HyperLiquidWebSocket - INFO - WebSocket 已连接: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:47:20,224 - HyperLiquidAdapter - INFO - WebSocket 已连接: 测试网
+2026-02-24 18:47:21,269 - TradingSystem - INFO - 反手: BUY -> SELL
+2026-02-24 18:47:21,432 - HyperLiquidAdapter - INFO - 反手：平仓 ETH LONG 0.4792
+2026-02-24 18:47:22,111 - HyperLiquidAdapter - INFO - 平仓: 卖出 0.4792 ETH @ $1640
+2026-02-24 18:47:24,467 - HyperLiquidAdapter - INFO - 开始充值 10 USDC 到合约账户...
+2026-02-24 18:47:24,627 - HyperLiquidAdapter - INFO - 充值响应: {'status': 'err', 'response': 'Must deposit before performing actions. User: 0x390034556e1b6932e1b15f67c8e35bf30710d16e'}
+2026-02-24 18:47:26,384 - HyperLiquidAdapter - INFO - 反手：开仓 卖出 ETH 数量: 0.4787 @ $1822.10
+2026-02-24 18:47:27,834 - HyperLiquidAdapter - INFO - 反手成功: ETH
+2026-02-24 18:47:27,834 - TradingSystem - INFO - 反手成功: ETH @ $1786.00 数量: 0.4787
+2026-02-24 18:47:27,834 - TradingSystem - INFO - [2026-02-24T18:47:20.554970] REVERSE_BUY | 信号: SELL (反手)
+2026-02-24 18:47:27,975 - HyperLiquidWebSocket - WARNING - WebSocket 连接关闭: sent 1000 (OK); no close frame received
+2026-02-24 18:47:27,976 - HyperLiquidWebSocket - INFO - WebSocket 已断开
+2026-02-24 18:47:27,976 - HyperLiquidAdapter - INFO - WebSocket 已断开
+2026-02-24 18:47:27,979 - HyperLiquidAdapter - INFO - 已断开 HyperLiquid 连接
+当前持仓: BUY
+
+>>> 执行 run_once() >>>
+
+结果:
+  信号: SELL
+  操作: REVERSE_BUY
+  持仓: BUY
+  开仓价: 1823.7

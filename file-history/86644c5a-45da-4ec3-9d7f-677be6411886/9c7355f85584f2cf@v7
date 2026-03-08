@@ -1,0 +1,24 @@
+#!/bin/bash
+# Abby Auto Trading - 回测系统
+# 双击运行
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+cd "$PROJECT_DIR"
+
+# 检查并安装必要的库
+python3 -c "import curses" 2>/dev/null || {
+    echo "安装 curses 库..."
+    pip3 install windows-curses 2>/dev/null || true
+}
+
+python3 -c "
+import sys
+sys.path.insert(0, 'src')
+from backtest.batch_backtest import main
+import curses
+curses.wrapper(main)
+"
+
+read -p "按回车键退出..."

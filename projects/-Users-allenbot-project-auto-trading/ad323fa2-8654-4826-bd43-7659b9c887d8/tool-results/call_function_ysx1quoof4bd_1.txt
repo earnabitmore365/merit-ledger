@@ -1,0 +1,16 @@
+Exit code 1
+2026-02-22 16:10:57,867 - INFO - 📁 加载数据: 26280 条 | 文件: /Users/allenbot/.openclaw/workspace/project/abby-auto-trading/src/backtest/data/historical/BTC/1h.json
+2026-02-22 16:10:57,867 - INFO - 🚀 回测初始化: BTC 1h (1095天) | K线: 26280 | 提款: 开启
+Traceback (most recent call last):
+  File "<string>", line 18, in <module>
+AttributeError: 'BacktestEngine' object has no attribute 'run_with_strategy'
+
+=== 回测 BTC/USDT ===
+
+2026-02-22 16:10:57,867 - INFO - 📁 加载数据: 26280 条 | 文件: /Users/allenbot/.openclaw/workspace/project/abby-auto-trading/src/backtest/data/historical/BTC/1h.json
+2026-02-22 16:10:57,867 - INFO - 🚀 回测初始化: BTC 1h (1095天) | K线: 26280 | 提款: 开启
+Traceback (most recent call last):
+  File "<string>", line 18, in <module>
+AttributeError: 'BacktestEngine' object has no attribute 'run_with_strategy'
+
+=== 回测 BTC/USDT ===

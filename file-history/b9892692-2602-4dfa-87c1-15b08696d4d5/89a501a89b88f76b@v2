@@ -1,0 +1,204 @@
+# Gate v4.1 报告目录
+
+> 数据库: `gate_v41_report.db`
+> 种子来源: `seed_v3.db` (10,416组 / 84策略 / 89.5M笔 / TTP=False)
+> 生成日期: 2026-03-04
+
+---
+
+## 管线流程
+
+```
+初考（门槛）         专考（成绩单）          组考（组队）
+8,400 组            7,231 通过              3队选代表
+  │                   │                      │
+  ▼                   ▼                      ▼
+gate1_*             gate2_*                gate3_*
+按周期10张表         按周期10张表             short/mid/long
+                    13维度评分               135 个入选
+                                             │
+                          ┌──────────────────┘
+                          ▼
+                    专场照妖镜v5              MC照妖镜
+                    mirror_v5_*              mc_results
+                    3考场WF(牛/盘整/熊)       100次洗牌
+                    119 通过                  │
+                          │                   ▼
+                          │              champions
+                          │              86 冠军
+                          ▼
+                    决策: 专考只跑WF不跑MC
+                    135 → 119 (淘汰16)
+```
+
+---
+
+## 各阶段关键数字
+
+| 阶段 | 输入 | 输出 | 淘汰率 |
+|------|------|------|--------|
+| 初考（门槛） | 8,400 | 7,231 | 13.9% |
+| 专考（成绩单） | 7,231 | 7,231 | 0%（排名不淘汰） |
+| 组考（组队） | 7,231 | 135（Short 51 / Mid 41 / Long 43） | 98.1% |
+| 专场照妖镜v5 WF | 135 | 119（Short 36 / Mid 41 / Long 42） | 11.9% |
+| MC照妖镜 | 135 | 86 | 36.3% |
+
+---
+
+## 31 张表说明
+
+### 初考（gate1_*） — 11 张表
+
+交易笔数是否达到门槛（K线数 ÷ X，X 按周期浮动）。
+
+| 表名 | 说明 | 记录数 | 关键字段 |
+|------|------|--------|----------|
+| `gate1_summary` | 汇总：每个周期通过了多少 | 10 | `interval, passed, total` |
+| `gate1_1m` ~ `gate1_1d` | 明细：每个策略×币种是否通过 | 840 × 10 | `passed`(0/1), `reason`(人话) |
+
+**reason 示例**: `"不通过: 20笔 < 门槛196"` / `"通过: 452笔 >= 门槛196"`
+
+### 专考（gate2_*） — 10 张表
+
+13 个维度的成绩单（6 个 regime 维度 + 7 个 sub_phase 维度），每个维度有 PnL、交易笔数、胜率、平均R值、排名。
+
+| 表名 | 说明 | 记录数 | 关键字段 |
+|------|------|--------|----------|
+| `gate2_1m` ~ `gate2_1d` | 每周期成绩单 | 700~757 | 13组 `{dim}_pnl/trades/win_rate/avg_r/insufficient/rank_{dim}` |
+
+**6 个 regime 维度**: `all`, `bull`, `bear`, `ranging`, `early_bull`, `early_bear`
+**7 个 sub_phase 维度**: `sp_sprint`, `sp_rest`, `sp_dip`, `sp_bounce`, `sp_up`, `sp_flat`, `sp_down`
+
+`insufficient=1` 表示该维度交易笔数不足（<10笔），成绩不可靠。
+
+### 组考（gate3_*） — 3 张表
+
+从专考成绩中选代表入队。每个候选在多个维度排名，综合选出最优。
+
+| 表名 | 说明 | 记录数 | 入选 | 关键字段 |
+|------|------|--------|------|----------|
+| `gate3_short` | 短期队（1m~30m） | 2,847 | 51 | `selected`(0/1), `selected_dimensions`, `reason` |
+| `gate3_mid` | 中期队（1h~4h） | 2,182 | 41 | 同上 |
+| `gate3_long` | 长期队（8h~1d） | 2,202 | 43 | 同上 |
+
+**reason 示例**: `"入选: all#3 bull#5"` / `"未入选"` / `"淘汰: 未通过初考"`
+
+### 专场照妖镜v5（mirror_v5_*） — 2 张表
+
+三个考场（牛场15段/盘整场15段/熊场14段）分别做 WF 和 MC。混沌最终决策：**只看 WF，不看 MC**。
+
+| 表名 | 说明 | 记录数 | 关键字段 |
+|------|------|--------|----------|
+| `mirror_v5_candidates` | 总览：每个候选的通过情况 | 135 | `pass_wf`(0/1), `pass_mc`(0/1), `pass_wf_mc`(0/1), `team` |
+| `mirror_v5_pool_detail` | 明细：每个候选在3考场的表现 | 405 | `pool_name`(bull/ranging/bear), `wf_ok`, `mc_ok`, `wf_passed/wf_total` |
+
+**三考场分组**:
+- 牛场: 纯牛(6段) + 牛&初牛(9段) = 15 folds
+- 盘整场: 初牛&盘整(5段) + 盘整&初熊(8段) + 纯盘整(2段) = 15 folds
+- 熊场: 初熊&熊(10段) + 纯熊(4段) = 14 folds
+
+### MC 照妖镜 — 2 张表
+
+100 次 Monte Carlo 洗牌，测翻倍率和爆仓率。
+
+| 表名 | 说明 | 记录数 | 关键字段 |
+|------|------|--------|----------|
+| `mc_results` | 全程 MC 结果 | 135 | `double_rate`, `bust_rate`, `d2d_p50`, `max_dd_p95`, `is_champion`(0/1), `reason` |
+| `champions` | MC 翻倍率 ≥ 50% 的冠军 | 86 | `double_rate`, `d2d_p50`, `max_dd_p95`, `balance_p50` |
+
+### Regime-aware WF — 4 张表
+
+按 regime 类型分组做 Leave-One-Out 交叉验证（早期实验版本，后被专场照妖镜v5替代）。
+
+| 表名 | 说明 | 记录数 |
+|------|------|--------|
+| `wf_paired_results` | 合并版明细 | 344 |
+| `wf_paired_champions` | 合并版冠军 | 44 |
+| `wf_regime_results` | 各 regime LOO 结果 | 430 |
+| `wf_champions` | LOO 全通过冠军 | 23 |
+
+### 目录表 — 1 张
+
+| 表名 | 说明 | 记录数 |
+|------|------|--------|
+| `gate_index` | 所有表的目录（表名、描述、记录数） | 31 |
+
+---
+
+## 常用查询
+
+### 查目录
+
+```sql
+SELECT * FROM gate_index;
+```
+
+### 查某策略的初考结果
+
+```sql
+SELECT * FROM gate1_1h WHERE strategy = 'vpt' AND coin = 'SOL';
+```
+
+### 查专考排名前10（全程PnL）
+
+```sql
+SELECT strategy, coin, all_pnl, rank_all
+FROM gate2_4h
+ORDER BY rank_all
+LIMIT 10;
+```
+
+### 查组考入选者
+
+```sql
+SELECT strategy, coin, interval, all_pnl, selected_dimensions, reason
+FROM gate3_long
+WHERE selected = 1
+ORDER BY all_pnl DESC;
+```
+
+### 查专场照妖镜 — WF 通过者
+
+```sql
+SELECT strategy, coin, interval, team, all_pnl
+FROM mirror_v5_candidates
+WHERE pass_wf = 1
+ORDER BY all_pnl DESC;
+```
+
+### 查某候选在3个考场的表现
+
+```sql
+SELECT c.strategy, c.coin, c.interval,
+       d.pool_name, d.wf_passed, d.wf_total, d.wf_ok,
+       d.mc_rate, d.mc_trades, d.mc_ok
+FROM mirror_v5_candidates c
+JOIN mirror_v5_pool_detail d ON c.combo_id = d.combo_id
+WHERE c.strategy = 'vpt' AND c.coin = 'SOL' AND c.interval = '4h';
+```
+
+### 查被 WF 淘汰的 16 个
+
+```sql
+SELECT strategy, coin, interval, team, all_pnl
+FROM mirror_v5_candidates
+WHERE pass_wf = 0
+ORDER BY all_pnl DESC;
+```
+
+### 查冠军队
+
+```sql
+SELECT strategy, coin, interval, team, all_pnl,
+       double_rate, d2d_p50, max_dd_p95
+FROM champions
+ORDER BY all_pnl DESC;
+```
+
+### 查某维度不足的策略
+
+```sql
+SELECT strategy, coin, early_bull_trades, early_bull_insufficient
+FROM gate2_1h
+WHERE early_bull_insufficient = 1;
+```

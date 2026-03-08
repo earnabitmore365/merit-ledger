@@ -1,0 +1,12 @@
+WARNING:HyperLiquidWebSocket:WebSocket 连接关闭: sent 1000 (OK); no close frame received
+=== 开多单前 ===
+总余额: 881.305221
+当前价格: 1819.4
+开仓数量: 0.48439332802022644
+开仓价值: 881.3052210000001
+下单结果: True - 成交: 0.4844 @ 1819.1
+
+=== 开多单后 ===
+现货余额: 880.957134
+合约余额 (accountValue): 87.769117
+总余额 (get_balance): 880.957134

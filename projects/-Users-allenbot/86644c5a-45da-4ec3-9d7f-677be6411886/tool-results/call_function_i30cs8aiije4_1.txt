@@ -1,0 +1,5 @@
+WebSocket 连接关闭: sent 1000 (OK); no close frame received
+连接: True
+ETH 价格: 1827.2
+余额: {'usdc': 883.029914, 'available': 883.029914}
+完成

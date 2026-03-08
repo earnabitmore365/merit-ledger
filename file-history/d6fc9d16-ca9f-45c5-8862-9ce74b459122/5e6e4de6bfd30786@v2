@@ -1,0 +1,39 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Trading Research — 加密货币交易策略研究、投资计划制定、市场分析、执行追踪。
+
+与 `~/project/auto-trading` 配合使用：
+- **auto-trading**: 交易系统代码、策略开发、回测引擎、UI
+- **trading-research（本项目）**: 投资决策、策略选择、市场分析、执行追踪、资金管理
+
+## Conventions
+
+- 语言: 中文
+- 回测报告位于: `~/project/auto-trading/reports/backtest/`
+- 回测引擎位于: `~/project/auto-trading/src/backtest/backtest.py`
+- 策略代码位于: `~/project/auto-trading/src/core/strategy/`
+- 需要跑回测时，可以直接调用 auto-trading 项目的脚本
+
+## Key Commands
+
+```bash
+# 跑单个回测（从 auto-trading 目录）
+cd ~/project/auto-trading && python3 -c "
+import sys; sys.path.insert(0, 'src')
+from backtest.backtest import BacktestEngine
+engine = BacktestEngine(coin='LINK', interval='15m', days=365, initial_capital=500, enable_ttp=True, stop_loss_pct=0.1, leverage=10.0)
+result = engine.run_backtest('proc')
+engine.save_report('proc')
+print(f'Return: {result.total_return:.1f}%, Trades: {result.total_trades}')
+"
+
+# 全矩阵回测
+cd ~/project/auto-trading && python3 run_full_matrix.py
+
+# 读取回测报告
+ls ~/project/auto-trading/reports/backtest/
+```

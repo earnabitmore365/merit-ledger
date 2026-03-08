@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""
+市场 Regime 检测器
+
+纯计算，无 IO，无状态。
+MA + RSI 三层判断：趋势方向 → 动量确认 → 弱趋势过滤。
+"""
+
+from typing import Dict, List
+
+from .config import RegimeDetectorConfig
+
+
+class MarketRegimeDetector:
+    """市场状态检测器"""
+
+    def __init__(self, config: RegimeDetectorConfig = None):
+        self.config = config or RegimeDetectorConfig()
+
+    # ── 指标计算（复用 strategy_adaptive.py 已验证算法）──
+
+    @staticmethod
+    def _ma(closes: List[float], period: int) -> float:
+        """简单移动平均"""
+        if len(closes) < period:
+            return sum(closes) / len(closes) if closes else 0.0
+        return sum(closes[-period:]) / period
+
+    @staticmethod
+    def _rsi(prices: List[float], period: int) -> float:
+        """RSI 指标"""
+        if len(prices) < period + 1:
+            return 50.0
+        gains, losses = [], []
+        for i in range(-period, 0):
+            change = prices[i] - prices[i - 1]
+            gains.append(max(0, change))
+            losses.append(max(0, -change))
+        avg_gain = sum(gains) / period if gains else 0.0
+        avg_loss = sum(losses) / period if losses else 0.0
+        if avg_loss == 0:
+            return 100.0 if avg_gain > 0 else 50.0
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+
+    # ── 检测 ──
+
+    def detect(self, klines: List[Dict]) -> str:
+        """检测市场状态
+
+        Returns:
+            "bull" / "bear" / "ranging" / "unknown"
+        """
+        return self.detect_with_details(klines)["regime"]
+
+    def detect_with_details(self, klines: List[Dict]) -> Dict:
+        """检测市场状态，返回 regime + 中间指标值
+
+        三层判断：
+        1. MA(short) vs MA(long) 方向
+        2. RSI 动量确认
+        3. MA差距 < ranging_ma_gap_pct → ranging（过滤弱趋势）
+        """
+        cfg = self.config
+
+        if not klines or len(klines) < cfg.min_klines:
+            return {"regime": "unknown", "ma_short": 0, "ma_long": 0, "rsi": 50, "ma_gap_pct": 0}
+
+        closes = [k["close"] for k in klines]
+
+        ma_short = self._ma(closes, cfg.short_period)
+        ma_long = self._ma(closes, cfg.long_period)
+        rsi = self._rsi(closes, cfg.rsi_period)
+
+        # MA 差距百分比
+        ma_gap_pct = abs(ma_short - ma_long) / ma_long if ma_long > 0 else 0
+
+        # 第三层：弱趋势 → ranging
+        if ma_gap_pct < cfg.ranging_ma_gap_pct:
+            regime = "ranging"
+        # 第一层+第二层：方向 + 动量确认
+        elif ma_short > ma_long and rsi > cfg.bull_rsi_threshold:
+            regime = "bull"
+        elif ma_short < ma_long and rsi < cfg.bear_rsi_threshold:
+            regime = "bear"
+        else:
+            # MA有方向但RSI未确认 → ranging
+            regime = "ranging"
+
+        return {
+            "regime": regime,
+            "ma_short": round(ma_short, 2),
+            "ma_long": round(ma_long, 2),
+            "rsi": round(rsi, 2),
+            "ma_gap_pct": round(ma_gap_pct, 5),
+        }

@@ -1,0 +1,93 @@
+⏺ Bash(python3 -c "
+      import sqlite3…)           
+  ⎿  pnl=-1.018000  r_value=-1.018000  fee=0.007000  funding=0.007000  slip
+     =0.004000  pnl==rv? True  
+     pnl=-1.012000  r_value=-1.012000  fee=0.007000  funding=0.001000  slip
+     … +7 lines (ctrl+o to expand)
+                                      
+⏺ 确认完毕：pnl = r_value（$1 固定注码），已包含 fee + funding + slippage。例如
+  pnl=-1.018 = 基础亏损-1.0 + 成本-0.018。所以 actual_pnl = r_value * bet       
+  已经是净值，balance_after = balance_before + actual_pnl 成立，不需要额外的
+  net_pnl。                                                                     
+                                                                             
+  补 balance_before + fee（按注码缩放），覆盖生成：                             
+                                      
+⏺ Bash(python3 -u -c "                                                          
+      import sqlite3, json, time, bisect, math…)                                
+  ⎿  sol_cmo_1h_solo.json                  4.6KB | trades:   7 | d2d:  N/A
+     | 首笔bb=$500.00 | bb+pnl=ba 校验: FAIL(1)                                 
+     sol_bbsqueeze_1h_solo.json          163.5KB | trades: 342 | d2d:  24d   
+     … +6 lines (ctrl+o to expand)
+                                      
+⏺ 浮点精度问题，修复 —— 用 round 后的值传递：       
+                                                                                
+⏺ Bash(python3 -u -c "                              
+      import sqlite3, json, time, bisect…)                                      
+  ⎿  sol_cmo_1h_solo.json                   4.6KB |    7笔 | d2d:  N/A | fi   
+     nal:$        0.00 | dd:100.0% | bb0=$500.00 | 校验:FAIL(1)                 
+     sol_bbsqueeze_1h_solo.json           163.5KB |  342笔 | d2d:  24d | fi
+     … +6 lines (ctrl+o to expand)                                              
+                                                                                
+⏺ 自动切换版 PASS。3 个 solo 各有 1 笔不一致，应该是归零那笔（balance < 0 被截为
+   0）。确认一下：                                                              
+                                                                              
+⏺ Bash(python3 -c "                                                             
+      import json…)                                                           
+  ⎿  sol_cmo_1h_solo.json 第7笔: bb=26.45 + pnl=-26.74 = -0.29, 实际ba=0.00     
+      (截零)                          
+     sol_bbsqueeze_1h_solo.json 第342笔: bb=66.56 + pnl=-67.56 = -1.00,         
+     实际                                                                       
+     … +3 lines (ctrl+o to expand)    
+                                                                                
+⏺ 全部确认 —— 3 个 solo 各有 1 笔是最后归零笔（balance_before + actual_pnl <    
+  0，被截为 $0.00），属于正常的破产截断，不是精度 bug。
+                                                                                
+  4 份报告最终状态                                                           
+                                                                                
+  ┌──────────────────────────┬─────┬──────┬─────┬────────┬──────┬──────────┐
+  │           文件           │ 大  │ 交易 │ d2d │ 最终余 │ 最大 │   校验   │    
+  │                          │ 小  │  数  │     │   额   │  DD  │          │ 
+  ├──────────────────────────┼─────┼──────┼─────┼────────┼──────┼──────────┤    
+  │ sol_cmo_1h_solo.json     │ 4.6 │ 7    │ N/A │ $0     │ 100% │ PASS (末 │
+  │                          │  KB │      │     │        │      │ 笔截零)  │    
+  ├──────────────────────────┼─────┼──────┼─────┼────────┼──────┼──────────┤ 
+  │ sol_bbsqueeze_1h_solo.js │ 164 │ 342  │ 24d │ $0     │ 100% │ PASS (末 │
+  │ on                       │  KB │      │     │        │      │ 笔截零)  │
+  ├──────────────────────────┼─────┼──────┼─────┼────────┼──────┼──────────┤
+  │ sol_meanreversion_1h_sol │ 234 │ 494  │ 27d │ $0     │ 100% │ PASS (末 │
+  │ o.json                   │  KB │      │     │        │      │ 笔截零)  │
+  ├──────────────────────────┼─────┼──────┼─────┼────────┼──────┼──────────┤
+  │ sol_regime_switch_1h.jso │ 219 │ 419  │ 12d │ $114,3 │ 55.6 │ PASS     │
+  │ n                        │  KB │      │     │ 78     │ %    │          │
+  └──────────────────────────┴─────┴──────┴─────┴────────┴──────┴──────────┘
+
+  每笔交易字段：open_time, close_time, direction, entry_price, exit_price,
+  bet_size, balance_before, actual_pnl, fee, r_value, balance_after, close_type,
+   regime_at_open, holding_bars（自动切换版额外有 source_strategy）
+
+  config.note 已注明：actual_pnl 是净盈亏（已含
+  fee/funding/slippage），balance_after = balance_before + actual_pnl，fee
+  是手续费部分（按注码缩放）。
+
+✻ Brewed for 2m 37s
+
+❯ 报告呢？怎么还是一样只有日期和balance？                                       
+                              
+⏺ Bash(python3 -c "                                                             
+      import json…)                                                           
+  ⎿  equity_curve 前10条:                                                       
+        {'date': '2020-08-22', 'balance': 590.76}                               
+        {'date': '2020-08-24', 'balance': 675.68}                               
+     … +26 lines (ctrl+o to expand)                                             
+                                                                                
+⏺ 明白，equity_curve 太简陋了。加完整字段，改成逐笔记录（不是逐日）：           
+  ⎿  Interrupted · What should Claude do instead?                               
+                                                                                
+  6 tasks (5 done, 1 open)                                                      
+  ✔ Step 1: 识别连续 regime 段                                               
+  ✔ Step 2: 过滤纯趋势段内的交易                                                
+  ✔ Step 2: 筛选无爆仓 combo                                                  
+  ✔ Step 3 v2: 加 trades_per_day + days_to_double, 按翻倍速度排序               
+  ✔ Step 4: 4条曲线对比报告                                                     
+  ◻ Step 5: 写入 investment_plan.md                                             
+                                             

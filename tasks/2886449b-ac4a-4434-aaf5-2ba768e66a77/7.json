@@ -1,0 +1,9 @@
+{
+  "id": "7",
+  "subject": "Step 4: 4条曲线对比报告",
+  "description": "3个单策略全程 + 自动切换版，验证 regime 切换价值",
+  "activeForm": "生成对比报告",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

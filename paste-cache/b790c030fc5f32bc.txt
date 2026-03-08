@@ -1,0 +1,66 @@
+第七：这是Sonnet给出的脚本分析：
+---
+架构评估
+整体结构（5个核心模块）：
+    1    detect_coins_and_intervals() — 自动扫描目录 ￼
+    2    compute_regime_timeline() — 复制 RegimeStrategy 的滞后逻辑，独立计算不依赖实例 ￼
+    3    pair_trades() — 开平仓配对 + MFE/MAE/ATR/volume/资金费 ￼
+    4    save_combo() — 35字段计算 + 写库 ￼
+    5    main() — 自动检测 → regime → 每策略回测 → 每策略 commit ￼
+---
+需要注意的点
+    1    result 字段引用需验证（第 607 行） result.max_balance, result.min_balance, result.max_profit, result.max_loss 这四个字段直接从 BacktestResult 取值，但 schema 里叫 max_win / max_loss，代码里用了 result.max_profit。需确认 BacktestEngine 的 BacktestResult 里确实有这四个属性，否则是静默 bug（赋 None 进库）。
+    2    MFE/MAE 是杠杆倍数后的比率，不是美元（第 411-419 行） favorable = (c['high'] - entry) / entry * leverage 存进库的是"最大有利偏移 × 杠杆"的比率，不是绝对美元。只要用法上一致就没问题，但分析时要注意单位。
+    3    signal_close_count 包含 end_of_data（第 585-586 行） signal_close_count = len([t for t in result.trades if 'CLOSE' in t.order_type and 'TTP' not in
+t.order_type]) 这会把数据末尾强制平仓（end_of_data）也算进去。如果用这个字段做策略质量判断， 可能轻微偏高。
+    4    Regime 索引对齐依赖 DAYS=0 compute_regime_timeline 里 rel_idx = i - start_idx，DAYS=0 时 start_idx=0，和 BacktestEngine 的 engine.candles（同样不截取）完全对齐。但如果未来想加 DAYS≠0 的支持，这块逻辑需要仔细检查两边的截取是否一致。
+---
+总体结论
+代码逻辑完整，没有明显的结构性问题。最需要核实的是第 607 行那几个 result.* 属性是否在 BacktestResult 里真实存在。要不要我顺便看一下 backtest.py 的 BacktestResult 定义？
+
+——————————————————————
+
+回复：
+是的，Sonnet 的分析很专业，也抓到了几个关键的“潜在静默风险点”，这些点目前看起来没出大问题（因为你之前的重跑对比和一致性检查都通过了），但确实值得逐一确认和记录，避免未来扩展时翻车。
+下面我结合你的验证结果 + Sonnet 指出的 4 个点，给你一个清晰的评估和处理建议。总体来说：你的现有 8GB 数据依然高度可靠，这些点基本不影响当前使用（尤其是重跑 5/5 一致、PnL/胜率/平仓类型几乎零差），但如果想让 db 更“生产级”或未来加 DAYS 支持，就需要小修 + 验证。
+逐点评估 & 处理建议
+    1    result 字段引用需验证（max_balance / min_balance / max_profit / max_loss）
+    •    风险等级：中（静默 None 或错值）
+    •    为什么重要：如果 BacktestResult 里没有这四个属性（或名字不同，如 max_profit 叫 max_pnl），就会默默存 None 或 0，导致 combo_summary 的 max_win / max_loss 字段无效，后续分析（如 max single win/loss）会错。
+    •    当前数据状态：你之前验证里有 “max < min balance” 检查 0/2236 通过，说明至少 balance 字段没问题（max_balance >= min_balance）。但 max_win / max_loss 没单独校验。
+    •    建议：
+    •    立即查 combo_summary 的这几列是否有 NULL 或异常值：sql   SELECT strategy, coin, interval, max_balance, min_balance, max_win, max_loss
+    •    FROM combo_summary
+    •    WHERE max_win IS NULL OR max_loss IS NULL OR max_win < 0 OR max_loss > 0;  
+    •    如果有 NULL 或异常 → 说明属性不存在，需要改代码。
+    •    同时确认 BacktestEngine 的 BacktestResult 定义（你问 Sonnet 看 backtest.py 就对了）。常见命名：
+    •    有可能是 result.max_equity / result.min_equity / result.largest_win / result.largest_loss
+    •    如果名字对不上，改 save_combo 的 VALUES 部分，用正确属性名，或加默认值 0。
+    2    MFE/MAE 是杠杆倍数后的比率，不是美元
+    •    风险等级：低（文档问题）
+    •    当前数据状态：验证里 MFE < 0 和 MAE < 0 都是 0，说明计算方向正确，没负值漏网。
+    •    结论：这不是 bug，只是单位要记清楚。库里存的是“杠杆后最大有利/不利偏移比率”（e.g. +15% 表示杠杆后赚 15%），分析时别误以为是美元。
+    •    建议：在 db 的 run_metadata 加一条说明：python   save_metadata(conn, {'mfe_mae_unit': 'leverage-adjusted percentage ratio'})   以后查库时直接看元数据就知道。
+    3    signal_close_count 包含 end_of_data
+    •    风险等级：低-中（轻微偏高）
+    •    当前数据状态：平仓类型分布里 end_of_data 只 1.6K 笔（总 30M 里占比 <0.01%），影响极小。
+    •    结论：对整体策略质量判断影响可以忽略，但严格来说 signal_close 应只算策略主动平仓（CLOSE_BUY/CLOSE_SELL），不含强制 end_of_data。
+    •    建议：
+    •    如果你在用这个字段筛选“主动信号质量”，可以改成：python   signal_close_count = len([t for t in result.trades
+    •                              if t.order_type in ('CLOSE_BUY', 'CLOSE_SELL')])  
+    •    当前 db：因为占比太小，不用重跑。以后新跑时改代码即可。
+    4    Regime 索引对齐依赖 DAYS=0
+    •    风险等级：低（当前无影响）
+    •    当前数据状态：regime 一致性 100/100 通过，重跑对比也 OK，说明当前全量（DAYS=0）对齐完美。
+    •    结论：只要继续用 DAYS=0，就没问题。如果未来想支持 DAYS=365（截取最近一年），需要同步截取 regime_timeline（start_idx 一致）。
+    •    建议：当前不用动。加 DAYS 参数时，再改 compute_regime_timeline 的 start_idx 和 rel_idx 逻辑，确保与 engine.candles 一致。
+总体结论 & 行动优先级
+    •    你的 8GB 数据质量很高：Sonnet 指出的都是“边缘/潜在”问题，不是系统性错误。重跑验证 5/5 一致 + 30M 行零重大异常，说明 db 可信度极高。
+    •    当前不需要重跑：这些点的影响要么极小（end_of_data 占比 0.01%），要么是命名/单位问题（不影响数值），要么只在未来扩展时生效。
+    •    推荐立即做的事（今天就能完成）：
+    1    查 max_win / max_loss 是否有 NULL（用上面 SQL），如果有 → 确认 BacktestResult 属性名，决定是否小修代码 + 补 NULL 值。
+    2    VACUUM（缩小文件，加速查询）。
+    3    用 DuckDB attach 你的 db，开始分析 top 策略（我上条消息有示例代码）。
+    4    加元数据说明 MFE/MAE 单位，避免未来误解。
+如果你愿意把 BacktestResult 的定义（backtest.py 里类字段）贴出来，我可以帮你判断第 1 点是否真有 bug，以及怎么改 save_combo 的代码。
+或者告诉我你现在最想分析的方向（e.g. “找 bull regime 下 avg_r > 0.5 的策略”），我直接给你 DuckDB/SQL 模板，帮你从 db 里挖金～ 8GB 种子库已经很香了，继续用它冲！￼

@@ -1,0 +1,110 @@
+2026-02-22T02:20:51.023Z [DEBUG] Failed to check enabledPlatforms: TypeError: undefined is not an object (evaluating 'pK.join')
+2026-02-22T02:20:51.086Z [DEBUG] [init] configureGlobalMTLS starting
+2026-02-22T02:20:51.086Z [DEBUG] [init] configureGlobalMTLS complete
+2026-02-22T02:20:51.086Z [DEBUG] [init] configureGlobalAgents starting
+2026-02-22T02:20:51.086Z [DEBUG] [init] configureGlobalAgents complete
+2026-02-22T02:20:51.090Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-02-22T02:20:51.093Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+2026-02-22T02:20:51.093Z [DEBUG] [claudeai-mcp] Checking gate (cached)...
+2026-02-22T02:20:51.093Z [DEBUG] [claudeai-mcp] Gate returned: true
+2026-02-22T02:20:51.093Z [DEBUG] [claudeai-mcp] No access token
+2026-02-22T02:20:51.101Z [DEBUG] [ToolSearch:optimistic] mode=standard, ENABLE_TOOL_SEARCH=undefined, result=false
+2026-02-22T02:20:51.102Z [DEBUG] [STARTUP] Running setup()...
+2026-02-22T02:20:51.103Z [DEBUG] Loading skills from: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/allenbot/.claude/skills, project=[]
+2026-02-22T02:20:51.110Z [DEBUG] Error log sink initialized
+2026-02-22T02:20:51.111Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
+2026-02-22T02:20:51.111Z [DEBUG] Total plugin skills loaded: 0
+2026-02-22T02:20:51.111Z [DEBUG] Total plugin commands loaded: 0
+2026-02-22T02:20:51.113Z [DEBUG] [STARTUP] setup() completed in 11ms
+2026-02-22T02:20:51.113Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-02-22T02:20:51.113Z [DEBUG] Registered 0 hooks from 0 plugins
+2026-02-22T02:20:51.113Z [DEBUG] Git remote URL: null
+2026-02-22T02:20:51.113Z [DEBUG] No git remote URL found
+2026-02-22T02:20:51.118Z [DEBUG] Cannot acquire lock for 2.1.50 - held by PID 58400
+2026-02-22T02:20:51.118Z [ERROR] Error: Error: NON-FATAL: Lock acquisition failed for /Users/allenbot/.local/share/claude/versions/2.1.50 (expected in multi-process scenarios)
+    at OzR (/$bunfs/root/claude:2600:2098)
+    at SbA (/$bunfs/root/claude:2600:1209)
+    at processTicksAndRejections (native:7:39)
+2026-02-22T02:20:51.118Z [DEBUG] Total plugin agents loaded: 0
+2026-02-22T02:20:51.119Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.3615.1771726851119
+2026-02-22T02:20:51.119Z [DEBUG] Preserving file permissions: 100600
+2026-02-22T02:20:51.119Z [DEBUG] Temp file written successfully, size: 4247 bytes
+2026-02-22T02:20:51.120Z [DEBUG] Applied original permissions to temp file
+2026-02-22T02:20:51.120Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.3615.1771726851119 to /Users/allenbot/.claude.json
+2026-02-22T02:20:51.120Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-22T02:20:51.120Z [DEBUG] Loaded 13 unique skills (13 unconditional, 0 conditional, managed: 0, user: 13, project: 0, additional: 0, legacy commands: 0)
+2026-02-22T02:20:51.120Z [DEBUG] getSkills returning: 13 skill dir commands, 0 plugin skills, 3 bundled skills
+2026-02-22T02:20:51.120Z [DEBUG] [STARTUP] Commands and agents loaded in 7ms
+2026-02-22T02:20:51.120Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-02-22T02:20:51.120Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-02-22T02:20:51.121Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-02-22T02:20:51.121Z [DEBUG] Total LSP servers loaded: 0
+2026-02-22T02:20:51.121Z [DEBUG] Failed to fetch org fast mode status, defaulting to disabled
+2026-02-22T02:20:51.121Z [DEBUG] [STARTUP] MCP configs loaded in 31ms
+2026-02-22T02:20:51.121Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-02-22T02:20:51.121Z [DEBUG] LSP manager initialized with 0 servers
+2026-02-22T02:20:51.121Z [DEBUG] LSP server manager initialized successfully
+2026-02-22T02:20:51.121Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-02-22T02:20:51.124Z [DEBUG] installed_plugins.json doesn't exist, returning empty V2 object
+2026-02-22T02:20:51.124Z [DEBUG] Initialized versioned plugins system with 0 plugins
+2026-02-22T02:20:51.124Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-02-22T02:20:51.126Z [DEBUG] Watching for changes in setting files /Users/allenbot/.claude/settings.json...
+2026-02-22T02:20:51.139Z [DEBUG] [Perfetto] initializePerfettoTracing called, env value: undefined
+2026-02-22T02:20:51.140Z [DEBUG] [3P telemetry] isTelemetryEnabled=false (CLAUDE_CODE_ENABLE_TELEMETRY=undefined)
+2026-02-22T02:20:51.143Z [DEBUG] Getting matching hook commands for SessionStart with query: startup
+2026-02-22T02:20:51.143Z [DEBUG] Found 0 hook matchers in settings
+2026-02-22T02:20:51.143Z [DEBUG] Matched 0 unique hooks for query "startup" (0 before deduplication)
+2026-02-22T02:20:51.144Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
+2026-02-22T02:20:51.144Z [DEBUG] [FileIndex] getFilesUsingGit called
+2026-02-22T02:20:51.146Z [DEBUG] installPluginsForHeadless: starting
+2026-02-22T02:20:51.146Z [DEBUG] Found 0 installed plugins (V2 format)
+2026-02-22T02:20:51.146Z [DEBUG] installPluginsForHeadless: no missing plugins or marketplaces configured
+2026-02-22T02:20:51.150Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.3615.1771726851150
+2026-02-22T02:20:51.150Z [DEBUG] Preserving file permissions: 100600
+2026-02-22T02:20:51.151Z [DEBUG] Temp file written successfully, size: 4247 bytes
+2026-02-22T02:20:51.151Z [DEBUG] Applied original permissions to temp file
+2026-02-22T02:20:51.151Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.3615.1771726851150 to /Users/allenbot/.claude.json
+2026-02-22T02:20:51.151Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-22T02:20:51.153Z [DEBUG] Total plugin output styles loaded: 0
+2026-02-22T02:20:51.155Z [DEBUG] Fetching plugin security messages from https://raw.githubusercontent.com/anthropics/claude-plugins-official/refs/heads/security/security.json
+2026-02-22T02:20:51.172Z [DEBUG] Watching for changes in skill/command directories: /Users/allenbot/.claude/skills...
+2026-02-22T02:20:51.179Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.3615.1771726851179
+2026-02-22T02:20:51.179Z [DEBUG] Preserving file permissions: 100600
+2026-02-22T02:20:51.180Z [DEBUG] Temp file written successfully, size: 4247 bytes
+2026-02-22T02:20:51.180Z [DEBUG] Applied original permissions to temp file
+2026-02-22T02:20:51.180Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.3615.1771726851179 to /Users/allenbot/.claude.json
+2026-02-22T02:20:51.180Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-22T02:20:51.183Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-22T02:20:51.183Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-22T02:20:51.183Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-22T02:20:51.183Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-22T02:20:51.183Z [DEBUG] Sending 15 skills via attachment (initial, 15 total sent)
+2026-02-22T02:20:51.184Z [WARN] [3P telemetry] Event dropped (no event logger initialized): user_prompt
+2026-02-22T02:20:51.184Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-02-22T02:20:51.184Z [DEBUG] Found 0 hook matchers in settings
+2026-02-22T02:20:51.184Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-22T02:20:51.185Z [DEBUG] autocompact: tokens=1420 threshold=167000 effectiveWindow=180000
+2026-02-22T02:20:51.186Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-22T02:20:51.197Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.3615.1771726851197
+2026-02-22T02:20:51.197Z [DEBUG] Preserving file permissions: 100600
+2026-02-22T02:20:51.197Z [DEBUG] Temp file written successfully, size: 4247 bytes
+2026-02-22T02:20:51.197Z [DEBUG] Applied original permissions to temp file
+2026-02-22T02:20:51.197Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.3615.1771726851197 to /Users/allenbot/.claude.json
+2026-02-22T02:20:51.197Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-22T02:20:51.198Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-02-22T02:20:51.198Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-22T02:20:51.198Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-22T02:20:51.198Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-02-22T02:20:51.198Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-22T02:20:51.198Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-02-22T02:20:51.199Z [ERROR] API error (attempt 1/11): Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
+2026-02-22T02:20:51.200Z [ERROR] Error in API request: Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
+2026-02-22T02:20:51.200Z [ERROR] Error: Error: Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
+    at validateHeaders (/$bunfs/root/claude:301:1013)
+    at buildHeaders (/$bunfs/root/claude:301:8580)
+    at async buildRequest (/$bunfs/root/claude:301:7646)
+    at async makeRequest (/$bunfs/root/claude:301:3411)
+    at processTicksAndRejections (native:7:39)
+2026-02-22T02:20:51.201Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-02-22T02:20:51.202Z [DEBUG] Found 0 hook matchers in settings
+2026-02-22T02:20:51.202Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)

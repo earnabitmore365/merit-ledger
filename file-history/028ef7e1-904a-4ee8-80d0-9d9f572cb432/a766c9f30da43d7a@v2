@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""
+ATR Combo Strategy (Route A+B)
+
+Combines pullback entry (Route A) and squeeze breakout (Route B).
+Either condition triggers entry, covering both market rhythms.
+
+Route A: VWAP slope up + RSI oversold = buy the dip
+Route B: ATR squeeze then breakout = ride the explosion
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class ATRComboConfig:
+    # Shared
+    atr_period: int = 14
+    vwap_period: int = 20
+    # Route A: pullback
+    rsi_period: int = 14
+    vwap_slope_lookback: int = 5
+    rsi_oversold: float = 35.0
+    rsi_overbought: float = 65.0
+    # Route B: squeeze
+    atr_avg_period: int = 50
+    squeeze_factor: float = 0.75
+
+
+class ATRCombo(Strategy):
+
+    def __init__(self, exchange=None, config: Optional[ATRComboConfig] = None):
+        self.exchange = exchange
+        self.config = config or ATRComboConfig()
+
+    @property
+    def name(self) -> str:
+        return "atr_combo"
+
+    def calculate_atr_series(self, klines: List[Dict], period: int = None) -> List[float]:
+        if period is None:
+            period = self.config.atr_period
+        tr_list = []
+        for i in range(1, len(klines)):
+            high = klines[i]["high"]
+            low = klines[i]["low"]
+            prev_close = klines[i - 1]["close"]
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            tr_list.append(tr)
+        atr_series = []
+        for i in range(len(tr_list)):
+            if i < period - 1:
+                atr_series.append(sum(tr_list[:i + 1]) / (i + 1))
+            else:
+                atr_series.append(sum(tr_list[i - period + 1:i + 1]) / period)
+        return atr_series
+
+    def calculate_vwap(self, klines: List[Dict], period: int = None) -> float:
+        if period is None:
+            period = self.config.vwap_period
+        if len(klines) < period:
+            return sum(c["close"] for c in klines) / len(klines)
+        tp_sum = 0.0
+        vol_sum = 0.0
+        for c in klines[-period:]:
+            tp = (c["high"] + c["low"] + c["close"]) / 3
+            v = c.get("volume", 1000)
+            tp_sum += tp * v
+            vol_sum += v
+        return tp_sum / vol_sum if vol_sum else 0.0
+
+    def calculate_vwap_at(self, klines: List[Dict], end_idx: int, period: int = None) -> float:
+        if period is None:
+            period = self.config.vwap_period
+        start = max(0, end_idx - period + 1)
+        subset = klines[start:end_idx + 1]
+        if not subset:
+            return 0.0
+        tp_sum = 0.0
+        vol_sum = 0.0
+        for c in subset:
+            tp = (c["high"] + c["low"] + c["close"]) / 3
+            v = c.get("volume", 1000)
+            tp_sum += tp * v
+            vol_sum += v
+        return tp_sum / vol_sum if vol_sum else 0.0
+
+    def calculate_rsi(self, klines: List[Dict], period: int = None) -> float:
+        if period is None:
+            period = self.config.rsi_period
+        if len(klines) < period + 1:
+            return 50.0
+        gains = []
+        losses = []
+        for i in range(1, len(klines)):
+            change = klines[i]["close"] - klines[i - 1]["close"]
+            gains.append(max(change, 0))
+            losses.append(max(-change, 0))
+        if len(gains) < period:
+            return 50.0
+        avg_gain = sum(gains[:period]) / period
+        avg_loss = sum(losses[:period]) / period
+        for i in range(period, len(gains)):
+            avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+            avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        if avg_loss == 0:
+            return 100.0
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = max(self.config.atr_avg_period + self.config.atr_period,
+                          self.config.vwap_period + self.config.vwap_slope_lookback,
+                          self.config.rsi_period) + 5
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        current = klines[-1]["close"]
+        vwap = self.calculate_vwap(klines)
+        if vwap == 0:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"],
+                metadata={"reason": "VWAP calculation failed"},
+            )
+
+        # === Route A: Pullback ===
+        vwap_prev = self.calculate_vwap_at(klines, len(klines) - 1 - self.config.vwap_slope_lookback)
+        vwap_slope = (vwap - vwap_prev) / vwap_prev if vwap_prev else 0
+        rsi = self.calculate_rsi(klines)
+
+        route_a_signal = Signal.HOLD
+        route_a_conf = 0.0
+        if vwap_slope > 0 and rsi < self.config.rsi_oversold:
+            route_a_signal = Signal.BUY
+            route_a_conf = (self.config.rsi_oversold - rsi) / self.config.rsi_oversold
+        elif vwap_slope < 0 and rsi > self.config.rsi_overbought:
+            route_a_signal = Signal.SELL
+            route_a_conf = (rsi - self.config.rsi_overbought) / (100 - self.config.rsi_overbought)
+
+        # === Route B: Squeeze ===
+        atr_series = self.calculate_atr_series(klines)
+        route_b_signal = Signal.HOLD
+        route_b_conf = 0.0
+
+        if len(atr_series) >= self.config.atr_avg_period + 1:
+            atr_current = atr_series[-1]
+            atr_prev = atr_series[-2]
+            atr_avg = sum(atr_series[-self.config.atr_avg_period:]) / self.config.atr_avg_period
+
+            if atr_avg > 0:
+                was_squeezed = atr_prev < atr_avg * self.config.squeeze_factor
+                is_expanding = atr_current > atr_avg
+
+                if was_squeezed and is_expanding:
+                    expansion_ratio = atr_current / atr_avg
+                    route_b_conf = min((expansion_ratio - 1.0) * 2, 1.0)
+                    if current > vwap:
+                        route_b_signal = Signal.BUY
+                    elif current < vwap:
+                        route_b_signal = Signal.SELL
+
+        # === Combine: either trigger fires ===
+        # Priority: if both fire same direction, boost confidence
+        # If conflict, take the higher confidence one
+        signal = Signal.HOLD
+        confidence = 0.0
+        trigger = "none"
+
+        if route_a_signal != Signal.HOLD and route_b_signal != Signal.HOLD:
+            if route_a_signal == route_b_signal:
+                # Both agree
+                signal = route_a_signal
+                confidence = min((route_a_conf + route_b_conf) / 2 + 0.2, 1.0)
+                trigger = "both_agree"
+            else:
+                # Conflict: take higher confidence
+                if route_a_conf >= route_b_conf:
+                    signal = route_a_signal
+                    confidence = route_a_conf * 0.7  # discount for conflict
+                    trigger = "pullback_override"
+                else:
+                    signal = route_b_signal
+                    confidence = route_b_conf * 0.7
+                    trigger = "squeeze_override"
+        elif route_a_signal != Signal.HOLD:
+            signal = route_a_signal
+            confidence = route_a_conf
+            trigger = "pullback"
+        elif route_b_signal != Signal.HOLD:
+            signal = route_b_signal
+            confidence = route_b_conf
+            trigger = "squeeze"
+
+        atr_current = atr_series[-1] if atr_series else 0
+
+        return TradingSignal(
+            signal=signal,
+            confidence=min(confidence, 1.0),
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "atr": atr_current, "vwap": vwap, "vwap_slope": vwap_slope,
+                "rsi": rsi, "price": current, "trigger": trigger,
+                "route_a": route_a_signal.name, "route_b": route_b_signal.name,
+            },
+        )

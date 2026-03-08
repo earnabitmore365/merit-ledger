@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""
+CCI Strategy - Commodity Channel Index
+
+Commodity-based oscillator.
+
+Features:
+- Typical price calculation
+- Mean deviation
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+import statistics
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class CCIConfig:
+    """CCI configuration"""
+    period: int = 20
+
+
+class CCI(Strategy):
+    """Commodity Channel Index trading strategy"""
+    
+    def __init__(self, exchange=None, config: Optional[CCIConfig] = None):
+        """Initialize CCI strategy
+        
+        Args:
+            exchange: Exchange adapter
+            config: Strategy configuration
+        """
+        self.exchange = exchange
+        self.config = config or CCIConfig()
+    
+    @property
+    def name(self) -> str:
+        return "cci"
+    
+    def calculate_cci(self, klines: List[Dict]) -> float:
+        """Calculate CCI
+        
+        Args:
+            klines: OHLCV data
+            
+        Returns:
+            CCI value
+        """
+        period = self.config.period
+        
+        if len(klines) < period:
+            return 0.0
+        
+        # Typical price
+        tp = [(c["high"] + c["low"] + c["close"]) / 3 for c in klines[-period :]]
+        
+        # SMA of TP
+        ma = sum(tp) / period
+        
+        # Mean deviation
+        mad = sum(abs(t - ma) for t in tp) / period
+        
+        if mad == 0:
+            return 0.0
+        
+        return (tp[-1] - ma) / (0.015 * mad)
+    
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        """Generate CCI signal
+        
+        Args:
+            coin: Trading pair
+            klines: OHLCV data
+            
+        Returns:
+            TradingSignal with CCI analysis
+        """
+        # Validate klines
+        min_required = self.config.period
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+        
+        # Calculate CCI
+        cci = self.calculate_cci(klines)
+        
+        # Generate signal
+        if cci < -100:
+            signal = Signal.BUY
+            trend = "oversold"
+        if cci > 100:
+            signal = Signal.SELL
+            trend = "overbought"
+        else:
+            signal = Signal.HOLD
+            trend = "neutral"
+        
+        return TradingSignal(
+            signal=signal,
+            confidence=min(abs(cci) / 200, 1.0),
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "cci": cci,
+                "trend": trend,
+            },
+        )

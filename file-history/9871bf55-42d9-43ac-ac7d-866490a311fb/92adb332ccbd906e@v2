@@ -1,0 +1,31 @@
+# 项目记忆
+
+## 项目概览
+这是一个加密货币交易项目，包含多个交易策略子项目。
+
+## 子项目列表
+- **auto-trading/** - 主要自动交易项目，使用Python开发
+- **dex-arbitrage-monitor/** - DEX套利监控
+- **funding-arbitrage-sim/** - 资金费率套利模拟
+- **grid-trading-sim/** - 网格交易模拟
+- **spot-futures-arbitrage/** - 现货期货套利
+- **triangular-arbitrage/** - 三角套利
+
+## 开发标准
+项目使用Python开发，遵循以下标准：
+- Python 3.11+
+- 类型注解 + Pydantic v2
+- ruff + black 格式化
+- 异步优先 (asyncio + httpx)
+- TDD测试驱动开发
+- 严格分层架构
+
+## 主要项目 CLAUDEmd
+`project/auto-trading/CLAUDEmd.md` 包含详细开发规范。
+
+## 下一步
+需要了解你具体想让我记忆什么内容：
+- 项目目标/愿景？
+- 特定的开发规范？
+- 特定的功能需求？
+- 团队协作方式？

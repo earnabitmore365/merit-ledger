@@ -1,0 +1,11 @@
+{
+  "id": "9",
+  "subject": "验证 + 写报告",
+  "description": "verify_seed.py四维度验证 + 抽查新周期regime分布 + 写报告到handoff.md",
+  "activeForm": "验证并写报告",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": [
+    "8"
+  ]
+}

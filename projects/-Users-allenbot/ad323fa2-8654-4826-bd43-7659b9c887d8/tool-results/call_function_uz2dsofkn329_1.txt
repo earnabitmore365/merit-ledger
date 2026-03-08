@@ -1,0 +1,8 @@
+Python path:
+  
+  /opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python311.zip
+  /opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python3.11
+  /opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python3.11/lib-dynload
+  /Users/allenbot/Library/Python/3.11/lib/python/site-packages
+  /opt/homebrew/lib/python3.11/site-packages
+  /opt/homebrew/opt/python-tk@3.11/libexec

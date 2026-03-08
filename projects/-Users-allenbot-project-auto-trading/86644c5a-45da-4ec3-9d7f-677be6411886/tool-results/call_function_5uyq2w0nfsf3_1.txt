@@ -1,0 +1,281 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→Exchange Adapter Base
+     4→
+     5→交易所适配器基类
+     6→所有交易所适配器都必须实现以下接口
+     7→"""
+     8→
+     9→from abc import ABC, abstractmethod
+    10→from dataclasses import dataclass
+    11→from typing import Dict, List, Optional
+    12→from enum import Enum
+    13→
+    14→
+    15→# ==================== 枚举定义 ====================
+    16→
+    17→class OrderSide(Enum):
+    18→    """订单方向"""
+    19→    BUY = "BUY"
+    20→    SELL = "SELL"
+    21→
+    22→
+    23→class OrderType(Enum):
+    24→    """订单类型"""
+    25→    MARKET = "MARKET"
+    26→    LIMIT = "LIMIT"
+    27→
+    28→
+    29→# ==================== 数据类定义 ====================
+    30→
+    31→@dataclass
+    32→class OrderRequest:
+    33→    """订单请求
+    34→    
+    35→    Attributes:
+    36→        coin: 币种名称
+    37→        side: 订单方向 (BUY/SELL)
+    38→        order_type: 订单类型 (MARKET/LIMIT)
+    39→        size: 订单数量
+    40→        price: 订单价格（限价单必填）
+    41→    """
+    42→    coin: str
+    43→    side: OrderSide
+    44→    order_type: OrderType
+    45→    size: float
+    46→    price: Optional[float] = None
+    47→
+    48→
+    49→@dataclass
+    50→class OrderResult:
+    51→    """订单结果
+    52→    
+    53→    Attributes:
+    54→        success: 是否成功
+    55→        order_id: 订单ID
+    56→        message: 结果消息
+    57→        filled_price: 成交价格
+    58→        filled_size: 成交数量
+    59→    """
+    60→    success: bool
+    61→    order_id: Optional[str] = None
+    62→    message: str = ""
+    63→    filled_price: Optional[float] = None
+    64→    filled_size: Optional[float] = None
+    65→
+    66→
+    67→@dataclass
+    68→class Position:
+    69→    """持仓信息
+    70→    
+    71→    Attributes:
+    72→        coin: 币种名称
+    73→        side: 持仓方向 (LONG/SHORT)
+    74→        size: 持仓数量
+    75→        entry_price: 开仓价格
+    76→        unrealized_pnl: 未实现盈亏
+    77→    """
+    78→    coin: str
+    79→    side: str  # "LONG" or "SHORT"
+    80→    size: float
+    81→    entry_price: float
+    82→    unrealized_pnl: float = 0.0
+    83→
+    84→
+    85→# ==================== 交易所适配器基类 ====================
+    86→
+    87→class ExchangeAdapter(ABC):
+    88→    """交易所适配器基类
+    89→    
+    90→    所有交易所适配器都必须继承此类并实现所有抽象方法
+    91→    负责封装交易所 API，提供统一的接口
+    92→    
+    93→    Usage:
+    94→        class HyperLiquidAdapter(ExchangeAdapter):
+    95→            def get_price(self, coin: str) -> float:
+    96→                ...
+    97→    """
+    98→    
+    99→    def __init__(self, config: Dict):
+   100→        """初始化
+   101→        
+   102→        Args:
+   103→            config: 交易所配置（API Key, Secret 等）
+   104→        """
+   105→        self.config = config
+   106→        self._connected = False
+   107→    
+   108→    # ==================== 连接管理 ====================
+   109→    
+   110→    @abstractmethod
+   111→    def connect(self) -> bool:
+   112→        """连接交易所
+   113→        
+   114→        Returns:
+   115→            bool: 是否连接成功
+   116→        """
+   117→        pass
+   118→    
+   119→    @abstractmethod
+   120→    def disconnect(self) -> None:
+   121→        """断开连接"""
+   122→        pass
+   123→    
+   124→    @abstractmethod
+   125→    def health_check(self) -> bool:
+   126→        """健康检查
+   127→        
+   128→        Returns:
+   129→            bool: 交易所是否健康
+   130→        """
+   131→        pass
+   132→    
+   133→    # ==================== 行情数据 ====================
+   134→    
+   135→    @abstractmethod
+   136→    def get_price(self, coin: str) -> float:
+   137→        """获取当前价格
+   138→        
+   139→        Args:
+   140→            coin: 币种名称（如 "ETH"）
+   141→        
+   142→        Returns:
+   143→            float: 当前价格
+   144→        """
+   145→        pass
+   146→    
+   147→    @abstractmethod
+   148→    def get_klines(
+   149→        self,
+   150→        coin: str,
+   151→        interval: str = "1h",
+   152→        limit: int = 100
+   153→    ) -> List[Dict]:
+   154→        """获取 K 线数据
+   155→        
+   156→        Args:
+   157→            coin: 币种名称
+   158→            interval: K 线周期（1m, 5m, 15m, 1h, 4h）
+   159→            limit: 获取数量
+   160→        
+   161→        Returns:
+   162→            List[Dict]: K 线数据列表
+   163→            [{
+   164→                'timestamp': 1234567890,
+   165→                'open': 100.0,
+   166→                'high': 105.0,
+   167→                'low': 99.0,
+   168→                'close': 103.0,
+   169→                'volume': 1000.0,
+   170→            }]
+   171→        """
+   172→        pass
+   173→    
+   174→    # ==================== 订单操作 ====================
+   175→    
+   176→    @abstractmethod
+   177→    def place_order(self, order: OrderRequest) -> OrderResult:
+   178→        """下单
+   179→        
+   180→        Args:
+   181→            order: 订单请求
+   182→        
+   183→        Returns:
+   184→            OrderResult: 订单结果
+   185→        """
+   186→        pass
+   187→    
+   188→    @abstractmethod
+   189→    def cancel_order(self, order_id: str) -> bool:
+   190→        """取消订单
+   191→        
+   192→        Args:
+   193→            order_id: 订单 ID
+   194→        
+   195→        Returns:
+   196→            bool: 是否成功
+   197→        """
+   198→        pass
+   199→    
+   200→    @abstractmethod
+   201→    def get_order_status(self, order_id: str) -> Dict:
+   202→        """查询订单状态
+   203→        
+   204→        Args:
+   205→            order_id: 订单 ID
+   206→        
+   207→        Returns:
+   208→            Dict: 订单状态
+   209→        """
+   210→        pass
+   211→    
+   212→    # ==================== 持仓管理 ====================
+   213→    
+   214→    @abstractmethod
+   215→    def get_positions(self) -> List[Position]:
+   216→        """获取所有持仓
+   217→        
+   218→        Returns:
+   219→            List[Position]: 持仓列表
+   220→        """
+   221→        pass
+   222→    
+   223→    @abstractmethod
+   224→    def get_position(self, coin: str) -> Optional[Position]:
+   225→        """获取指定币种持仓
+   226→        
+   227→        Args:
+   228→            coin: 币种名称
+   229→        
+   230→        Returns:
+   231→            Optional[Position]: 持仓信息，不存在返回 None
+   232→        """
+   233→        pass
+   234→    
+   235→    # ==================== 账户管理 ====================
+   236→    
+   237→    @abstractmethod
+   238→    def get_balance(self) -> Dict:
+   239→        """获取账户余额
+   240→        
+   241→        Returns:
+   242→            Dict: 余额信息
+   243→            {
+   244→                'usdc': 1000.0,
+   245→                'available': 900.0,
+   246→            }
+   247→        """
+   248→        pass
+   249→    
+   250→    @abstractmethod
+   251→    def close_position(self, coin: str) -> OrderResult:
+   252→        """平仓
+   253→        
+   254→        Args:
+   255→            coin: 币种名称
+   256→        
+   257→        Returns:
+   258→            OrderResult: 平仓结果
+   259→        """
+   260→        pass
+   261→    
+   262→    # ==================== 工具方法 ====================
+   263→    
+   264→    def is_connected(self) -> bool:
+   265→        """检查是否已连接"""
+   266→        return self._connected
+   267→    
+   268→    def get_exchange_name(self) -> str:
+   269→        """获取交易所名称（子类实现）"""
+   270→        raise NotImplementedError
+   271→    
+   272→    def __repr__(self) -> str:
+   273→        """字符串表示"""
+   274→        name = self.get_exchange_name() if hasattr(self, 'get_exchange_name') else 'Unknown'
+   275→        status = "已连接" if self._connected else "未连接"
+   276→        return f"<{name} Exchange: {status}>"
+   277→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

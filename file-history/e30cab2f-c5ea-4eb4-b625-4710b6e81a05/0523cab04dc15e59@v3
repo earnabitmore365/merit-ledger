@@ -1,0 +1,115 @@
+# CHECKPOINT — Auto-Trading 项目状态
+
+> 最后更新：2026-02-27
+
+## 任务历程
+
+1. ✅ 初始系统搭建 — v1.4，44策略、HyperLiquid适配器、回测引擎、curses UI
+2. ✅ UI 重构 — v1.5，BaseMenu组件库、trade_menu 7步流程、紧凑卡片面板
+3. ✅ 全矩阵回测 — 1521份报告，确定 proc+LINK+15m 为首选
+4. ✅ Regime Detection v1（MA+RSI）— 完成但效果不好，切换1680次/年，跑不过单proc
+5. ✅ 研究更好的判断方法 — 结论：ADX三层复合做主判断 + 链上指标辅助；regime当过滤器用而非切换器
+6. ✅ 建立指标库 src/indicators/ — 12个指标，12/12验证通过，MarketScore=0.684(buy)，BGeometrics限速8次/小时用6h缓存
+7. ⬜ **整合指标进交易系统**（当前目标）
+
+---
+
+## 当前任务：整合指标进交易系统
+
+### 目标
+让交易机器人和回测引擎能利用 MarketScore 综合打分来：
+- 更准确地判断市场趋势（替代 MA+RSI 的 Regime Detection）
+- 回测时验证指标有效性
+- 实盘时辅助决策（过滤信号、调整仓位、显示在面板上）
+
+### 关键决策
+- **过滤器而非切换器**：regime detection 用来过滤不利条件/降低仓位，不是在策略间来回跳。QuantConnect 社区验证过，切换器模式在实盘中频繁切换导致策略还没发挥就被换掉
+- **ADX 是主判断**：ADX(14) 判趋势有无 → SMA(50)斜率判方向 → ATR%防暴涨暴跌
+- **MarketScore 是辅助**：链上+衍生品+情绪综合打分（0-1），用来调整信心度或仓位比例，不直接决定 bull/bear
+- **滞后阈值（Hysteresis）**：进趋势 ADX>25 / 退趋势 ADX<18，不同阈值进出比"连续N次相同"更稳定。最少停留12根K线
+- **回测约束**：不能实时调 API（BGeometrics 8次/小时），回测时必须用本地缓存或历史数据
+
+### v1 失败的具体数据（改进基准）
+- MA(7) vs MA(25) + RSI(14)，cooldown_bars=3（15m=45分钟）
+- 10 币种回测结果：只有 XRP 上 Regime(207%) > proc(106%)，其余 7 个币 proc 赢
+- 核心问题：没有判断趋势强度，市场在 ranging 和弱趋势之间反复横跳 → 1680次切换/年
+
+### ADX 三层复合方案（研究结论）
+```
+第一层：ADX(14) 判断有没有趋势
+  └─ ADX < 20 → ranging（走 mean_reversion 或降低仓位）
+  └─ ADX > 25 → 有趋势，进第二层
+
+第二层：SMA(50) 斜率判方向
+  └─ 斜率 > 0 → bull → proc
+  └─ 斜率 < 0 → bear → demandindex_short
+
+第三层：ATR% vs 历史均值（防暴涨暴跌）
+  └─ ATR% > 2倍均值 → 高波动，降低信心或暂停
+
++ 滞后阈值：进趋势25/退趋势18，最少停留12根K线
+```
+
+### 指标库现状（已完成，可直接调用）
+```python
+from indicators import get_indicator, list_indicators
+
+# 单个指标
+result = get_indicator('ahr999').evaluate()
+print(result.score)   # 0-1 (0=极看空, 1=极看多)
+print(result.signal)  # strong_buy / buy / neutral / sell / strong_sell
+
+# 综合打分（11个子指标加权）
+score = get_indicator('market_score').evaluate()
+# 权重：链上40% + 市场结构25% + 衍生品20% + 情绪15%
+```
+
+12个指标：AHR999, Pi Cycle Top, Funding Rate, Open Interest, Fear & Greed, Stablecoin Supply, BTC Dominance, MVRV, NUPL, Puell Multiple, Exchange Netflow, MarketScore(综合)
+
+### 关键文件（需要改/参考的）
+| 文件 | 说明 | 动作 |
+|------|------|------|
+| `src/trading/regime/detector.py` | 现有 MA+RSI 检测器 | **需要替换为 ADX 三层方案** |
+| `src/trading/regime/strategy.py` | RegimeStrategy 元策略（继承Strategy） | **需要加过滤器逻辑** |
+| `src/trading/regime/config.py` | RegimeDetectorConfig 配置 | **需要更新参数** |
+| `src/indicators/composite.py` | MarketScoreIndicator | 直接调用，不改 |
+| `src/indicators/base.py` | BaseIndicator ABC + 缓存 | 直接调用，不改 |
+| `src/backtest/backtest.py:224` | run_backtest() 已支持 strategy= 参数 | 可能需要小改 |
+| `src/trading/trade_menu.py` | 已有"★ 自动识别"选项 | 可能需要更新 |
+| `src/trading/system.py` | TradingSystem.run_once() | 尽量不改 |
+| `src/core/strategy/base.py` | Strategy 基类 + Signal/TradingSignal | 参考，不改 |
+
+### 现有架构（接手必读）
+```
+RegimeStrategy(Strategy) 元策略设计：
+  - TradingSystem 调用 strategy.generate_signal(coin, klines)
+  - RegimeStrategy 内部：detect regime → cooldown → delegate to sub-strategy
+  - TradingSystem 和 BacktestEngine 不需要改动
+  - trade_menu Step 3 有"★ 自动识别"→ 选 bull/bear/ranging 各用什么策略
+
+DEFAULT_REGIME_MAP = {
+    "bull": "proc",                  # 回测最优
+    "bear": "demandindex_short",     # 熊市做空
+    "ranging": "mean_reversion",     # 震荡回归
+}
+```
+
+### 验证标准
+- 回测切换次数 < 200次/年（v1 是 1680次）
+- 至少 5/10 个币种 Regime > 对应单策略收益
+- Sharpe ratio 不低于单 proc 的 80%
+- 回测用 15m 周期、365天、$500本金、10x杠杆、10%止损
+
+### 状态
+等待 Sonnet 出详细实施方案，确认后由 Opus 执行。
+
+---
+
+## 项目基本信息
+- 路径：`/Users/allenbot/project/auto-trading`
+- 版本：v1.6
+- 语言：Python 3.11+，中文注释和 UI
+- macOS 上用 `python3`（不是 `python`）
+- GitHub：`earnabitmore365/auto-trading` (private)
+- 10币种：BTC, ETH, XRP, BNB, SOL, ADA, TRX, AVAX, LINK, DOT
+- K线数据：1m(526K条), 5m(200K条), 15m(100K条), 1h(30K条) per coin

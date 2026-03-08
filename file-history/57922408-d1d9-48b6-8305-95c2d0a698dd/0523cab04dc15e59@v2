@@ -1,0 +1,126 @@
+# CHECKPOINT — Auto-Trading 项目状态
+
+> 最后更新：2026-02-27
+
+## 任务历程
+
+1. ✅ 初始系统搭建 — v1.4，44策略、HyperLiquid适配器、回测引擎、curses UI
+2. ✅ UI 重构 — v1.5，BaseMenu组件库、trade_menu 7步流程、紧凑卡片面板
+3. ✅ 全矩阵回测 v1 — 1521份报告（复利注码），确定 proc+LINK+15m 为首选
+4. ✅ Regime Detection v1（MA+RSI）— 完成但效果不好，1680次切换/年
+5. ✅ 研究更好的判断方法 — 结论：ADX三层复合 + 滞后阈值；regime当过滤器而非切换器
+6. ✅ 建立指标库 src/indicators/ — 12个指标，MarketScore=0.684(buy)
+7. ✅ 整合指标进交易系统 — Regime v2：ADX(28)+SMA(50)+ATR(14) 三层复合，滞后阈值进25/退18，切换频率 950→273次/年
+8. ✅ 全矩阵回测 v2 — 1720组（43策略×10币种×4周期），固定注码模式，新增翻倍时间指标
+9. ⬜ **种子报告**（当前目标）
+
+---
+
+## 当前任务：种子报告（SQLite 完整回测数据库）
+
+### 目标
+一次跑完所有回测，将**汇总指标 + 每笔交易明细 + regime标签**存入 SQLite，以后所有分析直接查库，永远不用重跑回测。
+
+### 关键决策
+- **SQLite 单文件**：Python 内置 sqlite3 零依赖，支持 SQL 查询，比 JSON 小 60%
+- **配对交易**：将原始 Trade 列表配对为"开仓→平仓"，每笔包含入场价/出场价/PnL/R值/regime标签
+- **Regime 时间线独立计算**：复制 RegimeStrategy 的滞后逻辑但不实例化子策略，每个 (coin, interval) 只算一次
+- **循环顺序优化**：coin → interval → strategy，K线和regime只加载/计算一次，43个策略共享
+
+### 约束条件
+- 不引入新依赖（只用 stdlib sqlite3）
+- 回测参数与 v2 矩阵一致：365天 · $500 · 10x · 止损10% · TTP开 · 固定注码
+- 中断可恢复（每 coin×interval 提交一次事务）
+
+### 数据库 Schema
+```sql
+-- 汇总表（~1720 行）
+combo_summary: id, strategy, coin, interval, total_return, final_balance,
+    max_drawdown, sharpe_ratio, sortino_ratio, calmar_ratio,
+    total_trades, winning_trades, losing_trades, win_rate, avg_win_pct, avg_loss_pct,
+    profit_factor, ttp_count, double_count, fastest_double_days, avg_double_days,
+    daily_open_positions
+
+-- 配对交易表（~850万行）
+paired_trades: id, combo_id, open_candle_idx, close_candle_idx,
+    open_time, close_time, holding_bars, direction, entry_price, exit_price,
+    capital, position_size, pnl, r_value, balance_after,
+    close_type (ttp/stop_loss/signal/liquidation/end_of_data),
+    regime_at_open (bull/bear/ranging/unknown)
+
+-- Regime 时间线（~67万行）
+regime_timeline: coin, interval, candle_idx, candle_time_ms, regime, adx, sma_direction
+
+-- 运行元数据
+run_metadata: key, value
+```
+
+### 关键文件
+| 文件 | 说明 | 动作 |
+|------|------|------|
+| `src/backtest/backtest.py` | 回测引擎 | **改**：加 candles 参数 + trade_candle_indices 追踪 |
+| `src/backtest/generate_seed.py` | 种子生成脚本 | **新建**：三层循环 + 配对算法 + SQLite写入 |
+| `src/trading/regime/detector.py` | ADX检测器 | 参考（regime计算逻辑） |
+| `src/trading/regime/strategy.py` | 滞后阈值逻辑 | 参考（generate_seed 中独立实现） |
+| `src/trading/regime/config.py` | 参数配置 | 参考（ADX周期、阈值） |
+
+### 架构说明
+
+**交易配对算法**：
+```
+open_trade = None
+for trade, idx in zip(trades, candle_indices):
+    if trade.order_type in (BUY, SELL) → open_trade = (trade, idx)
+    elif CLOSE/TTP/LIQUIDATION → 配对 open_trade + close_trade → paired_trades
+```
+
+**平仓类型判定**：
+- `TTP_CLOSE_*` → 'ttp'
+- `LIQUIDATION` → 'liquidation'
+- `CLOSE_*` 且 pnl ≈ -capital → 'stop_loss'
+- 其他 `CLOSE_*` → 'signal'
+- 回测结束平仓 → 'end_of_data'
+
+**Regime 时间线**（独立函数）：
+1. detector.detect_with_details(window) → ADX + SMA方向
+2. 滞后阈值：趋势中 ADX<18 才退出，ranging中 ADX>25 才进入
+3. 禁止 bull↔bear 直接翻转
+4. min_dwell_bars=48, confirm_bars=6
+5. ADX 周期按 interval 缩放：1m→48, 5m→32, 15m→28, 1h→14
+
+**循环顺序**：
+```
+for coin(10) → for interval(4):
+    candles = load_once()
+    regime = compute_once()  # 写入 regime_timeline
+    for strategy(43):
+        engine = BacktestEngine(candles=candles, ...)
+        result = engine.run_backtest(strategy)
+        pair_trades(result) → 写入 paired_trades + combo_summary
+    db.commit()
+```
+
+### 验证标准
+1. `SELECT COUNT(*) FROM paired_trades` → ~850万行
+2. 抽查 combo：paired_trades 汇总 vs combo_summary 指标一致
+3. Regime 分布：bull/bear/ranging 比例合理
+4. 示例查询：`SELECT regime_at_open, AVG(r_value) FROM paired_trades WHERE strategy='proc' GROUP BY regime_at_open`
+
+### 种子报告能回答的问题
+- 每个策略在 bull/bear/ranging 下的表现 → 数据驱动 regime_map
+- 不同注码方式（固定/复利/Kelly）的模拟 → 从 R 值重算
+- TTP 有效性分析（按 regime/策略/持仓时长）
+- 止损触发率 vs 信号平仓率
+- 持仓时间与收益关系
+
+---
+
+## 项目基本信息
+- 路径：`/Users/allenbot/project/auto-trading`
+- 版本：v1.7
+- 语言：Python 3.11+，中文注释和 UI
+- macOS 上用 `python3`（不是 `python`）
+- GitHub：`earnabitmore365/auto-trading` (private)
+- 10币种：BTC, ETH, XRP, BNB, SOL, ADA, TRX, AVAX, LINK, DOT
+- K线数据：1m(526K条), 5m(200K条), 15m(100K条), 1h(30K条) per coin
+- 数据路径：`src/backtest/data/historical/{COIN}/{interval}.json`

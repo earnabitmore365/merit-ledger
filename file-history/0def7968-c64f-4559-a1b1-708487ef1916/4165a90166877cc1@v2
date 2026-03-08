@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""
+ADX Strategy - Average Directional Index（真实实现）
+
+Wilder 标准 ADX 算法：
+1. True Range → +DM / -DM
+2. Wilder 平滑（14期）
+3. +DI14 / -DI14
+4. DX → ADX
+
+信号逻辑：
+- ADX > 25 且 +DI14 > -DI14 → BUY（趋势强 + 方向向上）
+- ADX > 25 且 -DI14 > +DI14 → SELL（趋势强 + 方向向下）
+- ADX < 20                   → HOLD（无趋势）
+- 20 ≤ ADX ≤ 25              → 持仓观望
+"""
+
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class ADXConfig:
+    """ADX strategy configuration"""
+    period: int = 14          # Wilder 标准期数
+    trend_enter: float = 25.0  # ADX 入场阈值（趋势确认）
+    trend_exit: float = 20.0   # ADX 退出阈值（趋势消退）
+
+
+class ADX(Strategy):
+    """ADX trading strategy（真实 Wilder ADX 实现）"""
+
+    def __init__(self, exchange=None, config: Optional[ADXConfig] = None):
+        self.exchange = exchange
+        self.config = config or ADXConfig()
+
+    @property
+    def name(self) -> str:
+        return "adx"
+
+    @staticmethod
+    def _wilder_smooth(values: List[float], period: int) -> List[float]:
+        """Wilder 平滑：第一个值 = SMA(period)，之后 prev*(n-1)/n + curr/n"""
+        if len(values) < period:
+            return []
+        first = sum(values[:period]) / period
+        result = [first]
+        for i in range(period, len(values)):
+            result.append((result[-1] * (period - 1) + values[i]) / period)
+        return result
+
+    def _calc_adx_di(self, klines: List[Dict]) -> Tuple[float, float, float]:
+        """
+        计算 ADX、+DI14、-DI14
+
+        Returns:
+            (adx, plus_di, minus_di)，数据不足返回 (0, 0, 0)
+        """
+        period = self.config.period
+        n = len(klines)
+        if n < period * 2 + 1:
+            return 0.0, 0.0, 0.0
+
+        plus_dm_list = []
+        minus_dm_list = []
+        tr_list = []
+
+        for i in range(1, n):
+            h = klines[i]["high"]
+            l = klines[i]["low"]
+            ph = klines[i - 1]["high"]
+            pl = klines[i - 1]["low"]
+            pc = klines[i - 1]["close"]
+
+            up = h - ph
+            down = pl - l
+            plus_dm_list.append(up if up > down and up > 0 else 0.0)
+            minus_dm_list.append(down if down > up and down > 0 else 0.0)
+            tr_list.append(max(h - l, abs(h - pc), abs(l - pc)))
+
+        smooth_tr = self._wilder_smooth(tr_list, period)
+        smooth_plus = self._wilder_smooth(plus_dm_list, period)
+        smooth_minus = self._wilder_smooth(minus_dm_list, period)
+
+        if not smooth_tr or not smooth_plus or not smooth_minus:
+            return 0.0, 0.0, 0.0
+
+        length = min(len(smooth_tr), len(smooth_plus), len(smooth_minus))
+        dx_list = []
+        plus_di_list = []
+        minus_di_list = []
+
+        for i in range(length):
+            atr_val = smooth_tr[i]
+            if atr_val == 0:
+                dx_list.append(0.0)
+                plus_di_list.append(0.0)
+                minus_di_list.append(0.0)
+                continue
+            pdi = 100 * smooth_plus[i] / atr_val
+            mdi = 100 * smooth_minus[i] / atr_val
+            plus_di_list.append(pdi)
+            minus_di_list.append(mdi)
+            di_sum = pdi + mdi
+            dx_list.append(abs(pdi - mdi) / di_sum * 100 if di_sum > 0 else 0.0)
+
+        adx_smooth = self._wilder_smooth(dx_list, period)
+        if not adx_smooth:
+            return 0.0, 0.0, 0.0
+
+        adx = adx_smooth[-1]
+        plus_di = plus_di_list[-1]
+        minus_di = minus_di_list[-1]
+        return adx, plus_di, minus_di
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        """生成 ADX 信号"""
+        min_required = self.config.period * 3
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        adx, plus_di, minus_di = self._calc_adx_di(klines)
+
+        if adx >= self.config.trend_enter:
+            if plus_di > minus_di:
+                signal = Signal.BUY
+                trend = "strong_uptrend"
+            else:
+                signal = Signal.SELL
+                trend = "strong_downtrend"
+        else:
+            signal = Signal.HOLD
+            trend = "no_trend" if adx < self.config.trend_exit else "weak_trend"
+
+        return TradingSignal(
+            signal=signal,
+            confidence=min(adx / 50.0, 1.0),
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "adx": round(adx, 2),
+                "plus_di": round(plus_di, 2),
+                "minus_di": round(minus_di, 2),
+                "trend": trend,
+            },
+        )

@@ -1,0 +1,9 @@
+{
+  "id": "10",
+  "subject": "修改 strategy.py — 滞后阈值 + MarketScore",
+  "description": "删除 buffer/cooldown，新增 _apply_hysteresis + min_dwell_bars + 高波动降 confidence + MarketScore 信号方向加法调整",
+  "activeForm": "修改 strategy.py",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

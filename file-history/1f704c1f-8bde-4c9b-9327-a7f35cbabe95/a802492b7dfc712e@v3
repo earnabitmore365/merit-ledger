@@ -1,0 +1,4 @@
+#!/bin/bash
+# 快捷入口 — 转发给全局 evolve.sh（太极级）
+# Workspace 在 ~/.claude/evolver/，不再存放在 lab/ 里
+exec bash ~/.claude/evolve.sh auto-trading "$@"

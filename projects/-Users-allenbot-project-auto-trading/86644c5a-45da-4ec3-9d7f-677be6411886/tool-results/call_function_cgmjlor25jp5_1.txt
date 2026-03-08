@@ -1,0 +1,2 @@
+event: message
+data: {"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"unknown tool \"get_current_user\""}}

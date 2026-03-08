@@ -1,0 +1,50 @@
+
+网络: testnet
+账号: default
+币种: ETH
+策略: vwap
+杠杆: 10x
+余额: $902.23
+持仓: []
+
+[Enter] 继续交易  [Esc] 停止并退出
+
+
+我选好了，按确认，就回到这个画面，问我要不要继续。
+
+按enter继续就变成这样
+
+Last login: Tue Feb 24 14:56:48 on ttys001
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3685: command not found: compdef
+/Users/allenbot/project/auto-trading/user_interface/trade.command ; exit;       
+allenbot@Echo ~ % /Users/allenbot/project/auto-trading/user_interface/trade.command ; exit;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                          Traceback (most recent call last):
+              File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 167, in run_once
+                          result['signal'] = signal.signal.signal.value if hasattr(signal, 'signal') else signal.value if hasattr(signal, 'signal') else signal.signal.value if hasattr(signal, 'signal') else signal.value
+                                                                                  ^^^^^^^^^^^^^^^^^^^^
+                      AttributeError: 'Signal' object has no attribute 'signal'
+                                                                               2026-02-24 14:59:22,305 - ERROR - 执行错误: 'Signal' object has no attribute 'signal'
+    Traceback (most recent call last):
+                                        File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 167, in run_once
+                                                    result['signal'] = signal.signal.signal.value if hasattr(signal, 'signal') else signal.value if hasattr(signal, 'signal') else signal.signal.value if hasattr(signal, 'signal') else signal.value
+                            ^^^^^^^^^^^^^^^^^^^^
+                                                AttributeError: 'Signal' object has no attribute 'signal'
+

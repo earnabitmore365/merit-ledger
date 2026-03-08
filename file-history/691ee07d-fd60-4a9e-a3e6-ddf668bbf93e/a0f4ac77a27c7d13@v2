@@ -1,0 +1,99 @@
+"""Klinger Oscillator — 量力趋势振荡器（修正VF公式）"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class KlingerConfig:
+    fast_period: int = 34
+    slow_period: int = 55
+    signal_period: int = 13
+
+
+class Klinger(Strategy):
+    def __init__(self, exchange=None, config: Optional[KlingerConfig] = None):
+        self.exchange = exchange
+        self.config = config or KlingerConfig()
+
+    @property
+    def name(self) -> str:
+        return "klinger"
+
+    def _ema_val(self, values, period):
+        if len(values) < period:
+            return values[-1] if values else 0
+        k = 2 / (period + 1)
+        ema = sum(values[:period]) / period
+        for v in values[period:]:
+            ema = v * k + ema * (1 - k)
+        return ema
+
+    def _volume_force(self, klines):
+        """正确的 Klinger Volume Force：含 CM 累积"""
+        vf = []
+        prev_trend = 0
+        cm = 0.0
+
+        for i in range(1, len(klines)):
+            hlc = klines[i]["high"] + klines[i]["low"] + klines[i]["close"]
+            prev_hlc = klines[i - 1]["high"] + klines[i - 1]["low"] + klines[i - 1]["close"]
+            trend = 1 if hlc > prev_hlc else -1
+
+            dm = klines[i]["high"] - klines[i]["low"]
+
+            # CM累积：同向趋势累加DM，趋势翻转重置
+            if trend == prev_trend:
+                cm = cm + dm
+            else:
+                cm = dm  # 翻转时重置为当前DM
+
+            # VF = Volume × Trend × |2×(DM/CM) - 1|
+            if cm != 0:
+                vf_val = klines[i].get("volume", 1000) * trend * abs(2 * (dm / cm) - 1)
+            else:
+                vf_val = 0
+            vf.append(vf_val)
+            prev_trend = trend
+
+        return vf
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        need = self.config.slow_period + self.config.signal_period + 2
+        if not klines or len(klines) < need:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0)
+
+        vf = self._volume_force(klines)
+        if len(vf) < self.config.slow_period + 1:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"])
+
+        ko_series = []
+        for i in range(self.config.slow_period, len(vf) + 1):
+            sub = vf[:i]
+            fast = self._ema_val(sub, self.config.fast_period)
+            slow = self._ema_val(sub, self.config.slow_period)
+            ko_series.append(fast - slow)
+
+        if len(ko_series) < self.config.signal_period + 1:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"])
+
+        sig = self._ema_val(ko_series, self.config.signal_period)
+        ko = ko_series[-1]
+
+        prev_ko_series = ko_series[:-1]
+        prev_sig = self._ema_val(prev_ko_series, self.config.signal_period)
+        prev_ko = prev_ko_series[-1]
+
+        if ko > sig and prev_ko <= prev_sig:
+            signal = Signal.BUY
+        elif ko < sig and prev_ko >= prev_sig:
+            signal = Signal.SELL
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(signal=signal, confidence=0.6,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"klinger": ko, "signal": sig})

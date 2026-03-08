@@ -1,0 +1,4 @@
+src/trading/system.py:397:if __name__ == "__main__":
+src/interface/main.py:281:if __name__ == "__main__":
+src/config/config_manager.py:210:if __name__ == "__main__":
+src/interface/run_bot.py:387:if __name__ == "__main__":

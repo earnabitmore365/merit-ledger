@@ -1,0 +1,29 @@
+   505→                if enable_ttp:
+   506→                    from core.risk import TTPConfig
+   507→                    risk_mgr = TTPManager(TTPConfig())
+   508→
+   509→                # 创建交易系统
+   510→                system = TradingSystem(
+   511→                    exchange=adapter,
+   512→                    strategy=strategy,
+   513→                    risk_manager=risk_mgr,
+   514→                    config={
+   515→                        'coin': coin,
+   516→                        'leverage': leverage,
+   517→                        'position_pct': position_pct,
+   518→                        'stop_loss_pct': stop_loss,
+   519→                    }
+   520→                )
+   521→
+   522→                # 显示初始状态
+   523→                balance = adapter.get_balance().get('usdc', 0)
+   524→                status = {
+   525→                    "网络": network,
+   526→                    "账号": account,
+   527→                    "币种": coin,
+   528→                    "策略": strategy_name,
+   529→                    "杠杆": f"{leverage}x",
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

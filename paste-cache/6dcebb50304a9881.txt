@@ -1,0 +1,20 @@
+Last login: Mon Feb 23 22:58:53 on ttys002
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3685: command not found: compdef
+/Users/allenbot/project/auto-trading/user_interface/backtest.command ; exit;    
+allenbot@Echo ~ % /Users/allenbot/project/auto-trading/user_interface/backtest.command ; exit;
+Traceback (most recent call last):
+  File "<string>", line 6, in <module>
+  File "/opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python3.11/curses/__init__.py", line 94, in wrapper
+    return func(stdscr, *args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 357, in main
+    result = menu.navigate_options(intervals, "选择时间周期 [空格多选]", multi=True, selections=selections)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 171, in navigate_options
+    return [options[i] for i in self.selected_indices]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 171, in <listcomp>
+    return [options[i] for i in self.selected_indices]
+            ~~~~~~~^^^
+IndexError: list index out of range
+按回车键退出...

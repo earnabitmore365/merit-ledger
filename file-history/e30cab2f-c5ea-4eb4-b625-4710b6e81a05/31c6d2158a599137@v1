@@ -1,0 +1,188 @@
+# 指标库 `src/indicators/` — 12个市场指标
+
+## Context
+
+用户想做一个可复用的指标库，包含链上指标、宏观指标、衍生品指标。用来：
+1. 验证哪些指标对加密市场有效
+2. 未来接入 RegimeStrategy 做更精准的市场判断
+3. 统一接口，随时调用
+
+## 文件结构（9个新文件）
+
+```
+src/indicators/
+  __init__.py      — 自动发现 + 导出
+  base.py          — BaseIndicator ABC + CacheMixin + 注册表 + IndicatorResult
+  local.py         — AHR999 + Pi Cycle Top（本地算，用BTC价格数据）
+  hyperliquid.py   — Funding Rate + Open Interest（HyperLiquid API）
+  sentiment.py     — Fear & Greed Index（alternative.me）
+  market.py        — Stablecoin Supply + BTC Dominance（DefiLlama + CoinGecko）
+  onchain.py       — MVRV + NUPL + Puell + Exchange Netflow（BGeometrics）
+  composite.py     — MarketScore 综合打分
+  verify.py        — 验证脚本，一键测试所有指标
+```
+
+**不改任何现有文件。**
+
+## 统一接口
+
+```python
+class BaseIndicator(ABC):
+    name: str               # "ahr999"
+    source: str             # "local" / "hyperliquid" / "api"
+
+    def fetch(**kwargs) → Any           # 获取原始值
+    def score(raw_value) → float        # 归一化 0-1（0=极看空, 1=极看多）
+    def signal(score) → MarketSignal    # strong_buy/buy/neutral/sell/strong_sell
+    def evaluate(**kwargs) → IndicatorResult  # 一次性获取全部
+```
+
+## 12个指标详细设计
+
+### Tier 1: 本地计算（`local.py`）
+
+**AHR999（九神指标）**
+- 输入: BTC 1h K线（≥4800根=200天）
+- 1h→日线聚合: 取每天最后一根收盘价
+- 公式: `(price/200日均价) × (price/对数增长估值)`
+- 对数增长: `10^(5.84 * log10(距创世天数) - 17.01)`, 创世=2009-01-03
+- Score: <0.45→1.0(抄底), 0.45-1.2→0.6-0.8(定投), 1.2-5.0→0.2-0.6, >5.0→0.0(逃顶)
+
+**Pi Cycle Top**
+- 输入: BTC 1h K线（≥8400根=350天）
+- 公式: 111日SMA 是否上穿 350日SMA×2
+- Score: 交叉=0.0(逃顶), 接近(<5%)=0.2, 远离=0.7, 很远(>30%)=0.9
+
+### Tier 2: HyperLiquid（`hyperliquid.py`）
+
+共享一个 API 调用: `POST https://api.hyperliquid.xyz/info {"type":"metaAndAssetCtxs"}`
+
+**Funding Rate**
+- 原始值: `float(ctx["funding"])` (8小时费率)
+- Score: <-0.01%→0.8(空头付费=看涨), ±0.01%→0.5, >0.05%→0.1(过热)
+- 缓存: 5分钟
+
+**Open Interest**
+- 原始值: `float(ctx["openInterest"])` × 标记价格
+- Score: 基于变化率 — OI骤降=0.7(去杠杆), OI暴涨=0.2(过度杠杆)
+- 需要保存历史值做对比
+
+### Tier 3: 免费API（`sentiment.py` + `market.py`）
+
+**Fear & Greed** — `GET https://api.alternative.me/fng/`
+- 原始值: 0-100
+- **反向评分**: 极度恐惧(0-25)→score 0.8-1.0(买), 极度贪婪(75-100)→score 0-0.2(卖)
+- 缓存: 4小时
+
+**Stablecoin Supply** — `GET https://stablecoins.llama.fi/stablecoins`
+- 原始值: 总稳定币市值
+- Score: 基于增长趋势 — 增长>5%/月→0.8, 下降>5%→0.2
+- 需要存历史值算趋势
+- 缓存: 1小时
+
+**BTC Dominance** — `GET https://api.coingecko.com/api/v3/global`
+- 原始值: `data["market_cap_percentage"]["btc"]` (~56%)
+- Score: >60%→0.3(避险), 50-60%→0.5, <40%→0.9(山寨季)
+- 缓存: 1小时
+
+### Tier 4: 链上数据（`onchain.py`）
+
+全部来自 BGeometrics，免费 8次/小时。4个指标顺序请求，间隔0.5秒，共用6小时缓存。
+
+**MVRV Z-Score** — `/v1/mvrv-zscore`
+- Score: <0→0.9(历史底), 0-2→0.7, 2-4→0.5, 4-7→0.2, >7→0.05(顶)
+
+**NUPL** — `/v1/nupl`
+- Score: <0→0.9(投降), 0-0.25→0.7, 0.25-0.5→0.5, 0.5-0.75→0.3, >0.75→0.1(狂热)
+
+**Puell Multiple** — `/v1/puell-multiple`
+- Score: <0.5→0.9(矿工投降), 0.5-1→0.7, 1-2→0.5, 2-4→0.3, >4→0.1
+
+**Exchange Netflow** — `/v1/exchange-netflow`
+- Score: 大量流出(负)→0.8(看涨), 大量流入(正)→0.2(看跌)
+
+### 综合打分（`composite.py`）
+
+```
+权重:
+  链上 40%: MVRV(12%) + Netflow(10%) + NUPL(10%) + Puell(8%)
+  市场结构 25%: AHR999(10%) + Pi Cycle(8%) + BTC.D(7%)
+  衍生品 20%: Funding(10%) + OI(10%)
+  情绪 15%: Fear&Greed(8%) + 稳定币(7%)
+
+输出: 0-1 分数
+  0.0-0.3 = 深熊（抄底区）
+  0.3-0.5 = 早期复苏
+  0.5-0.7 = 牛市
+  0.7-0.9 = 牛市后期（止盈区）
+  0.9-1.0 = 狂热（逃顶）
+```
+
+指标失败时用 0.5(中性) 填充，权重按比例重分配。
+
+## 缓存策略
+
+JSON文件存 `src/indicators/cache/`，格式: `{"fetched_at": epoch, "ttl": seconds, "data": ...}`
+
+| 来源 | TTL | 理由 |
+|------|-----|------|
+| HyperLiquid | 5分钟 | 实时数据 |
+| CoinGecko/DefiLlama | 1小时 | 免费限速 |
+| alternative.me | 4小时 | 每日更新 |
+| BGeometrics | 6小时 | 8次/小时限制 |
+
+429错误时返回过期缓存（`_read_cache_stale()`）。
+
+## 1h→日线聚合
+
+```python
+def _aggregate_daily(klines):
+    """取每天最后一根1h K线的收盘价"""
+    daily = OrderedDict()
+    for k in klines:
+        day = datetime.utcfromtimestamp(k['time']/1000).strftime('%Y-%m-%d')
+        daily[day] = k  # 后覆盖前
+    return [{'time': v['time'], 'close': v['close'], 'date': d} for d, v in daily.items()]
+```
+
+BTC 1h 30K条 = ~1250天 → 远超 AHR999(200天) 和 Pi Cycle(350天) 需求。
+
+## 实现顺序
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 1 | `base.py` + `__init__.py` | 基础框架 |
+| 2 | `local.py` | AHR999 + Pi Cycle，立刻用BTC数据验证 |
+| 3 | `hyperliquid.py` | Funding + OI |
+| 4 | `sentiment.py` + `market.py` | Fear&Greed + 稳定币 + BTC.D |
+| 5 | `onchain.py` | MVRV + NUPL + Puell + Netflow |
+| 6 | `composite.py` | 综合打分 |
+| 7 | `verify.py` | 一键验证所有指标 |
+
+## 验证方案
+
+```bash
+python3 src/indicators/verify.py
+```
+
+输出：
+```
+Indicator            Raw        Score  Signal       Source
+────────────────────────────────────────────────────────────
+ahr999               1.23       0.650  neutral      local
+pi_cycle_top         False      0.900  strong_buy   local
+funding_rate         0.0001     0.550  neutral      hyperliquid
+...
+market_score         —          0.620  buy          composite
+```
+
+本地指标额外: 每30天采样一次，显示历史值变化趋势。
+
+## 关键参考文件
+
+| 文件 | 用途 |
+|------|------|
+| `src/core/strategy/base.py` | ABC + 注册表模式参考 |
+| `src/core/strategy/__init__.py` | auto-discovery 模式参考 |
+| `src/backtest/data/historical/BTC/1h.json` | 30K条，AHR999/PiCycle测试数据 |
+| `src/trading/regime/detector.py` | 未来整合点 |

@@ -1,0 +1,58 @@
+# lab — AI Sandbox
+
+> 本目录是 AI（白纱 + 黑丝）的自主实验环境，**不上传 GitHub**。
+
+---
+
+## 这里是什么
+
+`lab/src/` 是原系统 `src/` 的完整代码副本，供 AI 自由修改和测试。
+原系统永远保持干净，lab 坏了有原系统可以参考。
+
+## 目录结构
+
+```
+lab/
+├── src/                    # 代码副本，随便改
+│   └── backtest/data → ../../src/backtest/data   # 软链接，共享原系统 K 线数据
+├── reports/                # 输出目录（自动创建），不污染原系统
+├── .env                    # 测试网配置
+└── README.md               # 本文件
+```
+
+## 工作流
+
+```
+1. 在 lab/src/ 里开发 / 实验
+2. 测试通过，汇报用户
+3. 用户确认后，覆盖回原系统 src/
+```
+
+## 规则
+
+- **策略层**（`src/core/strategy/strategy_*.py`）— AI 可自主开发，不需要用户逐步确认
+- **核心系统**（回测引擎、交易系统、风险管理）— 改动完成后汇报用户，用户确认再覆盖
+- **数据**：K 线数据通过软链接共享，读的是原系统同一份数据，不复制不修改
+- **输出**：报告、数据库写到 `lab/reports/`，不写回原系统 `reports/`
+- **实盘**：`.env` 是测试网配置，lab 里不进行主网实盘操作
+
+---
+
+## 已知优化项
+
+### regime 分析查询太慢
+**现状**：按连续 regime 段过滤 paired_trades（30M × 93K segments range JOIN）极慢，
+当前用 Python 二分查找按 combo 逐个处理，约 30~40 秒。
+
+**根本解法**（下次重跑种子时实施）：
+在 `generate_seed.py` 里给 `paired_trades` 新增 `regime_at_close` 字段，
+记录平仓时的 regime 状态。查询直接变成：
+```sql
+SELECT ... FROM paired_trades
+WHERE regime_at_open = regime_at_close
+GROUP BY strategy, coin, interval, regime_at_open
+```
+毫秒级出结果，不需要任何 JOIN。
+
+**临时替代方案**（不重跑数据）：
+用 DuckDB attach SQLite 跑同样查询，列式引擎聚合快 5~20x。

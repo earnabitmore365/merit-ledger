@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""
+Exchange Package
+
+交易所适配器包 - 自动扫描
+"""
+
+import sys
+import pkgutil
+from pathlib import Path
+
+_CURRENT_DIR = Path(__file__).parent
+
+# 自动扫描所有模块
+_modules = []
+for module_info in pkgutil.iter_modules([str(_CURRENT_DIR)]):
+    module_name = module_info.name
+    if not module_name.startswith('_'):
+        _modules.append(module_name)
+
+# 先导入所有子模块
+for module_name in _modules:
+    try:
+        exec(f"import {__package__}.{module_name}")
+    except Exception as e:
+        pass  # 忽略导入错误
+
+# 收集所有 __all__ 中的内容
+_all_items = []
+for module_name in _modules:
+    try:
+        mod = eval(f"{__package__}.{module_name}")
+        if hasattr(mod, '__all__'):
+            _all_items.extend(mod.__all__)
+    except Exception as e:
+        pass
+
+# 导出核心函数
+from .base import ExchangeAdapter, get_exchange, list_exchanges
+_all_items.extend(['ExchangeAdapter', 'get_exchange', 'list_exchanges'])
+
+__all__ = _all_items
+
+# 导出所有内容
+for module_name in _modules:
+    try:
+        mod = eval(f"{__package__}.{module_name}")
+        this_module = sys.modules[__name__]
+        for item in dir(mod):
+            if not item.startswith('_'):
+                setattr(this_module, item, getattr(mod, item))
+    except Exception as e:
+        pass

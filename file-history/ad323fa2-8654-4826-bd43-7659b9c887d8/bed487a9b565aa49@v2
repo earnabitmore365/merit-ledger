@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""
+RSI Divergence Strategy
+
+RSI 背离策略
+- RSI 背离：价格创新高/低，但 RSI 没有创新高/低
+- 顶背离：价格创新高，RSI 走低 → 卖出信号
+- 底背离：价格创新低，RSI 走高 → 买入信号
+"""
+
+from typing import Dict, List
+from src.core.strategy.base import Strategy, Signal
+
+
+class RSIDivergenceStrategy(Strategy):
+    """RSI 背离策略"""
+
+    def __init__(self):
+        super().__init__("rsi_divergence")
+        self.rsi_period = 14
+
+    def calculate_rsi(self, prices: List[float], period: int = 14) -> float:
+        """计算 RSI"""
+        if len(prices) < period + 1:
+            return 50.0
+
+        deltas = []
+        for i in range(1, len(prices)):
+            delta = prices[i] - prices[i - 1]
+            deltas.append(delta)
+
+        gains = [d if d > 0 else 0 for d in deltas]
+        losses = [-d if d < 0 else 0 for d in deltas]
+
+        avg_gain = sum(gains[-period:]) / period
+        avg_loss = sum(losses[-period:]) / period
+
+        if avg_loss == 0:
+            return 100.0
+
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
+    def find_peaks(self, prices: List[float], lookback: int = 20) -> List[int]:
+        """找出局部高点"""
+        peaks = []
+        for i in range(lookback, len(prices) - lookback):
+            is_peak = True
+            for j in range(i - lookback, i + lookback + 1):
+                if j >= len(prices):
+                    continue
+                if prices[j] > prices[i] and j != i:
+                    is_peak = False
+                    break
+            if is_peak:
+                peaks.append(i)
+        return peaks
+
+    def find_troughs(self, prices: List[float], lookback: int = 20) -> List[int]:
+        """找出局部低点"""
+        troughs = []
+        for i in range(lookback, len(prices) - lookback):
+            is_trough = True
+            for j in range(i - lookback, i + lookback + 1):
+                if j >= len(prices):
+                    continue
+                if prices[j] < prices[i] and j != i:
+                    is_trough = False
+                    break
+            if is_trough:
+                troughs.append(i)
+        return troughs
+
+    def generate_signal(self, coin: str, klines: List[Dict]) -> Signal:
+        """生成交易信号
+
+        Args:
+            coin: 币种名称
+            klines: K 线数据
+
+        Returns:
+            Signal: BUY / SELL / HOLD
+        """
+        if not klines or len(klines) < 50:
+            return Signal.HOLD
+
+        klines = klines[-50:]
+
+        prices = [k['close'] for k in klines]
+        rsi_values = []
+
+        for i in range(len(prices)):
+            if i == 0:
+                rsi_values.append(50.0)
+            else:
+                rsi = self.calculate_rsi(prices[:i + 1], self.rsi_period)
+                rsi_values.append(rsi)
+
+        recent_prices = prices[-30:]
+        recent_rsi = rsi_values[-30:]
+
+        peaks = self.find_peaks(recent_prices, 3)
+        troughs = self.find_troughs(recent_prices, 3)
+
+        if len(peaks) < 2 or len(troughs) < 2:
+            return Signal.HOLD
+
+        last_peak = peaks[-1]
+        prev_peak = peaks[-2]
+        last_trough = troughs[-1]
+        prev_trough = troughs[-2]
+
+        # 顶背离：价格创新高，RSI 没创新高
+        if prices[-1] > prices[prev_peak] and rsi_values[-1] < rsi_values[prev_peak]:
+            return Signal.SELL
+
+        # 底背离：价格创新低，RSI 没创新低
+        if prices[-1] < prices[prev_trough] and rsi_values[-1] > rsi_values[prev_trough]:
+            return Signal.BUY
+
+        return Signal.HOLD

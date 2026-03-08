@@ -1,0 +1,17 @@
+173:        self.logger.info(f"币种: {self.config.get('coin', 'ETH')}")
+214:            coin = self.config.get('coin', 'ETH')
+329:            'coin': self.config.get('coin', 'ETH'),
+330:            'leverage': self.config.get('leverage', 10.0),
+342:        coin = self.config.get('coin', 'ETH')
+363:        coin = self.config.get('coin', 'ETH')
+364:        interval = self.config.get('interval', '1h')
+365:        limit = self.config.get('kline_limit', 100)
+370:        coin = self.config.get('coin', 'ETH')
+375:        coin = self.config.get('coin', 'ETH')
+416:        coin = self.config.get('coin', 'ETH')
+437:        coin = self.config.get('coin', 'ETH')
+441:        position_pct = self.config.get('position_pct', 0.1)
+443:        leverage = self.config.get('leverage', 10.0)
+476:        coin = self.config.get('coin', 'ETH')
+516:        coin = self.config.get('coin', 'ETH')
+546:            f"{self.config.get('coin', 'ETH')}>"

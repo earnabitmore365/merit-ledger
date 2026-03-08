@@ -1,0 +1,22 @@
+Last login: Wed Feb 25 22:13:38 on ttys002
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3685: command not found: compdef
+/Users/allenbot/project/auto-trading/user_interface/backtest.command ; exit;    
+allenbot@Echo ~ % /Users/allenbot/project/auto-trading/user_interface/backtest.command ; exit;
+Traceback (most recent call last):
+  File "<string>", line 6, in <module>
+  File "/opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python3.11/curses/__init__.py", line 94, in wrapper
+    return func(stdscr, *args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 581, in main
+    result = menu.navigate_options(coins, "选择交易币种 [空格多选, 输入搜索]", multi=True, selections=selections, searchable=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 228, in navigate_options
+    key = self.stdscr.getch()
+          ^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+allenbot@Echo ~ % 
+
+
+我按 Ctrl + C 退出后，显示这个画面。
+正常的吗？

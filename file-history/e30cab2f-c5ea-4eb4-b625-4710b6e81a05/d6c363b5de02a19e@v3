@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""
+RegimeStrategy — 市场自适应元策略（v2 — ADX 三层 + 滞后阈值）
+
+根据检测到的市场状态（bull/bear/ranging）自动委托给对应子策略。
+继承 Strategy，TradingSystem 和 BacktestEngine 无需改动即可使用。
+
+v2 改进：
+- 滞后阈值（Hysteresis）：进趋势 ADX>25 / 退趋势 ADX<18
+- min_dwell_bars：最少停留 12 根 K 线才允许切换
+- 高波动过滤：ATR% 超标时降低信心度
+- MarketScore 辅助：链上+衍生品+情绪综合打分调整信心（实盘开，回测关）
+"""
+
+import time
+import logging
+from typing import Dict, List, Optional
+
+from core.strategy import Strategy, Signal, TradingSignal, get_strategy
+from .detector import MarketRegimeDetector
+from .config import RegimeConfig
+
+logger = logging.getLogger(__name__)
+
+
+class RegimeStrategy(Strategy):
+    """市场自适应元策略（ADX 三层 + 滞后阈值）"""
+
+    def __init__(self, config: RegimeConfig = None):
+        self._config = config or RegimeConfig()
+        self.detector = MarketRegimeDetector(self._config.detector)
+        self._strategies: Dict[str, Strategy] = {}
+        for regime, strategy_name in self._config.regime_map.items():
+            self._strategies[regime] = get_strategy(strategy_name)
+
+        # 状态
+        self._current_regime = "unknown"
+        self._regime_bars = 0               # 当前 regime 已停留的 K 线数
+        self._pending_regime: Optional[str] = None  # 待确认的新 regime
+        self._pending_count = 0             # 连续确认计数
+        self._switch_history: List[Dict] = []
+
+        # MarketScore 缓存（实盘用，避免频繁调 API）
+        self._market_score_cache: Optional[float] = None
+        self._market_score_ts: float = 0.0  # 上次获取时间戳
+
+    @property
+    def name(self) -> str:
+        """动态名称，面板显示 auto[bull->proc]"""
+        sub = self._strategies.get(self._current_regime)
+        sub_name = sub.name if sub else "?"
+        return f"auto[{self._current_regime}->{sub_name}]"
+
+    # ── 滞后阈值切换 ──
+
+    def _apply_hysteresis(self, details: Dict) -> str:
+        """用滞后阈值决定实际 regime
+
+        进入趋势：ADX > trend_enter_adx (25)
+        退出趋势：ADX < trend_exit_adx (18)
+        中间地带：保持当前状态不变
+        """
+        cfg = self._config.detector
+        adx = details["adx"]
+        sma_dir = details["sma_direction"]
+
+        if self._current_regime in ("bull", "bear"):
+            # 已在趋势中：ADX 低于退出阈值才回到 ranging
+            if adx < cfg.trend_exit_adx:
+                return "ranging"
+            # 仍在趋势中：按 SMA 方向更新 bull/bear
+            return "bull" if sma_dir == "up" else "bear"
+
+        # 当前是 ranging 或 unknown：ADX 高于进入阈值才进趋势
+        if adx > cfg.trend_enter_adx:
+            return "bull" if sma_dir == "up" else "bear"
+
+        return "ranging"
+
+    def _maybe_switch(self, new_regime: str, klines: List[Dict]) -> None:
+        """尝试切换 regime，受 min_dwell_bars + confirm_bars 双重约束
+
+        1. 当前 regime 停留不足 min_dwell_bars → 不切换
+        2. 新 regime 需连续出现 confirm_bars 次才确认切换
+        """
+        cfg = self._config.detector
+
+        if new_regime == self._current_regime:
+            self._regime_bars += 1
+            self._pending_regime = None
+            self._pending_count = 0
+            return
+
+        # 停留不够久，不切换
+        if self._regime_bars < cfg.min_dwell_bars:
+            self._regime_bars += 1
+            return
+
+        # 确认机制：新 regime 需连续出现 confirm_bars 次
+        if new_regime == self._pending_regime:
+            self._pending_count += 1
+        else:
+            self._pending_regime = new_regime
+            self._pending_count = 1
+
+        if self._pending_count < cfg.confirm_bars:
+            self._regime_bars += 1
+            return
+
+        # 确认通过，执行切换
+        old = self._current_regime
+        self._current_regime = new_regime
+        self._regime_bars = 1
+        self._pending_regime = None
+        self._pending_count = 0
+        self._switch_history.append({
+            "time": klines[-1].get("time", int(time.time() * 1000)),
+            "from": old,
+            "to": new_regime,
+        })
+        logger.info(f"Regime 切换: {old} -> {new_regime} "
+                    f"(子策略: {self._strategies.get(new_regime, '?')})")
+
+    # ── MarketScore 辅助 ──
+
+    def _get_market_score(self) -> Optional[float]:
+        """获取 MarketScore（带 5 分钟缓存）
+
+        回测时 use_market_score=False，直接跳过。
+        """
+        if not self._config.use_market_score:
+            return None
+
+        now = time.time()
+        if self._market_score_cache is not None and now - self._market_score_ts < 300:
+            return self._market_score_cache
+
+        try:
+            from indicators import get_indicator
+            result = get_indicator("market_score").evaluate()
+            if result.ok:
+                self._market_score_cache = result.score
+                self._market_score_ts = now
+                return result.score
+        except Exception as e:
+            logger.debug(f"MarketScore 获取失败: {e}")
+
+        return self._market_score_cache  # 返回旧缓存
+
+    def _adjust_confidence(self, confidence: float, signal: Signal,
+                           details: Dict) -> float:
+        """调整信心度
+
+        1. 高波动 → ×0.5
+        2. MarketScore → 信号方向一致加分，不一致减分（±0.15 max）
+        """
+        result = confidence
+
+        # 高波动惩罚
+        if details.get("high_volatility"):
+            result *= 0.5
+
+        # MarketScore 调整
+        ms = self._get_market_score()
+        if ms is not None and signal in (Signal.BUY, Signal.SELL):
+            weight = self._config.market_score_weight  # 0.3
+            # ms > 0.5 看多，ms < 0.5 看空
+            delta = (ms - 0.5) * weight  # 范围 ±0.15
+            if signal == Signal.SELL:
+                delta = -delta  # 看空时反转：ms 低=看空=加分
+            result += delta
+
+        return max(0.0, min(1.0, result))
+
+    # ── 主入口 ──
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        if not klines or len(klines) < self._config.detector.min_klines:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines",
+                          "regime": self._current_regime},
+            )
+
+        # 1. 检测器返回 naive_regime + 详细指标
+        details = self.detector.detect_with_details(klines)
+
+        # 2. 滞后阈值 → 决定实际 regime
+        new_regime = self._apply_hysteresis(details)
+
+        # 2.5 禁止 bull↔bear 直接翻转，必须经过 ranging 缓冲
+        if (self._current_regime in ("bull", "bear")
+                and new_regime in ("bull", "bear")
+                and new_regime != self._current_regime):
+            new_regime = "ranging"
+
+        # 3. min_dwell_bars + confirm_bars 约束
+        self._maybe_switch(new_regime, klines)
+
+        # 4. 委托给子策略
+        sub = self._strategies.get(self._current_regime)
+        if sub is None:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"],
+                metadata={"reason": f"No strategy for regime: {self._current_regime}",
+                          "regime": self._current_regime},
+            )
+
+        signal = sub.generate_signal(coin, klines)
+
+        # 5. 调整信心度（高波动 + MarketScore）
+        signal.confidence = self._adjust_confidence(
+            signal.confidence, signal.signal, details
+        )
+
+        # 6. 元数据
+        signal.metadata["regime"] = self._current_regime
+        signal.metadata["regime_sub"] = sub.name
+        signal.metadata["adx"] = details["adx"]
+        signal.metadata["sma_slope"] = details["sma_slope"]
+        signal.metadata["high_volatility"] = details["high_volatility"]
+
+        return signal

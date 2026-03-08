@@ -1,0 +1,94 @@
+Invalid config at /Users/allenbot/.openclaw/openclaw.json:\n- <root>: Unrecognized key: "providers"
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+██░▄▄▄░██░▄▄░██░▄▄▄██░▀██░██░▄▄▀██░████░▄▄▀██░███░██
+██░███░██░▀▀░██░▄▄▄██░█░█░██░█████░████░▀▀░██░█░█░██
+██░▀▀▀░██░█████░▀▀▀██░██▄░██░▀▀▄██░▀▀░█░██░██▄▀▄▀▄██
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+                  🦞 OPENCLAW 🦞                    
+ 
+┌  OpenClaw doctor
+│
+◇  Config ───────────────────────────────────────────────────╮
+│                                                            │
+│  Config invalid; doctor will run with best-effort config.  │
+│                                                            │
+├────────────────────────────────────────────────────────────╯
+│
+◇  Doctor changes ─╮
+│                  │
+│  - providers     │
+│                  │
+├──────────────────╯
+│
+◇  State integrity ────────────────────────────────────────────────────────╮
+│                                                                          │
+│  - Config file is group/world readable (~/.openclaw/openclaw.json).      │
+│    Recommend chmod 600.                                                  │
+│  - Multiple state directories detected. This can split session history.  │
+│    - /Users/allen/.openclaw                                              │
+│    Active state dir: ~/.openclaw                                         │
+│                                                                          │
+├──────────────────────────────────────────────────────────────────────────╯
+│
+◇  Security ─────────────────────────────────╮
+│                                            │
+│  - No channel security warnings detected.  │
+│  - Run: openclaw security audit --deep     │
+│                                            │
+├────────────────────────────────────────────╯
+│
+◇  Skills status ────────────╮
+│                            │
+│  Eligible: 33              │
+│  Missing requirements: 39  │
+│  Blocked by allowlist: 0   │
+│                            │
+├────────────────────────────╯
+Invalid config at /Users/allenbot/.openclaw/openclaw.json:\n- <root>: Unrecognized key: "providers"
+│
+◇  Plugins ──────╮
+│                │
+│  Loaded: 6     │
+│  Disabled: 30  │
+│  Errors: 0     │
+│                │
+├────────────────╯
+│
+◇  Gateway ──────────────╮
+│                        │
+│  Gateway not running.  │
+│                        │
+├────────────────────────╯
+│
+◇  Gateway connection ──────────────────────────────╮
+│                                                   │
+│  Gateway target: ws://127.0.0.1:18789             │
+│  Source: local loopback                           │
+│  Config: /Users/allenbot/.openclaw/openclaw.json  │
+│  Bind: loopback                                   │
+│                                                   │
+├───────────────────────────────────────────────────╯
+│
+◇  Gateway ────────────────────────────────────────╮
+│                                                  │
+│  Last gateway error: Run: openclaw doctor --fix  │
+│                                                  │
+├──────────────────────────────────────────────────╯
+│
+◇  Gateway ────────────────────────────────────╮
+│                                              │
+│  Runtime: running (pid 14635, state active)  │
+│                                              │
+├──────────────────────────────────────────────╯
+│
+◇  Gateway ──────────────────────────────────────────────────────────╮
+│                                                                    │
+│  LaunchAgent loaded; stopping requires "openclaw gateway stop" or  │
+│  launchctl bootout gui/$UID/ai.openclaw.gateway.                   │
+│                                                                    │
+├────────────────────────────────────────────────────────────────────╯
+Run "openclaw doctor --fix" to apply changes.
+Invalid config:
+- <root>: Unrecognized key: "providers"
+│
+└  Doctor complete.

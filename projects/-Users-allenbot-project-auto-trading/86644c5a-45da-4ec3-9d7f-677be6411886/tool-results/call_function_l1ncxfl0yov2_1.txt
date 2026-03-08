@@ -1,0 +1,54 @@
+   200→            balance = self.get_balance()
+   201→            return 'usdc' in balance
+   202→
+   203→        except Exception as e:
+   204→            self.logger.error(f"健康检查失败: {e}")
+   205→            return False
+   206→
+   207→    # ==================== 行情数据 ====================
+   208→
+   209→    def get_price(self, coin: str) -> float:
+   210→        """获取当前价格
+   211→
+   212→        Args:
+   213→            coin: 币种名称（如 "ETH"）
+   214→
+   215→        Returns:
+   216→            float: 当前价格
+   217→        """
+   218→        try:
+   219→            if not self._info:
+   220→                return 0.0
+   221→
+   222→            meta = self._info.meta_and_asset_ctxs()
+   223→            if isinstance(meta, list) and len(meta) >= 2:
+   224→                universe = meta[0].get('universe', []) if isinstance(meta[0], dict) else []
+   225→                asset_ctxs = meta[1] if isinstance(meta[1], list) else []
+   226→
+   227→                # 找到币种的索引
+   228→                coin_idx = None
+   229→                for i, item in enumerate(universe):
+   230→                    if isinstance(item, dict) and item.get('name') == coin:
+   231→                        coin_idx = i
+   232→                        break
+   233→
+   234→                # 获取价格（优先用 markPx，比 midPx 更适合下单）
+   235→                if coin_idx is not None and coin_idx < len(asset_ctxs):
+   236→                    ctx = asset_ctxs[coin_idx]
+   237→                    # markPx 是市场价格，更适合下单
+   238→                    if ctx.get('markPx'):
+   239→                        return float(ctx['markPx'])
+   240→                    elif ctx.get('midPx'):
+   241→                        return float(ctx['midPx'])
+   242→
+   243→            return 0.0
+   244→
+   245→        except Exception as e:
+   246→            self.logger.error(f"获取价格失败: {e}")
+   247→            return 0.0
+   248→
+   249→    def get_klines(
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

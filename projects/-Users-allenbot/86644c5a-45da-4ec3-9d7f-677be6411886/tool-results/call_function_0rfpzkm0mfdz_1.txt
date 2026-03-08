@@ -1,0 +1,526 @@
+     1→# Abby Auto-Trading 交易系统
+     2→
+     3→**版本**: 1.2
+     4→**时间**: 2026-02-24
+     5→
+     6→---
+     7→
+     8→## 1. 目录结构
+     9→
+    10→```
+    11→abby-auto-trading/
+    12→├── logs/                      # 日志目录
+    13→│   ├── trading/             # 交易日志
+    14→│   ├── backtest/           # 回测日志
+    15→│   └── live/               # 实盘日志
+    16→│
+    17→├── reports/                 # 报告目录
+    18→│   ├── trading/           # 交易报告
+    19→│   ├── backtest/         # 回测报告
+    20→│   └── live/             # 实盘报告
+    21→│
+    22→├── src/                     # 源代码
+    23→│   │
+    24→│   ├── core/              # 核心模块
+    25→│   │   ├── strategy/     # 策略（40+个）
+    26→│   │   │   ├── base.py           # 策略基类 + Signal 定义
+    27→│   │   │   ├── __init__.py       # 策略注册表 get_strategy()
+    28→│   │   │   └── strategy_*.py     # 40个策略实现
+    29→│   │   │
+    30→│   │   └── risk/         # 风险管理
+    31→│   │       ├── base.py           # 风险管理基类
+    32→│   │       ├── stop_loss.py      # 止损管理
+    33→│   │       └── ttp.py            # 移动止盈管理
+    34→│   │
+    35→│   ├── exchange/        # 交易所适配器
+    36→│   │   ├── base.py          # 适配器基类 + 数据类
+    37→│   │   ├── __init__.py
+    38→│   │   │
+    39→│   │   ├── hyperliquid/     # HyperLiquid
+    40→│   │   │   ├── adapter.py   # HL 适配器
+    41→│   │   │   ├── websocket.py  # WebSocket 客户端
+    42→│   │   │   ├── accounts.py   # 账号管理
+    43→│   │   │   └── README.md     # HL API 文档
+    44→│   │   │
+    45→│   │   └── binance/         # Binance（待开发）
+    46→│   │
+    47→│   ├── trading/         # 交易系统
+    48→│   │   └── system.py        # 交易系统主控
+    49→│   │
+    50→│   ├── backtest/       # 回测系统
+    51→│   │   ├── backtest.py      # 回测引擎 + 统计分析
+    52→│   │   ├── batch_backtest.py # 批量回测界面（curses）
+    53→│   │   └── data/           # 回测数据
+    54→│   │       └── historical/  # 历史K线数据
+    55→│   │
+    56→│   └── utils/          # 工具模块
+    57→│
+    58→├── user_interface/     # 用户界面（快捷脚本）
+    59→│   ├── backtest.command    # 批量回测入口
+    60→│   └── trade.command       # 交易系统入口
+    61→│
+    62→└── README.md
+    63→```
+    64→
+    65→---
+    66→
+    67→## 1.1 自动发现机制
+    68→
+    69→系统使用 **自动发现** 机制，新增策略/风险管理/交易所只需创建文件，无需手动注册。
+    70→
+    71→| 模块 | 获取方式 | 自动发现 |
+    72→|------|----------|----------|
+    73→| 策略 | `get_strategy('名称')` | ✅ 自动扫描 `core/strategy/strategy_*.py` |
+    74→| 风险管理 | `RiskManagerFactory.create('名称')` | ✅ 自动扫描 `core/risk/*.py` |
+    75→| 交易所 | `get_exchange('名称', config)` | ✅ 自动扫描 `exchange/*/adapter.py` |
+    76→
+    77→**使用示例**：
+    78→```python
+    79→# 策略 - 自动发现
+    80→from core.strategy import get_strategy, list_strategies
+    81→print(list_strategies())  # ['vwap', 'ma', 'rsi', ...]
+    82→strategy = get_strategy('vwap')
+    83→
+    84→# 风险管理 - 自动发现
+    85→from core.risk import RiskManagerFactory
+    86→risk_mgr = RiskManagerFactory.create('risk')  # 同时支持止损+TTP
+    87→
+    88→# 交易所 - 自动发现
+    89→from exchange import get_exchange, list_exchanges
+    90→adapter = get_exchange('hyperliquid', {'testnet': True})
+    91→```
+    92→
+    93→---
+    94→
+    95→## 2. 核心模块
+    96→
+    97→### 2.1 exchange/base.py - 适配器基类
+    98→
+    99→```python
+   100→# 数据类
+   101→OrderSide        # BUY, SELL (订单方向)
+   102→OrderType        # MARKET, LIMIT (订单类型)
+   103→OrderRequest     # 订单请求
+   104→OrderResult      # 订单结果
+   105→Position         # 持仓信息 (coin, side, size, entry_price)
+   106→
+   107→# ==================== 架构说明 ====================
+   108→# 系统分为三层：
+   109→#
+   110→#  1. 交易系统层 (我们自己的术语)
+   111→#     - 使用 Action 枚举: BUY, SELL, CLOSE_BUY, CLOSE_SELL, REVERSE_BUY, REVERSE_SELL, TTP_CLOSE_BUY, TTP_CLOSE_SELL, NONE
+   112→#     - 持仓状态: NO_POSITION, BUY, SELL
+   113→#
+   114→#  2. 适配器接口层 (标准化)
+   115→#     - 使用 OrderRequest 对接: side=OrderSide.BUY/SELL, order_type=OrderType.MARKET/LIMIT
+   116→#     - Adapter 内部负责转成交易所需要的格式 (IOC + 价格偏移)
+   117→#
+   118→#  3. 交易所层 (外部格式)
+   119→#     - HyperLiquid: 使用 IOC 订单 + offset 模拟市价单
+   120→#
+   121→#  数据流:
+   122→#     策略信号 → Action → OrderRequest → Adapter → 交易所 API
+   123→#     交易所返回 ← OrderResult ← Adapter
+   124→
+   125→# 基类
+   126→ExchangeAdapter  # 交易所适配器抽象基类
+   127→    connect()           # 连接
+   128→    disconnect()       # 断开
+   129→    health_check()     # 健康检查
+   130→    get_price()        # 获取价格
+   131→    get_klines()      # 获取K线
+   132→    place_order()      # 下单
+   133→    cancel_order()     # 取消订单
+   134→    get_order_status() # 查询订单状态
+   135→    get_positions()    # 获取所有持仓
+   136→    get_position()     # 获取指定持仓
+   137→    get_balance()      # 获取余额
+   138→    close_position()   # 平仓
+   139→
+   140→# 自动获取交易所适配器
+   141→get_exchange(name, config)  # 自动发现并创建适配器
+   142→list_exchanges()            # 列出所有可用交易所
+   143→```
+   144→
+   145→**自动发现**：新增交易所只需在 `exchange/` 创建目录，实现 `ExchangeAdapter` 即可。
+   146→
+   147→```python
+   148→# 信号枚举
+   149→Signal           # BUY, SELL, HOLD
+   150→
+   151→# 策略基类
+   152→Strategy(ABC)
+   153→    name            # 策略名称
+   154→    generate_signal(coin, klines) -> Signal  # 生成信号
+   155→    get_params()   # 获取参数
+   156→    set_params()   # 设置参数
+   157→```
+   158→
+   159→**可用策略 (40个)**：
+   160→- 技术指标: ma, rsi, macd, boll, atr, adx, cci, vwap, trix, roc
+   161→- 趋势: parabolic_sar, ichimoku, donchian, keltner, smc
+   162→- 动量: momentum, roc, cmo, adaptive, proc
+   163→- 振荡器: rsi_divergence, awesome_oscillator, ultimate_oscillator, tvi, ulcer
+   164→- 均线策略: ma_rsi, bb_squeeze, strategy_advanced_kline_echo
+   165→- 形态: candlestick, renko_echo, heikin_ashi
+   166→- 套利: accumulation_distribution, vpt, cmf, demand_index_echo
+   167→- 高级: lstm, elder_ray, aroon, klinger_echo, pivot_points_echo
+   168→- 其他: stddev, accumulation_distribution, mean_reversion
+   169→
+   170→### 2.3 core/risk/ - 风险管理
+   171→
+   172→```python
+   173→# 风险检查结果
+   174→RiskCheckResult
+   175→    should_close    # 是否需要平仓
+   176→    reason         # 原因
+   177→
+   178→# 风险管理基类
+   179→RiskManager(ABC)
+   180→    check(position, current_price, **kwargs) -> RiskCheckResult
+   181→    reset()
+   182→
+   183→# 止损管理
+   184→StopLossManager(RiskManager)
+   185→    check() -> RiskCheckResult
+   186→
+   187→# 移动止盈管理
+   188→TTPManager(RiskManager)
+   189→    check() -> RiskCheckResult
+   190→
+   191→# 统一风险管理（止损+TTP，默认）
+   192→CombinedRiskManager(RiskManager)
+   193→    check() -> RiskCheckResult  # 同时检查止损和TTP
+   194→```
+   195→
+   196→**自动发现**：新增风险管理只需在 `core/risk/` 创建文件，继承 `RiskManager` 即可。
+   197→
+   198→### 2.4 trading/system.py - 交易系统主控
+   199→
+   200→```python
+   201→TradingSystem
+   202→    exchange        # 交易所适配器
+   203→    strategy        # 策略
+   204→    risk_manager    # 风险管理
+   205→    config          # 配置
+   206→
+   207→    run(interval_seconds, max_iterations)  # 运行
+   208→    run_once()     # 执行一次
+   209→    stop()         # 停止
+   210→    reverse_position()  # 反手
+   211→    get_status()   # 获取状态
+   212→```
+   213→
+   214→### 2.5 exchange/hyperliquid/adapter.py - HyperLiquid 适配器
+   215→
+   216→```python
+   217→HyperLiquidAdapter(ExchangeAdapter)
+   218→    # 特有方法
+   219→    calculate_market_price(coin, is_buy)  # 市价单计算
+   220→    reverse_position(coin) -> OrderResult  # 反手
+   221→    deposit_to_perp(amount) -> bool        # 充值
+   222→    set_leverage(coin, leverage) -> bool   # 设置杠杆
+   223→
+   224→    # 市价单公式
+   225→    # 买单 = markPx × (1 + offset)
+   226→    # 卖单 = markPx × (1 - offset)
+   227→    # 测试网 offset = 10%, 主网 = 2%
+   228→```
+   229→
+   230→---
+   231→
+   232→## 3. 使用示例
+   233→
+   234→### 3.1 创建适配器
+   235→
+   236→```python
+   237→from exchange.hyperliquid.adapter import HyperLiquidAdapter
+   238→from exchange.hyperliquid.accounts import get_adapter_config
+   239→
+   240→# 方式一：从账号管理获取
+   241→config = get_adapter_config('default', 'testnet')
+   242→adapter = HyperLiquidAdapter(config)
+   243→adapter.connect()
+   244→
+   245→# 方式二：直接配置
+   246→config = {
+   247→    'wallet_address': '0x...',
+   248→    'private_key': '0x...',
+   249→    'testnet': True,
+   250→}
+   251→adapter = HyperLiquidAdapter(config)
+   252→adapter.connect()
+   253→```
+   254→
+   255→### 3.2 下单交易
+   256→
+   257→```python
+   258→from exchange.base import OrderRequest, OrderSide, OrderType
+   259→
+   260→# 开多仓
+   261→order = OrderRequest(
+   262→    coin='ETH',
+   263→    side=OrderSide.BUY,
+   264→    order_type=OrderType.MARKET,
+   265→    size=0.1,
+   266→)
+   267→result = adapter.place_order(order)
+   268→
+   269→# 平仓
+   270→result = adapter.close_position('ETH')
+   271→
+   272→# 反手
+   273→result = adapter.reverse_position('ETH')
+   274→```
+   275→
+   276→### 3.3 运行交易系统
+   277→
+   278→```python
+   279→from trading.system import TradingSystem
+   280→from exchange.hyperliquid.adapter import HyperLiquidAdapter
+   281→from core.strategy import get_strategy
+   282→
+   283→adapter = HyperLiquidAdapter(config)
+   284→adapter.connect()
+   285→
+   286→strategy = get_strategy('vwap')
+   287→system = TradingSystem(
+   288→    exchange=adapter,
+   289→    strategy=strategy,
+   290→    config={'coin': 'ETH', 'leverage': 10}
+   291→)
+   292→
+   293→system.run(interval_seconds=60)
+   294→```
+   295→
+   296→### 3.4 运行回测
+   297→
+   298→```python
+   299→from backtest.backtest import run_backtest
+   300→
+   301→result = run_backtest(
+   302→    coin='ETH',
+   303→    strategy_name='vwap',
+   304→    interval='1h',
+   305→    days=365,
+   306→    initial_capital=500
+   307→)
+   308→
+   309→print(f"收益率: {result.total_return:.2%}")
+   310→print(f"胜率: {result.win_rate:.2%}")
+   311→print(f"夏普: {result.sharpe_ratio:.2f}")
+   312→```
+   313→
+   314→---
+   315→
+   316→## 4. 账号管理
+   317→
+   318→### 4.1 账号配置 (exchange/hyperliquid/accounts.py)
+   319→
+   320→```python
+   321→from exchange.hyperliquid.accounts import get_adapter_config
+   322→
+   323→# 获取账号配置
+   324→config = get_adapter_config('default', 'testnet')
+   325→# 返回: {'wallet_address', 'private_key', 'api_address', 'testnet', ...}
+   326→```
+   327→
+   328→### 4.2 HyperLiquid 账号体系
+   329→
+   330→| 类型 | 说明 |
+   331→|------|------|
+   332→| wallet_address | 主钱包地址 |
+   333→| api_address | API 授权地址（无需资金）|
+   334→| private_key | 私钥 |
+   335→
+   336→---
+   337→
+   338→## 5. 命令行工具
+   339→
+   340→### 5.1 批量回测系统
+   341→
+   342→```bash
+   343→# 双击运行，或在终端执行
+   344→./user_interface/backtest.command
+   345→```
+   346→
+   347→功能：
+   348→- 自动扫描可用币种（按市值排序）
+   349→- 自动扫描可用时间周期
+   350→- 批量选择多个币种/策略/周期
+   351→- 支持搜索过滤
+   352→- 进度条显示
+   353→- 汇总比较结果
+   354→
+   355→### 5.2 交易系统
+   356→
+   357→```bash
+   358→# 双击运行，或在终端执行
+   359→./user_interface/trade.command
+   360→```
+   361→
+   362→---
+   363→
+   364→## 6. 数据流
+   365→
+   366→```
+   367→K线数据 → 策略 → 信号 → 风险管理 → 执行器 → 交易所
+   368→   │          │          │          │          │
+   369→   ▼          ▼          ▼          ▼          ▼
+   370→Exchange   Strategy   RiskMgr   Executor   Exchange
+   371→Adapter    (生成)     (检查)    (执行)    Adapter
+   372→```
+   373→
+   374→---
+   375→
+   376→## 7. 模块依赖
+   377→
+   378→```
+   379→user_interface/
+   380→    ↓
+   381→trading/system.py
+   382→    ↓
+   383→exchange/base.py ← exchange/hyperliquid/adapter.py
+   384→    ↑
+   385→core/strategy/base.py
+   386→core/risk/base.py
+   387→    ↑
+   388→backtest/backtest.py
+   389→```
+   390→
+   391→---
+   392→
+   393→## 8. 策略开发
+   394→
+   395→### 8.1 创建新策略
+   396→
+   397→参考根目录的 [STRATEGY_GUIDE.md](./STRATEGY_GUIDE.md)
+   398→
+   399→新策略文件放置位置：
+   400→```
+   401→src/core/strategy/
+   402→├── strategy_{name}.py    # 策略实现（自动发现）
+   403→```
+   404→
+   405→**无需手动注册！** 系统会自动扫描所有 `strategy_*.py` 文件并注册。
+   406→
+   407→---
+   408→
+   409→## 9. 术语参考
+   410→
+   411→### 9.1 交易操作 (Action)
+   412→
+   413→| 操作 | 说明 | 持仓变化 |
+   414→|------|------|---------|
+   415→| `BUY` | 开多仓 | 无 → 多 |
+   416→| `SELL` | 开空仓 | 无 → 空 |
+   417→| `CLOSE_BUY` | 平多仓 | 多 → 无 |
+   418→| `CLOSE_SELL` | 平空仓 | 空 → 无 |
+   419→| `REVERSE_BUY` | 反手平多 + 开空 | 多 → 空 |
+   420→| `REVERSE_SELL` | 反手平空 + 开多 | 空 → 多 |
+   421→| `TTP_CLOSE_BUY` | TTP 平多仓 | 多 → 无 |
+   422→| `TTP_CLOSE_SELL` | TTP 平空仓 | 空 → 无 |
+   423→| `NONE` | 无操作 | 不变 |
+   424→
+   425→### 9.2 持仓状态
+   426→
+   427→| 状态 | 说明 |
+   428→|------|------|
+   429→| `NO_POSITION` | 无持仓 |
+   430→| `BUY` | 多仓 (Long) |
+   431→| `SELL` | 空仓 (Short) |
+   432→
+   433→### 9.3 订单接口 (OrderRequest)
+   434→
+   435→| 字段 | 类型 | 说明 |
+   436→|------|------|------|
+   437→| `coin` | str | 币种 |
+   438→| `side` | OrderSide | BUY/SELL |
+   439→| `order_type` | OrderType | MARKET/LIMIT |
+   440→| `size` | float | 数量 |
+   441→| `price` | float | 价格（限价单） |
+   442→| `ioc_offset` | float | IOC 偏移比例 |
+   443→
+   444→### 9.4 交易所适配器接口
+   445→
+   446→```python
+   447→# 获取适配器
+   448→from exchange import get_exchange, list_exchanges
+   449→
+   450→adapter = get_exchange('hyperliquid', {'testnet': True})
+   451→adapter.connect()
+   452→
+   453→# 行情数据
+   454→adapter.get_price('ETH')           # 当前价格
+   455→adapter.get_klines('ETH', '1h')    # K线数据
+   456→
+   457→# 账户数据
+   458→adapter.get_balance()              # 余额
+   459→adapter.get_positions()            # 所有持仓
+   460→adapter.get_position('ETH')        # 指定持仓
+   461→
+   462→# 交易
+   463→adapter.place_order(OrderRequest)  # 下单
+   464→adapter.close_position('ETH')      # 平仓
+   465→adapter.reverse_position('ETH')    # 反手
+   466→```
+   467→
+   468→### 9.5 数据流图
+   469→
+   470→```
+   471→┌─────────────────────────────────────────────────────────────────────┐
+   472→│                         交易系统 (TradingSystem)                      │
+   473→│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────────┐  │
+   474→│  │   策略      │ → │   Signal    │ → │   Action (BUY/SELL)    │  │
+   475→│  │ generate_   │    │  BUY/SELL   │    │  CLOSE_BUY/REVERSE...  │  │
+   476→│  │ signal()    │    │   HOLD      │    │  NO_POSITION           │  │
+   477→│  └─────────────┘    └─────────────┘    └─────────────────────────┘  │
+   478→│         ↓                ↓                         ↓                  │
+   479→│         └────────────────┴─────────────────────────┘                 │
+   480→│                           ↓                                            │
+   481→│                  ┌──────────────────┐                                 │
+   482→│                  │  OrderRequest   │                                 │
+   483→│                  │  side=OrderSide │                                 │
+   484→│                  │  order_type=... │                                 │
+   485→│                  └────────┬─────────┘                                 │
+   486→└───────────────────────────┼──────────────────────────────────────────┘
+   487→                            ↓
+   488→┌───────────────────────────────────────────────────────────────────────┐
+   489→│                         Adapter (适配器)                               │
+   490→│  ┌──────────────────────────────────────────────────────────────┐   │
+   491→│  │  收到 OrderRequest                                           │   │
+   492→│  │  ↓                                                           │   │
+   493→│  │  转换为交易所格式 (IOC + 偏移)                                 │   │
+   494→│  │  ↓                                                           │   │
+   495→│  │  调用交易所 API                                                │   │
+   496→│  └──────────────────────────────────────────────────────────────┘   │
+   497→│         ↓                ↓                ↓                         │
+   498→│   HyperLiquid      Binance          其他交易所                      │
+   499→└───────────────────────────────────────────────────────────────────────┘
+   500→```
+   501→
+   502→### 9.6 新增模块说明
+   503→
+   504→**新增策略**:
+   505→1. 在 `src/core/strategy/` 创建 `strategy_xxx.py`
+   506→2. 继承 `Strategy` 类
+   507→3. 实现 `generate_signal()` 方法
+   508→4. 系统自动发现，无需注册
+   509→
+   510→**新增风险管理**:
+   511→1. 在 `src/core/risk/` 创建 `xxx.py`
+   512→2. 继承 `RiskManager` 类
+   513→3. 实现 `check()` 方法
+   514→4. 系统自动发现，无需注册
+   515→
+   516→**新增交易所**:
+   517→1. 在 `src/exchange/` 创建目录 `xxx/`
+   518→2. 创建 `adapter.py`，继承 `ExchangeAdapter`
+   519→3. 实现所有抽象方法
+   520→4. 系统自动发现，无需注册
+   521→
+   522→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

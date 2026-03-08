@@ -1,0 +1,20 @@
+total 160
+drwxr-xr-x  19 allenbot  staff    608 Feb 23 13:00 .
+drwxr-x---+ 40 allenbot  staff   1280 Feb 23 13:00 ..
+-rw-r--r--@  1 allenbot  staff  18436 Feb 22 15:22 .DS_Store
+drwxr-xr-x   7 allenbot  staff    224 Feb 23 12:59 backups
+drwxr-xr-x   3 allenbot  staff     96 Feb  2 19:34 cache
+drwxr-xr-x  16 allenbot  staff    512 Feb 23 12:59 debug
+drwxr-xr-x   2 allenbot  staff     64 Feb  2 19:34 downloads
+drwxr-xr-x   4 allenbot  staff    128 Feb 22 14:38 file-history
+-rw-------   1 allenbot  staff  45604 Feb 23 13:00 history.jsonl
+drwxr-xr-x   3 allenbot  staff     96 Feb 22 18:46 plans
+drwxr-xr-x   5 allenbot  staff    160 Feb 23 12:41 plugins
+drwx------   7 allenbot  staff    224 Feb 22 19:49 projects
+-rw-r--r--   1 allenbot  staff    496 Feb 22 15:15 prompt.md
+drwxr-xr-x   7 allenbot  staff    224 Feb 23 13:00 session-env
+-rw-r--r--@  1 allenbot  staff    571 Feb 23 12:42 settings.json
+-rw-r--r--   1 allenbot  staff    974 Feb 23 12:51 settings.local.json
+drwxr-xr-x   3 allenbot  staff     96 Feb 23 13:00 shell-snapshots
+drwxr-xr-x  15 allenbot  staff    480 Feb 19 16:22 skills
+drwxr-xr-x  12 allenbot  staff    384 Feb 23 13:00 todos

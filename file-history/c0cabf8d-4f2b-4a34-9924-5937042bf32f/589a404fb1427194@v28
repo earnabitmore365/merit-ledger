@@ -1,0 +1,256 @@
+⛔ **恢复协议优先**：看到此文件 ≠ 已完成恢复协议。必须先完整执行 CLAUDE.md 步骤1-4，才能开始任何工作。
+
+> 太极签：2026-03-01
+
+# Auto-Trading 项目记忆
+
+> 白纱最后更新：—
+> 黑丝最后更新：2026-02-28 17:49
+
+## 项目基本信息
+- 路径: `/Users/allenbot/project/auto-trading`
+- 项目: Abby Auto-Trading v1.7，加密货币自动交易系统
+- 语言: Python 3.11+，中文注释和 UI
+- macOS 上用 `python3`（不是 `python`）
+
+## GitHub 仓库
+- **代码**: `earnabitmore365/auto-trading` (private) — 源码、策略、回测摘要
+- **对话记录**: `earnabitmore365/trading-analysis` (private) — 7个会话完整 Markdown
+- 私钥已移到 `.env`（不提交），代码从环境变量读取
+- `.gitignore` 排除: 历史数据(378MB)、回测报告(871MB)、`__pycache__`、日志、`.env`
+
+## 投资研究（已迁移到独立项目）
+- **研究项目**: `~/project/trading-research/`
+- 投资计划、策略选择、市场分析、执行追踪 → 都在那边讨论
+- 完整计划: `~/project/trading-research/investment_plan.md`
+- **技术要点（与代码相关的留这里）**:
+  - `stop_loss_pct=0.1` + 10x杠杆 = 逐仓强平，回测与实盘等价
+  - 回测参数: $500本金, 10x杠杆, 10%止损, TTP开启, DAYS=365
+  - 1521份有效报告存于 `reports/backtest/`
+
+## 用户对记录一致性的明确要求（原话保留）
+
+"你们记的东西我基本看不懂，只能靠你们提取，别到时每次问都有各个不同的答案。。。不然我会脑抽筋"
+
+**执行原则：**
+- 用户问任何策略/数据/决策，白纱和黑丝的答案必须一致——唯一权威来源是 `investment_plan.md`
+- 关键数字（d2d、avg_r、策略名、回测结果）必须从文件重新读取，不能凭记忆回答
+- 如果两个 AI 的答案有冲突，以 investment_plan.md 为准，不以记忆或上下文为准
+- 每次分析完有新结论，必须立即写入 investment_plan.md，不能只停留在聊天记录里
+
+## 协作流程（项目级 CLAUDE.md，02-28 更新）
+
+**三阶段流程（阶段一→二→三，不跳步）：**
+- 阶段一：需求进来 → 白纱出**精简方案**（目标/核心步骤/关键决策点/预期输出，骨架不展开）→ 用户打磨确认
+- 阶段二：用户说"给黑丝"/"查漏" → 白纱出**完整方案** → 黑丝只读不动（禁 Edit/Write/Bash），三选一：a.接受 b.硬伤≤3条 c.建议重构
+- 阶段三：双方OK → 白纱更新CHECKPOINT → 用户说"开始" → 黑丝执行
+
+**轻量例外**：用户说"直接改"且是局部修改（无新文件/删除/接口变动）→ 跳过完整流程。超出范围即使用户说"直接改"也须提醒并走完整流程。
+
+**CHECKPOINT 强制更新节点**：支线开启时 / 黑丝执行完成后汇报前 / 恢复流程发现过时时
+
+**两份 CLAUDE.md**：
+- 全局 `~/.claude/CLAUDE.md` — 精简版（无角色定义、无协作流程）
+- 项目 `auto-trading/CLAUDE.md` — 完整版（含角色定义、三阶段流程、CHECKPOINT规则）
+- 读规章必须读项目级，全局版是子集
+
+## 测试网的定位（用户明确说过）
+- **测试网只能验证系统层面**：API连通、下单逻辑、仓位管理能不能跑通
+- **测试网无法验证策略**：数据不是主网实时的，价格不真实，策略表现没有参考价值
+- **不要建议"测试网跑几天验证策略效果"** — 这个建议没有意义
+- investment_plan.md 里"测试网跑3天验证"那句话的含义仅限于：确认系统不报错，不是验证策略
+
+## 重要原则
+- **完整性、真实性、有效性** — 用户唯一追求的标准
+- **不写死任何配置** — 币种、周期、策略全部自动识别（__init__、base类、generate_seed.py 都是）
+- **方案设计必须对齐用户核心指标** — 设计分析步骤时，先看 investment_plan.md 里的筛选标准，逐条翻译成输出字段，不能用代理指标（avg_r）替代核心指标（days_to_double）而不说明
+- **白纱职责：主动补全漏洞** — 用户说话会漏细节，白纱出方案前必须自己做完整性检查（对照筛选标准逐条核实），发现缺失主动补上，不能等数据出来才发现，更不能等用户追问
+- **报告验证原则** — 验证不能只在AI这边跑代码得出结论，报告本身要让用户自己能对得上数。回测报告的 trades 格式必须呈现完整资金链：开仓balance + pnl = 平仓balance，平仓balance = 下笔开仓balance，用户扫一眼就能核实，不依赖AI代码验证
+
+## 回测报告格式规范（给用户看的格式）
+
+**顶层结构：**
+```json
+{
+  "strategy": "策略名/币种/周期",
+  "config": { "coin", "interval", "leverage", "initial_balance", "bet_formula", "note" },
+  "balance": 最终余额（数字）,
+  "results": {
+    "total_trades", "winning_trades", "win_rate",
+    "final_balance", "peak_balance", "max_drawdown_pct",
+    "days_to_double", "sharpe"
+  },
+  "trades": [ ... ]
+}
+```
+
+**trades 每条记录（开仓行 + 平仓行成对出现）：**
+```json
+{ "time": "YYYY-MM-DD HH:MM", "order_type": "BUY/SELL", "price": ..., "capital": ..., "pnl": 0, "balance": 开仓时余额, "withdraw": 0 }
+{ "time": "YYYY-MM-DD HH:MM", "order_type": "CLOSE_BUY/CLOSE_SELL", "price": ..., "capital": ..., "pnl": 净盈亏, "balance": 平仓后余额, "withdraw": 0 }
+```
+
+**用户验证方式（自己对数）：**
+- 开仓行 pnl = 0（开仓时不产生盈亏）
+- 开仓余额 + pnl = 平仓余额
+- 平仓余额 = 下一笔开仓余额
+- pnl 已含 fee/funding/slippage（净盈亏）
+
+**注意：** config.note 会说明 pnl 是净盈亏（已含所有成本）
+- **改代码前先说，等用户确认再动** — 违反这条用户会发火，已反复强调
+- **跨周期回测必须用相同日期范围**: 按各周期最大可用数据
+- **实盘收益按回测70%估算**: 滑点+手续费+延迟（v2种子已内置真实成本）
+- **demandindex是做空策略**: 熊市暴赚，牛市会亏，注意市场转向
+- **Van Tharp R-Multiple**: 固定注码$1 = 1R，PnL直接就是R值，乘以倍数可缩放到任意本金
+- **用户持有 BNB 现货**，币本位合约交易是实际需求，数据必须完整
+
+## 已完成的 bug 修复（精简版）
+- backtest.py: 8个修复（开仓记录缺失、O(n²)性能、bars_per_day等）
+- batch_backtest.py: 5个修复（百分比显示、屏幕溢出等）
+- system.py: 6个修复（import位置、_sync_position过滤、反手逻辑等）
+- trade_menu.py: 6个修复（连盈连亏算法、风险管理器配置等）
+- 策略 if/if bug: 8个策略修复 + 创建4个单向策略(cci_long/short, demandindex_long/short)
+- TTP 完全重写为状态机
+- download_latest_coins.py: since计算修复
+
+## 待修复（lab 造完后统一修 → 搬回源代码）
+- **batch_backtest.py:11** — `sys.path.insert` 路径错误，`'..', 'src'` 解析到 `src/src/`（不存在），应改为 `'..'`
+- **trade_menu.py:18** — 同上，`'..', 'src'` 解析到 `src/src/`，应改为 `'..'`
+- **accounts.py:15** — `.parents[3]` 硬编码深度，若文件层级变动会断（低风险，当前稳定）
+- **backtest.py:27-28** — 变量命名 `_src_dir` / `_backtest_dir` 互换（功能正确，阅读易混淆）
+
+## 数据状态（S22 结束时实测）
+- 13币种: 10 合约（USDT本位）+ 3 币本位，全部在种子库（2236组）
+- 10 合约: BTC, ETH, XRP, BNB, SOL, ADA, TRX, AVAX, LINK, DOT
+- 3 币本位: BTC_COIN, ETH_COIN, BNB_COIN
+- 已删除: DOGE(meme币)、ATOM、LTC（非市值前十）
+- **1m**: 全部 13 币种 × 1,052K 条 ✅
+- **5m**: 全部 13 币种 × 420K 条 ✅ (4年)
+- **15m**: 全部 13 币种 × 140K 条 ✅ (4年)
+- **1h**: 全部 13 币种达目标 ✅ (BTC/BNB 70K, 币本位~48K, SOL 48K, DOT 48K, AVAX 47K 等)
+- 52 组数据文件全部到位，零错误
+- 存放: `src/backtest/data/historical/{COIN}/{tf}.json`
+- 币种历史限制: SOL/AVAX/DOT 只有~6年(2020上线), 其他7币 8年+
+- 空间估算: K线~3.1GB + 种子DB~9GB = ~12GB（硬盘剩133GB）
+- 数据 gap: 5m 2023-03-24(16根), 1h 2018年早期(10-25根) — 经 Binance API 验证为交易所源头缺失，不可补
+- 下载脚本: `download_latest_coins_2.0.py`（双交易所: spot + delivery 币本位）
+
+## 上下文恢复工具
+- 转换脚本: `~/.claude/scripts/convert_conversation.py`
+- 用法: `python3 ~/.claude/scripts/convert_conversation.py <jsonl> /tmp/session.md`
+- 来源: GitHub `earnabitmore365/trading-analysis` 仓库
+
+## 用户想法：自动市场识别 + 策略切换
+- 交易机器人自动检测当前市场状态（牛市/熊市/盘整）
+- 根据市场状态自动切换最优策略
+- 例：熊市 → demandindex_short 做空，牛市 → cci_long 做多，盘整 → mean_reversion
+- 需要：市场状态判定模块 + 策略映射表 + 切换逻辑
+- 可以结合全矩阵回测结果，找出每种市场状态下表现最好的策略
+
+## trade_menu.py 重构（已完成 ✅）
+- `src/ui/__init__.py` — 空 init
+- `src/ui/base.py` (~820行) — BaseMenu 公共 UI 组件库（Color/Box/边框绘制/navigate_options/show_form/show_confirm/show_loading）
+- `src/trading/trade_menu.py` (~670行，原1116行) — 继承 BaseMenu + StatsCalculator 去重 + 7步流程 + 紧凑卡片面板
+- 方案详见 `.claude/plans/fluffy-zooming-whisper.md`
+
+## Regime Detection v2（ADX 三层复合 — 已完成核心）
+- `src/trading/regime/config.py` — ADX28+SMA50+ATR14, 滞后阈值进25/退18, dwell48, confirm6
+- `src/trading/regime/detector.py` — Wilder标准ADX算法, 纯计算无状态, 已验证10币种
+- `src/trading/regime/strategy.py` — 滞后+确认+MarketScore+no-direct-flip
+- 频率优化: 950→273次/年（ADX28是最有效杠杆）
+- **问题**: regime_map的3个策略是猜的，从未数据验证 → 引出下面的分析计划
+
+## 指标库（已完成 ✅）
+- `src/indicators/` — 12个指标，9个文件，统一 BaseIndicator 接口
+- 本地: AHR999(score=1.0 抄底区) + Pi Cycle Top(gap=56.8% 安全)
+- 衍生品: Funding Rate + OI (HyperLiquid API, 5min缓存)
+- 情绪: Fear & Greed (score=0.89 极度恐惧=买入)
+- 市场: Stablecoin Supply (DefiLlama) + BTC.D (CoinGecko)
+- 链上: MVRV + NUPL + Puell + Exchange Netflow (BGeometrics, 6h缓存)
+- 综合: MarketScore 加权(链上40%+市场25%+衍品20%+情绪15%) = 0.68 (buy)
+- BGeometrics API: `bitcoin-data.com/api/v1/{metric}/last`，8次/小时限制
+- 429 降级: 返回过期缓存数据
+- 验证: `python3 src/indicators/verify.py` (--local-only / --history)
+- 用户想法：**用真实数据验证指标有效性**，做成可复用的库
+
+## 交接机制（S9 建立）
+- **全局规则** `~/.claude/CLAUDE.md` — CHECKPOINT 机制、压缩提醒、中文、恢复流程
+- **项目状态** `auto-trading/CHECKPOINT.md` — 任务历程 + 当前任务完整细节
+- **Slash Command** `/checkpoint` — `~/.claude/commands/checkpoint.md`，交接时输入即可
+- **规则**：✅ 完成的压成一句，⬜ 未完成的写完整版细节（关键文件、架构、约束、验证标准）
+- **任务状态以 CHECKPOINT.md 为准**，不再维护下面这个"待执行"列表
+
+## 种子报告进展
+- **v1**: 1720组, 12.4M配对交易, 2.17GB — 被误删
+- **v2 代码已验证通过**: backtest.py + generate_seed.py，单条测试 35 字段全部有值
+- **行动3 分析方向（已确认）**: 用 `regime_timeline` 识别连续趋势段（非 `regime_at_open` 打标签），只取开仓和平仓都在同一 regime 段内的交易，保证统计纯粹性；按单币种聚合（bull/bear/ranging 各找最强策略），资金不分散
+- **行动3 正确输出字段（教训）**: Step3 必须包含 `days_to_double`（模拟复利$500→$1000首次天数）和 `trades_per_day`，不能只用 `avg_r` 替代——avg_r 不能反映翻倍速度，高频低R可能比低频高R翻倍更快。筛选标准必须对齐 investment_plan.md 里的核心指标
+- **v2 combo_summary (35字段)**: 原有26 + 新增8(max_balance/min_balance/max_win/max_loss/expectancy_ratio/longest_win_streak/longest_loss_streak/signal_close_count) + id
+- **v2 paired_trades (24字段)**: fee, funding_cost, slippage_cost, mfe, mae, open_atr_pct, open_volume, funding_count
+- **注码**: $1固定注码（Van Tharp R-Multiple），初始本金$500
+- **DAYS=0**: 全量数据，不截取（种子什么都不能缺）
+- **断点续传**: 每个策略 commit 一次（精确到单策略级别）
+- **自动检测**: 扫描 data/historical/ 目录，不写死币种/周期列表
+- **命令行参数**: `--coins` 和 `--intervals` 可选过滤
+- **v2 种子已完成**: 2236组 / 30,033,724笔 / 7.54GB / 零失败零遗漏
+- **Prop Firm 指标**: CAGR, 日回撤<5%, 总回撤<10%, 盈亏比
+- **旧 run_full_matrix.py 已删除**，功能被 generate_seed.py 完全替代
+
+## 用户关键原话（数据补充 + v2 种子相关）
+- "4年是一个周期，但是跨周期应该是2个4年。所以。。。。。搞个8年的数据库吗？"
+- "趁我睡觉的时候再补，连同5m 15m 1h的都补好"
+- "那我们现在深度的挖掘一下，有什么是要加进去的，不管现在有没有用，可能以后会有用的数据"
+- "确定可以吗？你知道我最在意的唯一原则，就是真实性，完整性，有效性。"
+- "嗯嗯，那就跟着专业人士走，等下补好所有的数据就按这个跑。"
+
+## 种子验证结果（S22 verify_seed.py）
+- 维度1 重跑对比：5/5 通过
+- 维度2 内部一致性：PnL 19/20通过(1组差$0.01浮点)，胜率2236/2236，平仓类型全部通过
+- 维度3 逻辑合理性：MFE/MAE/fee/direction/price/NULL 全部通过，holding_bars<=0有68笔(0.00023%)
+- 维度4 Regime一致性：100/100通过
+- **结论：数据完整、真实、有效**
+
+## AI Sandbox — lab/
+- 路径：`/Users/allenbot/project/auto-trading/lab/`
+- 内容：src/ 代码副本（1.9MB）+ 软链接到原系统数据 + .env（测试网）
+- 不上传（.gitignore），AI 随便实验，完成后用户决定是否覆盖回原系统
+- **lab 里随便造，不用等用户确认任何东西**（用户原话："lab是专门做给你们随便造的，不用等我确认任何东西"）
+- 完成后由用户决定是否覆盖回原系统 src/
+
+## 策略筛选流程 → 详见 memory/screening_pipeline.md
+- 关卡一：门槛（K线数÷X，按周期浮动）→ 关卡二：各自考场（regime内排名）→ 关卡三：组队 → 关卡四：整队照妖镜
+- 已确认：关卡一公式和X值（1m/5m/15m=500, 1h=350），实测淘汰332/2236（14.8%）
+- 待确认：关卡二考场报名笔数门槛、关卡三/四细节
+
+## 待执行 → 见 CHECKPOINT.md
+
+## 会话索引（最新在最上面，详见 memory/session_summaries.md）
+| # | ID | 日期 | 消息 | 核心内容 |
+|---|-----|------|------|----------|
+| S27 | 96872f8a(续2) | 03-01 | — | 战略转向：单策略WF→整队WF+四关框架+门槛K线÷X+Layer2执行20/20+screening_pipeline.md |
+| S26 | c0cabf8d | 02-28 | — | Sonnet: 照妖镜框架定稿+VanTharp注码澄清+纯信号版不重跑+avg_r分布数据+第一层方案+读取59名尖子生结果(meanrev XRP/5m 4.21 Sharpe) |
+| S25 | 96872f8a(续) | 03-01 | — | 路A/B均过拟合失败+策略分类框架+第一层筛选完成(59名尖子生)+validate_seeds.py |
+| S24 | 96872f8a | 02-28 | — | Step5+BNB_COIN专项+交易系统4文件验证+路径审计(4待修复) |
+| S23 | c0cabf8d | 02-27~28 | 170 | 行动3 Step1~4全完成：SOL/1h自动切换(12天翻倍/$114K/Sharpe+2.13)+4份旧格式报告+CHECKPOINT重构+BNB_COIN待执行 |
+| S22 | 2886449b | 02-27 | 156 | v2种子全量完成(2236组/30M笔/7.54GB)+数据下载52组+verify_seed验证4维度通过 |
+| S21 | 0a205d7d | 02-27 | 40 | CLAUDE.md遵守性修复+路径泛化({项目路径编码})+会话补录S16/S17 |
+| S20 | 57922408 | 02-27 | 279 | 种子报告v1完成→误删→v2升级→数据补充(5m/15m/1h完成+1m部分)→恢复协议撞车修复→项目迁移 |
+| S19 | e30cab2f | 02-27 | 163 | 指标库12个+Regime v2(ADX三层)+全矩阵1720组+种子概念 |
+| S18 | 9d13c65d | 02-27 | 21 | Regime v1实现→验证→失败(1680切换/年)→ADX研究→指标库规划 |
+| S17 | 02ad7f4a | 02-26~27 | 74 | Sonnet: checkpoint测试+Regime v2方案+OpenClaw skills审查+research_workflow重写 |
+| S16 | 86342176 | 02-26 | 20 | Sonnet: 交接机制设计+CHECKPOINT概念+活文档方案+配额讨论 |
+| S15 | d8fec100 | 02-26 | 5 | README v1.5 + Regime Detection规划启动 |
+| S14 | d80431a0 | 02-26 | 14 | OpenClaw审查+免费模型fallback链(Gemini→Mistral→Groq) |
+| S13 | d6fc9d16 | 02-26 | 54 | trade_menu改造+if/if bug修复+150组回测+GitHub搭建 |
+| S12 | e955d763 | 02-25 | 107 | 数据质量修复、16+bug深度审查、TTP状态机重写 |
+| S11 | 9871bf55 | 02-25 | 6 | 项目级记忆机制搭建 |
+| S10 | 86644c5a | 02-25 | 1200 | 最大会话：回测重构、adapter重写、batch_backtest UI |
+| S9 | 4f07fe15 | 02-24 | 14 | OpenClaw换模型(MiniMax-M2.5-highspeed) |
+| S8 | f95f5086 | 02-23 | 12 | GitHub MCP安装、gh auth login |
+| S7 | 1c332b68 | 02-23 | 9 | [小型] GitHub MCP配置 |
+| S6 | ee936cb7 | 02-23 | 1 | [小型] API Key格式排查 |
+| S5 | 2e689a10 | 02-23 | 3 | [小型] 登录问题调试 |
+| S4 | e78a5b34 | 02-22 | 4 | [小型] Claude Code Skills教学 |
+| S3 | ad323fa2 | 02-22 | 156 | 策略统一+TTP修复+adapter初步适配 |
+| S2 | e5cd5291 | 02-21 | 134 | OpenClaw大修(token超限+compaction+模型切换) |
+| S1 | 9de60301 | 02-21 | 3 | [小型] 初始测试 |

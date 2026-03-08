@@ -1,0 +1,260 @@
+⏺ 好，完整版：                                                                  
+                                         
+  ---                                                                           
+  交易系统实施方案（黑丝执行版）                                                
+                                                                                
+  工作目录：lab/，原系统 src/ 一行不动。                    
+  完成后汇报用户，由用户决定是否覆盖回原系统。
+
+  ---
+  一、文件清单
+
+  ┌─────────────────────────────┬──────┬───────────────────────────┐
+  │            文件             │ 操作 │           说明            │
+  ├─────────────────────────────┼──────┼───────────────────────────┤
+  │ lab/run.py                  │ 新建 │ 入口脚本 + 多币种线程管理 │
+  ├─────────────────────────────┼──────┼───────────────────────────┤
+  │ lab/src/trading/runner.py   │ 新建 │ 单币种运行器              │
+  ├─────────────────────────────┼──────┼───────────────────────────┤
+  │ lab/src/trading/state.py    │ 新建 │ 状态持久化                │
+  ├─────────────────────────────┼──────┼───────────────────────────┤
+  │ lab/src/trading/notifier.py │ 新建 │ 通知接口（空实现）        │
+  ├─────────────────────────────┼──────┼───────────────────────────┤
+  │ lab/src/trading/system.py   │ 不动 │ 现有主控原样用            │
+  ├─────────────────────────────┼──────┼───────────────────────────┤
+  │ lab/src/trading/regime/     │ 不动 │ Regime v2 原样用          │
+  └─────────────────────────────┴──────┴───────────────────────────┘
+
+  新增运行时目录（需自动创建，加入 .gitignore）：
+  lab/state/    # 持仓状态 JSON
+  lab/logs/     # 日志文件
+
+  ---
+  二、state.py — 状态持久化
+
+  路径：lab/src/trading/state.py
+
+  类：StateStore
+
+  职责：记录每个币种的持仓状态，进程重启后能恢复，避免重复开仓。
+
+  存储路径：lab/state/{coin}_{interval}.json
+
+  存储字段：
+  {
+    "position": "BUY",
+    "entry_price": 182.5,
+    "regime": "bull",
+    "last_kline_time": 1740000000000
+  }
+
+  方法：
+  - __init__(coin, interval, base_dir) → 确定文件路径，自动创建 state/ 目录
+  - save(position, entry_price, regime, last_kline_time) → 原子写入
+  JSON（先写临时文件再 rename，防止写到一半崩溃导致文件损坏）
+  - load() → dict → 读 JSON，文件不存在返回空 dict {}
+  - clear() → 删除状态文件（可选，平仓后调用）
+
+  ---
+  三、notifier.py — 通知接口
+
+  路径：lab/src/trading/notifier.py
+
+  职责：统一事件通知接口，现在空实现只写日志，以后加 Telegram/微信只改这里。
+
+  事件类型（字符串常量）：
+  OPEN            # 开仓
+  CLOSE           # 平仓（含 TTP 止盈、止损）
+  REGIME_SWITCH   # Regime 切换
+  ERROR           # 运行错误
+  DAILY_SUMMARY   # 每日汇总（预留，现在不实现）
+
+  类：Notifier
+
+  方法：
+  - __init__(coin) → 绑定币种，获取对应 logger
+  - notify(event_type: str, data: dict) → 当前只 logger.info(f"[{event_type}]
+  {data}")，不做其他事
+
+  data 字典各事件建议字段：
+  - OPEN：{coin, direction, price, capital, regime}
+  - CLOSE：{coin, direction, price, pnl, close_type, regime}
+  - REGIME_SWITCH：{coin, from_regime, to_regime, adx}
+  - ERROR：{coin, error, traceback}
+
+  ---
+  四、runner.py — 单币种运行器
+
+  路径：lab/src/trading/runner.py
+
+  类：TradingRunner
+
+  职责：包装 TradingSystem，加入 K 线整点对齐、事件钩子、状态恢复。
+
+  __init__ 参数：
+  TradingRunner(
+      coin: str,
+      interval: str,          # "1h" / "15m" 等
+      strategy,               # 策略实例（已创建好传入，不在这里 new）
+      adapter_config: dict,   # HyperLiquid 连接配置
+      trading_config: dict,   # leverage, position_pct, min_trade 等
+      notifier: Notifier,
+      state_store: StateStore,
+  )
+
+  初始化流程：
+  1. 用 adapter_config 创建 HyperLiquidAdapter，调用 connect()
+  2. 创建 TradingSystem(exchange=adapter, strategy=strategy,
+  config=trading_config)
+  3. 调用 _restore_state()，读 StateStore → 注入 system.position 和
+  system.entry_price
+  4. 创建独立 logger，输出到 lab/logs/{coin}_{interval}.log
+
+  主要方法：
+
+  start()：主循环
+  while not self._stop:
+      _wait_for_next_kline()
+      _run_once()
+
+  stop()：设置 self._stop = True
+
+  _wait_for_next_kline()：K 线整点对齐
+  - 根据 interval 算出秒数（1h=3600, 15m=900, 5m=300, 1m=60）
+  - next_close = ceil(now / interval_sec) * interval_sec
+  - sleep(next_close - now + 8)（多等 8 秒让交易所数据稳定）
+
+  _run_once()：
+  1. 记录 run 前状态：prev_position = system.position，prev_regime =
+  strategy._current_regime（如果是 RegimeStrategy）
+  2. 调用 system.run_once()
+  3. 比较前后状态，触发对应事件钩子：
+    - 无仓 → 有仓：调用 _on_open()
+    - 有仓 → 无仓：调用 _on_close()
+    - 有仓 → 反向仓：调用 _on_close() + _on_open()
+    - regime 变了：调用 _on_regime_switch()
+  4. 调用 state_store.save() 保存最新状态
+
+  _on_open(direction, price)：
+  - notifier.notify(OPEN, {...})
+
+  _on_close(pnl, price, close_type)：
+  - notifier.notify(CLOSE, {...})
+
+  _on_regime_switch(from_r, to_r, adx)：
+  - notifier.notify(REGIME_SWITCH, {...})
+
+  _restore_state()：
+  - 读 state_store.load()
+  - 如果有持仓记录，直接赋值 system.position 和 system.entry_price
+  - 记录日志："恢复持仓状态：BUY @ 182.5"
+
+  注意：prev_regime 只在策略是 RegimeStrategy 时有意义，判断前先 isinstance
+  检查。
+
+  ---
+  五、run.py — 入口脚本
+
+  路径：lab/run.py
+
+  职责：定义策略配置、创建 runner、管理多线程、监听 Ctrl+C。
+
+  COIN_CONFIGS（核心配置表）：
+  COIN_CONFIGS = [
+      {
+          "coin": "SOL",
+          "interval": "1h",
+          "strategy_type": "regime",
+          "regime_map": {
+              "bull": "cmo",
+              "bear": "bbsqueeze",
+              "ranging": "meanreversion",
+          },
+      },
+      {
+          "coin": "BNB_COIN",
+          "interval": "1h",
+          "strategy_type": "single",
+          "strategy_name": "accumulationdistribution",
+      },
+  ]
+
+  trading_config（所有币种共用，与回测参数一致）：
+  TRADING_CONFIG = {
+      "leverage": 10.0,
+      "position_pct": 0.1,
+      "min_trade": 100,
+      "stop_loss_pct": 0.1,
+      "kline_limit": 150,    # Regime v2 需要 ≥120 根
+  }
+
+  create_runner(coin_config, network) 函数：
+  1. 按 strategy_type 创建策略实例：
+    - regime → 创建 RegimeStrategy，传入
+  regime_map，use_market_score=True，adx_period 按 interval 自动取（用现有
+  get_adx_period(interval)）
+    - single → get_strategy(strategy_name)
+  2. 从 .env 读取私钥和 wallet_address
+  3. 创建 adapter_config = {wallet_address, private_key,
+  testnet=(network=="testnet")}
+  4. 创建 StateStore(coin, interval)
+  5. 创建 Notifier(coin)
+  6. 创建并返回 TradingRunner(...)
+
+  main() 函数：
+  argparse:
+    --coins      逗号分隔，默认全部（SOL,BNB_COIN）
+    --network    mainnet / testnet，默认 mainnet
+
+  过滤 COIN_CONFIGS 按 --coins
+
+  为每个 coin_config 调用 create_runner()
+
+  为每个 runner 创建 daemon=True 的线程，target=run_with_catch(runner)
+
+  启动所有线程
+
+  监听 Ctrl+C：
+    收到 → 调用所有 runner.stop() → join 所有线程（timeout=10s）→ 退出
+
+  run_with_catch(runner) 函数（崩溃隔离）：
+  def run_with_catch(runner):
+      try:
+          runner.start()
+      except Exception as e:
+          logger.error(f"[{runner.coin}] 崩溃: {e}")
+          runner.notifier.notify("ERROR", {"error": str(e)})
+          # 不 raise，不影响其他线程
+
+  启动示例：
+  # 只跑 SOL
+  python3 run.py --coins SOL --network mainnet
+
+  # 同时跑两个
+  python3 run.py --coins SOL,BNB_COIN --network mainnet
+
+  ---
+  六、日志结构
+
+  lab/logs/
+  ├── SOL_1h.log          # SOL runner 日志（开平仓、Regime 切换、错误）
+  ├── BNB_COIN_1h.log     # BNB_COIN runner 日志
+  └── system.log          # run.py 级别日志（启动、停止、线程崩溃）
+
+  每个文件独立 FileHandler，格式：%(asctime)s [%(levelname)s] %(message)s
+
+  ---
+  七、注意事项（黑丝执行时要确认）
+
+  1. BNB_COIN 的交易所 symbol：在 HyperLiquid 上币本位合约的实际 symbol
+  名称需要确认，可能不是直接写 BNB_COIN，要先查一下 adapter 支持哪些 symbol
+  2. lab/src 和原 src 的代码版本：lab/src 是 02-28 的拷贝，执行前先 diff
+  一下两边 trading/regime/ 和 exchange/ 是否有差异，如有差异以原 src
+  为准（手动同步过来）
+  3. RegimeStrategy 的 _current_regime 是私有属性：isinstance
+  检查后直接访问，不需要改 regime/strategy.py
+  4. state/ 和 logs/ 目录：runner 初始化时自动 os.makedirs(..., exist_ok=True)
+  创建
+  5. 不写死任何配置：strategy 名称、币种、网络全部从参数和 COIN_CONFIGS 读，不
+  hardcode
+

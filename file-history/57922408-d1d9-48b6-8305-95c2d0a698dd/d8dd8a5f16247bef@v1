@@ -1,0 +1,156 @@
+# 会话摘要全集
+
+> 以下是所有 7 个会话的精华提炼。读完此文件等同于读完全部对话记录，后续无需再读 trading-analysis 仓库的完整 session 文件。
+
+---
+
+## S1: session_ad323fa2 (02-22, 156 条消息)
+
+**讨论了什么：**
+- OpenClaw 崩溃修复（agents 把 providers 配置放到错误的根级别位置）
+- 40+ 个策略文件统一性审查（继承基类、`candles` → `klines`、导入路径统一）
+- TTP（移动止盈）逻辑修复与 `risk/ttp.py` 集成
+- HyperLiquid Testnet 实盘测试尝试（未完成，adapter 兼容性问题）
+
+**改了什么代码：**
+- 41 个 `strategy_*.py` 文件：参数统一为 `klines`，导入路径改为 `core.strategy`
+- `src/core/risk/ttp.py`：重写 TTP，添加两次确认机制
+- `src/interface/run_bot.py` + `src/backtest/backtest.py`：集成 TTPManager，替代内联 TTP 代码
+- `src/core/strategy/__init__.py`：改为自动扫描 `strategy_*.py` 注册策略
+- `src/exchange/hyperliquid/adapter.py`：多次修改尝试修复 SDK 兼容性（未完全完成）
+
+**关键决策：**
+- 统一用 `klines` 而非 `candles`
+- TTP 必须调用统一的 `risk/ttp.py`，不允许各模块自己实现
+- 绝对不允许手动模拟，必须用 testnet 实盘测试
+- Adapter 适配系统接口，不改 bot 语法
+- 策略自动发现（`__init__.py` 自动扫描注册）
+
+---
+
+## S2: session_f95f5086 (02-23 01:48, 12 条消息)
+
+**讨论了什么：**
+- 检查 Claude Code 可用技能（13 个 skill）
+- 安装 GitHub Copilot MCP，配置 gh auth login
+
+**改了什么代码：**
+- 无代码修改，只配置了 GitHub CLI 认证
+
+**关键决策：**
+- 使用 Personal Access Token 登录 gh CLI（账号: earnabitmore365）
+
+---
+
+## S3: session_86644c5a (02-23 02:00, 1200 条消息 — 最大会话)
+
+**讨论了什么：**
+- MCP 配置检查（filesystem/zapier/google-drive）
+- 回测系统全面重构
+- HyperLiquid 交易所适配器完全重写
+- 批量回测 UI（batch_backtest.py）从零开发
+- 架构大清理
+
+**改了什么代码：**
+- `src/backtest/backtest.py`：8 个 bug 修复（开仓记录缺失、O(n²)性能、profit_factor、bars_per_day 等）
+- `src/backtest/batch_backtest.py`：新建，curses 交互式菜单，多选币种/策略/周期，搜索，进度条
+- HyperLiquid adapter 完全重写：市价单用 IOC + price offset、反手功能、WebSocket 修复
+- 新增 `accounts.py` 账号管理（测试网/主网）
+- 架构清理：删除 `src/config/`、`src/interface/`、`executor.py`、`arbitrage.py`
+- 所有 `__init__.py` 改为 pkgutil 自动扫描
+- 重写 README.md、新建 STRATEGY_GUIDE.md
+- 实测通过：开多/开空/多转空/空转多/平仓 全部成功
+
+**关键决策：**
+- 提款功能默认关闭
+- 报告路径统一到 `reports/backtest/`
+- 策略返回类型统一为 TradingSignal
+- 数据 13 币种 × 4 周期，每周期 30000 条
+
+---
+
+## S4: session_4f07fe15 (02-23 15:58, 14 条消息)
+
+**讨论了什么：**
+- OpenClaw 换模型（MiniMax-M2.5 → MiniMax-M2.5-highspeed）
+
+**改了什么代码：**
+- `~/.openclaw/openclaw.json`：删除 Lightning 模型，默认改为 highspeed，MiniMax-M2.5 作为 fallback
+
+**关键决策：**
+- Primary: MiniMax-M2.5-highspeed，Fallback: MiniMax-M2.5
+
+---
+
+## S5: session_e955d763 (02-25 04:18, 107 条消息)
+
+**讨论了什么：**
+- 历史数据格式转换与质量问题（字段名不兼容、1m/5m/15m 数据有 29 个大缺口）
+- backtest.py + batch_backtest.py 深度审查与修复（16+ 个 bug）
+- TTP 完全重写为状态机（原设计 4 个根本性缺陷）
+- system.py + trade_menu.py 深度审查（11 个 bug）
+- trade_menu UI 改进计划（会话末尾制定但未实施）
+
+**改了什么代码：**
+- `src/backtest/backtest.py`：开仓记录、O(n²)、bars_per_day、profit_factor、除零保护等 8 修复
+- `src/backtest/batch_backtest.py`：百分比显示、屏幕溢出、全选功能、Ctrl+C 静默退出等 5 修复
+- `src/core/risk/ttp.py`：完全重写为状态机（TTPState 追踪 highest/lowest/pullback/swing_count）
+- `download_latest_coins.py`：since 从写死 1h 改为动态 `1000 * ms_per_bar`，循环所有周期
+- `src/trading/system.py`：6 修复（import 位置、_sync_position 过滤、反手逻辑、Action 加 LIQUIDATION）
+- `src/trading/trade_menu.py`：6 修复（连盈连亏算法、风险管理器配置逻辑反了、持仓过滤币种）
+- 新建 CLAUDE.md、MEMORY.md
+
+**关键决策：**
+- 数据适配代码（写转换脚本），不改回测系统
+- O(n²) 用 MAX_WINDOW=200 固定窗口解决（策略最多用 52 根 K 线）
+- TTP 采用状态机重写（原设计补丁修不了）
+- 风险管理器纠正：TTP 开启 = CombinedRiskManager，TTP 关闭 = StopLossManager
+
+---
+
+## S6: session_9871bf55 (02-25 09:20, 6 条消息)
+
+**讨论了什么：**
+- 项目级别记忆机制讨论
+- 如何通过 `--project` 指定 Claude Code 工作目录
+
+**改了什么代码：**
+- 创建 `/Users/allenbot/project/MEMORY.md`（基础版）
+- 创建 `/Users/allenbot/project/.claude.json`（项目配置）
+
+**关键决策：**
+- 进入项目目录后运行 `claude` 即可自动加载记忆
+
+---
+
+## S7: session_d6fc9d16 (02-25 12:12, 54 条消息 — 当前会话前半段)
+
+**讨论了什么：**
+- trade_menu 6 项 UI 改动实施 + 3 轮日志泄漏修复
+- 策略 if/if bug 发现与修复（8 个策略 BUY 被 HOLD 覆盖）
+- 历史数据扩容（10 币种 × 3 周期，5m=20万条、15m=10万条）
+- 150 组全矩阵回测（5策略 × 10币种 × 3周期，DAYS=694 公平对比）
+- 1920 个回测报告深度分析 + 投资三阶段规划
+- GitHub 仓库搭建（auto-trading + trading-analysis）
+- 对话记录保存（JSONL → Markdown 转换脚本）
+
+**改了什么代码：**
+- `trade_menu.py`：交易模式选择页、步骤重编号、账号灰色禁用、show_loading 动画、日志闪烁修复、全局输出抑制
+- 8 个策略 if/if → if/elif 修复（demandindex、cci、adaptive、ichimoku 等）
+- 新建 4 个单向策略（demandindex_long/short、cci_long/short）
+- `download_latest_coins.py`：扩展到 10 币种
+- `.gitignore`：完善排除规则（历史数据 378MB、报告 871MB）
+- `accounts.py`：私钥移到 `.env` 环境变量
+- 新建 `.env` / `.env.example`
+- 新建 `run_full_matrix.py`、`ANALYSIS_NOTES.md`
+- 新建 trading-analysis 仓库（convert_conversation.py + 7 个 session markdown）
+- trade_menu 完整重构方案写入 `.claude/plans/fluffy-zooming-whisper.md`（未执行）
+
+**关键决策：**
+- demandindex/cci 之前表现好完全是 if/if bug（只做空 + 碰上熊市），修复双向后崩盘 → 保留单向版本
+- proc 是唯一真正靠谱的双向策略（修复前后表现一致）
+- 跨周期回测必须用相同日期范围（DAYS=694），否则 1h 数据虚高
+- 实盘收益按回测 70% 估算
+- 投资三阶段：熊市 demandindex_short 做空 → 底部 proc 双向 → 牛市降杠杆多策略分散
+- TOP 组合：TRX+cci_long+1h（Sharpe 3.97）、ETH+proc+15m（Sharpe 3.55）
+- ADA 适合做空不适合做多；XRP/BNB/TRX 做空全军覆没

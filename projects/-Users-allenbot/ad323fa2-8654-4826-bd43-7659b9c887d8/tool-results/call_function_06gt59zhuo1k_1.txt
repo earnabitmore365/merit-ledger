@@ -1,0 +1,44 @@
+    95→        long_stop = highest_close - (atr * self.config.multiplier)
+    96→        short_stop = lowest_close + (atr * self.config.multiplier)
+    97→        
+    98→        return {"long_stop": long_stop, "short_stop": short_stop}
+    99→    
+   100→    def generate_signal(
+   101→        self, coin: str, candles: List[Dict] = None
+   102→    ) -> TradingSignal:
+   103→        """Generate ATR Trailing Stop signal
+   104→        
+   105→        Args:
+   106→            coin: Trading pair
+   107→            candles: OHLCV data
+   108→            
+   109→        Returns:
+   110→            TradingSignal with trailing stop analysis
+   111→        """
+   112→        # Validate candles
+   113→        min_required = self.config.lookback
+   114→        if not candles or len(candles) < min_required:
+   115→            return TradingSignal(
+   116→                signal=Signal.HOLD,
+   117→                confidence=0.0,
+   118→                coin=coin,
+   119→                timestamp=candles[-1]["time"] if candles else 0,
+   120→                metadata={"reason": "Insufficient candles"},
+   121→            )
+   122→        
+   123→        # Extract closes
+   124→        closes = [c["close"] for c in candles]
+   125→        current_price = closes[-1]
+   126→        
+   127→        # Calculate ATR
+   128→        atr = self.calculate_atr(candles)
+   129→        
+   130→        # Calculate trailing stops
+   131→        trail = self.calculate_trailing_stops(candles, atr)
+   132→        
+   133→        # Determine trend using MAs
+   134→        ma_short = sum(closes[-10:]) / 10
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

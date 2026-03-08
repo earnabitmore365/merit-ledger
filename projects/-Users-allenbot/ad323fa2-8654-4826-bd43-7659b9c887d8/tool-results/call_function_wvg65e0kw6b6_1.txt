@@ -1,0 +1,7 @@
+-rw-------  1 allenbot  staff  3078 Feb 22 14:52 /Users/allenbot/.openclaw/openclaw.json
+-rw-------@ 1 allenbot  staff  3223 Feb 17 14:17 /Users/allenbot/.openclaw/openclaw.json.backup
+-rw-r--r--  1 allenbot  staff  3130 Feb 22 14:52 /Users/allenbot/.openclaw/openclaw.json.bak
+-rw-------  1 allenbot  staff  3130 Feb 22 14:22 /Users/allenbot/.openclaw/openclaw.json.bak.1
+-rw-------  1 allenbot  staff  3130 Feb 22 14:19 /Users/allenbot/.openclaw/openclaw.json.bak.2
+-rw-------  1 allenbot  staff  2995 Feb 22 14:17 /Users/allenbot/.openclaw/openclaw.json.bak.3
+-rw-------  1 allenbot  staff  2862 Feb 22 03:32 /Users/allenbot/.openclaw/openclaw.json.bak.4

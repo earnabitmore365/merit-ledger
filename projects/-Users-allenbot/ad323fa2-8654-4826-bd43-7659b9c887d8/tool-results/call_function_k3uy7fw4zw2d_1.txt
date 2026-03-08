@@ -1,0 +1,176 @@
+     1→{
+     2→  "meta": {
+     3→    "lastTouchedVersion": "2026.2.19-2",
+     4→    "lastTouchedAt": "2026-02-22T03:22:06.519Z"
+     5→  },
+     6→  "wizard": {
+     7→    "lastRunAt": "2026-02-22T03:22:06.496Z",
+     8→    "lastRunVersion": "2026.2.19-2",
+     9→    "lastRunCommand": "configure",
+    10→    "lastRunMode": "local"
+    11→  },
+    12→  "auth": {
+    13→    "profiles": {
+    14→      "minimax:default": {
+    15→        "provider": "minimax",
+    16→        "mode": "api_key"
+    17→      }
+    18→    }
+    19→  },
+    20→  "models": {
+    21→    "mode": "merge",
+    22→    "providers": {
+    23→      "minimax": {
+    24→        "baseUrl": "https://api.minimax.io/anthropic",
+    25→        "apiKey": "sk-cp-AVjcKaazYE7p76PAn7u6xcY_0VVJIjic1SPGwddHh4F2qPMVANl927ioUmmv88o-cUZvkAlFD8stFxBQCK_22swW3zeDE4L2ZNYtXa8xn1EIs2P9ygxedvI",
+    26→        "api": "anthropic-messages",
+    27→        "models": [
+    28→          {
+    29→            "id": "MiniMax-M2.5",
+    30→            "name": "MiniMax M2.5",
+    31→            "reasoning": true,
+    32→            "input": [
+    33→              "text"
+    34→            ],
+    35→            "cost": {
+    36→              "input": 15,
+    37→              "output": 60,
+    38→              "cacheRead": 2,
+    39→              "cacheWrite": 10
+    40→            },
+    41→            "contextWindow": 200000,
+    42→            "maxTokens": 12800
+    43→          }
+    44→        ]
+    45→      }
+    46→    }
+    47→  },
+    48→  "agents": {
+    49→    "defaults": {
+    50→      "model": {
+    51→        "primary": "minimax/MiniMax-M2.5",
+    52→        "fallbacks": [
+    53→          "openrouter/deepseek/deepseek-r1-0528"
+    54→        ]
+    55→      },
+    56→      "models": {
+    57→        "minimax/MiniMax-M2.5": {
+    58→          "alias": "Minimax"
+    59→        },
+    60→        "openrouter/deepseek/deepseek-r1-0528": {}
+    61→      },
+    62→      "workspace": "/Users/allenbot/.openclaw/workspace",
+    63→      "memorySearch": {
+    64→        "provider": "local",
+    65→        "local": {
+    66→          "modelPath": "/Users/allenbot/.openclaw/models/embeddings/nomic-embed-text-v1.5.Q5_K_M.gguf"
+    67→        }
+    68→      },
+    69→      "contextPruning": {
+    70→        "mode": "cache-ttl",
+    71→        "ttl": "1h",
+    72→        "softTrim": {
+    73→          "maxChars": 12000
+    74→        }
+    75→      },
+    76→      "compaction": {
+    77→        "mode": "safeguard",
+    78→        "reserveTokensFloor": 24000,
+    79→        "memoryFlush": {
+    80→          "enabled": true
+    81→        }
+    82→      },
+    83→      "maxConcurrent": 8,
+    84→      "subagents": {
+    85→        "maxConcurrent": 8
+    86→      }
+    87→    }
+    88→  },
+    89→  "tools": {
+    90→    "web": {
+    91→      "search": {
+    92→        "enabled": true,
+    93→        "apiKey": "BSACf8LaQnJcZit-BhDhXWYl6Jvwmik"
+    94→      },
+    95→      "fetch": {
+    96→        "enabled": true
+    97→      }
+    98→    },
+    99→    "sessions": {
+   100→      "visibility": "agent"
+   101→    }
+   102→  },
+   103→  "messages": {
+   104→    "ackReactionScope": "group-mentions"
+   105→  },
+   106→  "commands": {
+   107→    "native": "auto",
+   108→    "nativeSkills": "auto",
+   109→    "restart": true
+   110→  },
+   111→  "channels": {
+   112→    "telegram": {
+   113→      "enabled": true,
+   114→      "dmPolicy": "allowlist",
+   115→      "botToken": "8550969879:AAGk2YPzinvcfES8CJD6ehaoDw5fPJnLv38",
+   116→      "allowFrom": [
+   117→        "6506412244"
+   118→      ],
+   119→      "groupPolicy": "allowlist",
+   120→      "streamMode": "partial"
+   121→    }
+   122→  },
+   123→  "gateway": {
+   124→    "mode": "local",
+   125→    "auth": {
+   126→      "mode": "token",
+   127→      "token": "aba5486e8f745aa24a757d4744816acbcc5b478505b1d297"
+   128→    }
+   129→  },
+   130→  "plugins": {
+   131→    "entries": {
+   132→      "telegram": {
+   133→        "enabled": true
+   134→      },
+   135→      "whatsapp": {
+   136→        "enabled": true
+   137→      }
+   138→    }
+   139→  },
+   140→  "models": {
+   141→    "mode": "merge",
+   142→    "providers": {
+   143→      "minimax": {
+   144→        "baseUrl": "https://api.minimax.io/anthropic",
+   145→        "apiKey": "sk-cp-AVjcKaazYE7p76PAn7u6xcY_0VVJIjic1SPGwddHh4F2qPMVANl927ioUmmv88o-cUZvkAlFD8stFxBQCK_22swW3zeDE4L2ZNYtXa8xn1EIs2P9ygxedvI",
+   146→        "api": "anthropic-messages",
+   147→        "models": [
+   148→          {
+   149→            "id": "MiniMax-M2.5",
+   150→            "name": "MiniMax M2.5",
+   151→            "reasoning": true,
+   152→            "input": [
+   153→              "text"
+   154→            ],
+   155→            "cost": {
+   156→              "input": 15,
+   157→              "output": 60,
+   158→              "cacheRead": 2,
+   159→              "cacheWrite": 10
+   160→            },
+   161→            "contextWindow": 200000,
+   162→            "maxTokens": 12800
+   163→          }
+   164→        ]
+   165→      },
+   166→      "openrouter": {
+   167→        "apiKey": "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"
+   168→      }
+   169→    }
+   170→  }
+   171→}
+   172→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

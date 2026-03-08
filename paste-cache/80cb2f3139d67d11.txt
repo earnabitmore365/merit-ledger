@@ -1,0 +1,39 @@
+Last login: Wed Feb 25 06:18:55 on ttys001
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3685: command not found: compdef
+/Users/allenbot/project/auto-trading/user_interface/trade.command ; exit;       
+allenbot@Echo ~ % /Users/allenbot/project/auto-trading/user_interface/trade.command ; exit;
+
+
+
+
+
+
+
+
+
+
+
+
+Last login: Wed Feb 25 06:24:02 on ttys001
+/Users/allenbot/project/auto-trading/user_interface/trade.command ; exit;
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3685: command not found: compdef
+allenbot@Echo ~ % /Users/allenbot/project/auto-trading/user_interface/trade.command ; exit;
+Traceback (most recent call last):
+  File "<string>", line 6, in <module>
+  File "/opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python3.11/curses/__init__.py", line 94, in wrapper
+    return func(stdscr, *args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/trading/trade_menu.py", line 867, in main
+    'top10_avg': round(top10_avg, 2),
+                       ^^^^^^^^^
+NameError: name 'top10_avg' is not defined
+按回车键退出...
+
+Saving session...
+...copying shared history...
+...saving history...truncating history files...
+...completed.
+
+[进程已完成]
+
+还是一样。没报告没日志

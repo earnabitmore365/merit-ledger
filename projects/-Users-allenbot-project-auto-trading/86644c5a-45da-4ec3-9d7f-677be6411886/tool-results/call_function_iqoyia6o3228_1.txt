@@ -1,0 +1,2 @@
+477:                from trading.system import TradingSystem
+510:                system = TradingSystem(

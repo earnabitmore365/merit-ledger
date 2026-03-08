@@ -1,0 +1,1 @@
+The file /Users/allenbot/.claude/plugins/marketplaces/claude-plugins-official/external_plugins/github/.mcp.json has been updated successfully.

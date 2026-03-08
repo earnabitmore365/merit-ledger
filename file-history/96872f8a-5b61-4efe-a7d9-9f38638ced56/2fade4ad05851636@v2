@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""
+VROC Strategy - Volume Rate of Change
+
+Volume-based momentum indicator.
+
+Features:
+- Volume change rate
+- Threshold signals
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class VROCConfig:
+    """VROC configuration"""
+    period: int = 20
+    threshold: float = 1.5
+
+
+class VROC(Strategy):
+    """Volume Rate of Change trading strategy"""
+    
+    def __init__(self, exchange=None, config: Optional[VROCConfig] = None):
+        """Initialize VROC strategy
+        
+        Args:
+            exchange: Exchange adapter
+            config: Strategy configuration
+        """
+        self.exchange = exchange
+        self.config = config or VROCConfig()
+    
+    @property
+    def name(self) -> str:
+        return "vroc"
+    
+    def calculate_vroc(self, volumes: List[float]) -> float:
+        """Calculate VROC
+        
+        Args:
+            volumes: Volume data
+            
+        Returns:
+            VROC percentage
+        """
+        period = self.config.period
+        
+        if len(volumes) < period + 1:
+            return 0.0
+        
+        current = volumes[-1]
+        past = volumes[-period]
+        
+        if past == 0:
+            return 0.0
+        
+        return (current - past) / past * 100
+    
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        """Generate VROC signal
+        
+        Args:
+            coin: Trading pair
+            klines: OHLCV data
+            
+        Returns:
+            TradingSignal with volume analysis
+        """
+        # Validate klines
+        min_required = self.config.period + 1
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+        
+        # Extract volumes
+        volumes = [c.get("volume", 1000) for c in klines]
+        
+        # Calculate VROC
+        vroc = self.calculate_vroc(volumes)
+        
+        # Generate signal — 用真正的VROC + 价格方向组合
+        closes = [c["close"] for c in klines]
+        price_up = closes[-1] > closes[-2]
+        vroc_threshold = 30.0
+
+        if vroc > vroc_threshold and price_up:
+            signal = Signal.BUY
+            trend = "volume_surge_up"
+        elif vroc < -vroc_threshold and not price_up:
+            signal = Signal.SELL
+            trend = "volume_surge_down"
+        else:
+            signal = Signal.HOLD
+            trend = "normal_volume"
+        
+        return TradingSignal(
+            signal=signal,
+            confidence=0.5,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "vroc": vroc,
+                "current_volume": volumes[-1],
+                "past_volume": volumes[0],
+                "trend": trend,
+            },
+        )

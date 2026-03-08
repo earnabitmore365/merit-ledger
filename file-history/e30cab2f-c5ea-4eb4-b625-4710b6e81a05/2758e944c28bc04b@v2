@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""
+市场 Regime 检测器（v2 — ADX 三层复合方案）
+
+纯计算，无 IO，无状态。
+第一层：ADX(14) 趋势强度
+第二层：SMA(50) 斜率方向
+第三层：ATR% 高波动过滤
+
+detector 返回 naive_regime（用中间阈值 22），
+滞后阈值（进25/退18）由 strategy.py 处理。
+"""
+
+from typing import Dict, List
+
+from .config import RegimeDetectorConfig
+
+
+class MarketRegimeDetector:
+    """市场状态检测器（ADX 三层复合）"""
+
+    def __init__(self, config: RegimeDetectorConfig = None):
+        self.config = config or RegimeDetectorConfig()
+
+    # ── 基础计算 ──
+
+    @staticmethod
+    def _true_range(klines: List[Dict]) -> List[float]:
+        """真实波幅: max(H-L, |H-prevC|, |L-prevC|)
+
+        返回 len(klines)-1 个值（从第二根开始）
+        """
+        trs = []
+        for i in range(1, len(klines)):
+            h = klines[i]["high"]
+            l = klines[i]["low"]
+            pc = klines[i - 1]["close"]
+            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        return trs
+
+    @staticmethod
+    def _wilder_smooth(values: List[float], period: int) -> List[float]:
+        """Wilder 平滑: 第一个值 = SMA(period)，之后 prev*(n-1)/n + curr/n
+
+        返回 len(values)-period+1 个值
+        """
+        if len(values) < period:
+            return []
+        first = sum(values[:period]) / period
+        result = [first]
+        for i in range(period, len(values)):
+            result.append((result[-1] * (period - 1) + values[i]) / period)
+        return result
+
+    # ── ADX 计算（Wilder 标准算法）──
+
+    @staticmethod
+    def _calc_adx(klines: List[Dict], period: int) -> float:
+        """计算当前 ADX 值
+
+        标准 Wilder ADX 算法：
+        1. +DM/-DM → Wilder 平滑 → +DI/-DI
+        2. DX = |+DI - -DI| / (+DI + -DI) × 100
+        3. ADX = Wilder 平滑(DX, period)
+
+        需要至少 3*period 根 K 线才能得到稳定值
+        """
+        n = len(klines)
+        if n < period * 2 + 1:
+            return 0.0
+
+        # +DM / -DM / TR
+        plus_dm = []
+        minus_dm = []
+        trs = []
+        for i in range(1, n):
+            h = klines[i]["high"]
+            l = klines[i]["low"]
+            ph = klines[i - 1]["high"]
+            pl = klines[i - 1]["low"]
+            pc = klines[i - 1]["close"]
+
+            up = h - ph
+            down = pl - l
+            plus_dm.append(up if up > down and up > 0 else 0.0)
+            minus_dm.append(down if down > up and down > 0 else 0.0)
+            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+
+        # Wilder 平滑
+        smooth_tr = MarketRegimeDetector._wilder_smooth(trs, period)
+        smooth_plus = MarketRegimeDetector._wilder_smooth(plus_dm, period)
+        smooth_minus = MarketRegimeDetector._wilder_smooth(minus_dm, period)
+
+        if not smooth_tr or not smooth_plus or not smooth_minus:
+            return 0.0
+
+        # +DI / -DI → DX
+        length = min(len(smooth_tr), len(smooth_plus), len(smooth_minus))
+        dx_list = []
+        for i in range(length):
+            atr_val = smooth_tr[i]
+            if atr_val == 0:
+                dx_list.append(0.0)
+                continue
+            plus_di = 100 * smooth_plus[i] / atr_val
+            minus_di = 100 * smooth_minus[i] / atr_val
+            di_sum = plus_di + minus_di
+            if di_sum > 0:
+                dx_list.append(abs(plus_di - minus_di) / di_sum * 100)
+            else:
+                dx_list.append(0.0)
+
+        # ADX = Wilder 平滑(DX)
+        adx_smooth = MarketRegimeDetector._wilder_smooth(dx_list, period)
+        return adx_smooth[-1] if adx_smooth else 0.0
+
+    # ── SMA 斜率（归一化百分比）──
+
+    @staticmethod
+    def _calc_sma_slope(closes: List[float], sma_period: int, slope_window: int) -> float:
+        """SMA 斜率：最近 slope_window 个 SMA 值的平均变化率（百分比）
+
+        正=上升趋势，负=下降趋势
+        """
+        if len(closes) < sma_period + slope_window:
+            return 0.0
+
+        # 计算最近 slope_window+1 个时点的 SMA
+        sma_vals = []
+        for i in range(slope_window + 1):
+            end = len(closes) - slope_window + i
+            sma_vals.append(sum(closes[end - sma_period:end]) / sma_period)
+
+        # 平均百分比变化率
+        slopes = []
+        for i in range(len(sma_vals) - 1):
+            if sma_vals[i] > 0:
+                slopes.append((sma_vals[i + 1] - sma_vals[i]) / sma_vals[i])
+        return sum(slopes) / len(slopes) if slopes else 0.0
+
+    # ── ATR% 波动检测 ──
+
+    @staticmethod
+    def _calc_atr_pct(klines: List[Dict], period: int, lookback: int) -> tuple:
+        """返回 (当前ATR%, 历史均值ATR%)"""
+        trs = MarketRegimeDetector._true_range(klines)
+        if len(trs) < period:
+            return 0.0, 0.0
+
+        current_price = klines[-1]["close"]
+        if current_price <= 0:
+            return 0.0, 0.0
+
+        # 当前 ATR%
+        current_atr = sum(trs[-period:]) / period
+        current_atr_pct = current_atr / current_price
+
+        # 历史均值 ATR%（滚动计算）
+        atr_pcts = []
+        usable = min(len(trs), lookback)
+        for i in range(period, usable):
+            end = len(trs) - i + period
+            start = end - period
+            if start >= 0:
+                atr_val = sum(trs[start:end]) / period
+                price_val = klines[end]["close"]
+                if price_val > 0:
+                    atr_pcts.append(atr_val / price_val)
+
+        avg_atr_pct = sum(atr_pcts) / len(atr_pcts) if atr_pcts else current_atr_pct
+        return current_atr_pct, avg_atr_pct
+
+    # ── 三层检测 ──
+
+    def detect(self, klines: List[Dict]) -> str:
+        """检测市场状态（naive，不含滞后）
+
+        Returns:
+            "bull" / "bear" / "ranging" / "unknown"
+        """
+        return self.detect_with_details(klines)["naive_regime"]
+
+    def detect_with_details(self, klines: List[Dict]) -> Dict:
+        """检测市场状态，返回详细指标值
+
+        naive_regime 用中间阈值 22 做粗判，
+        滞后阈值（进25/退18）由 strategy._apply_hysteresis() 处理。
+        """
+        cfg = self.config
+
+        if not klines or len(klines) < cfg.min_klines:
+            return {
+                "naive_regime": "unknown",
+                "adx": 0.0,
+                "sma_slope": 0.0,
+                "atr_pct": 0.0,
+                "atr_mean": 0.0,
+                "high_volatility": False,
+                "sma_direction": "flat",
+            }
+
+        closes = [k["close"] for k in klines]
+
+        # 第一层：ADX 趋势强度
+        adx = self._calc_adx(klines, cfg.adx_period)
+
+        # 第二层：SMA 斜率方向
+        slope = self._calc_sma_slope(closes, cfg.sma_period, cfg.sma_slope_window)
+        sma_dir = "up" if slope > 0 else "down" if slope < 0 else "flat"
+
+        # 第三层：ATR% 波动
+        atr_pct, atr_mean = self._calc_atr_pct(klines, cfg.atr_period, cfg.atr_lookback)
+        high_vol = atr_mean > 0 and atr_pct > atr_mean * cfg.atr_vol_multiplier
+
+        # naive_regime（中间阈值 22，粗判）
+        mid_threshold = (cfg.trend_enter_adx + cfg.trend_exit_adx) / 2  # 21.5
+        if adx > mid_threshold:
+            naive = "bull" if sma_dir == "up" else "bear"
+        else:
+            naive = "ranging"
+
+        return {
+            "naive_regime": naive,
+            "adx": round(adx, 2),
+            "sma_slope": round(slope, 6),
+            "atr_pct": round(atr_pct, 6),
+            "atr_mean": round(atr_mean, 6),
+            "high_volatility": high_vol,
+            "sma_direction": sma_dir,
+        }

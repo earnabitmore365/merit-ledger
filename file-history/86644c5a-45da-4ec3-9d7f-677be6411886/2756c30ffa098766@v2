@@ -1,0 +1,65 @@
+# trade_menu.py 说明文档
+
+## 变量定义
+
+### 交易记录相关
+| 变量名 | 类型 | 说明 |
+|--------|------|------|
+| `trade_records` | list | 交易记录列表，每条包含 time, type, pnl, balance |
+| `pnl_records` | list | 平仓/反手的盈亏记录（type 为 CLOSE 或 REVERSE，且 pnl != 0）|
+| `profits` | list | 盈利列表（pnl > 0）|
+| `losses` | list | 亏损列表（pnl < 0）|
+
+### 统计相关
+| 变量名 | 说明 |
+|--------|------|
+| `open_count` | 开仓次数 |
+| `close_count` | 平仓次数 |
+| `reverse_count` | 反手次数 |
+| `total_trades` | 总交易次数 |
+| `ttp_count` | 移动止盈(TTP)次数 |
+| `daily_avg` | 日均交易次数 |
+| `total_pnl` | 总盈亏金额 |
+| `pnl_pct` | 总盈亏百分比 |
+
+### 连盈/连亏
+| 变量名 | 说明 |
+|--------|------|
+| `max_win_streak` | 最大连盈次数 |
+| `max_win_amount` | 最大连盈金额 |
+| `max_loss_streak` | 最大连亏次数 |
+| `max_loss_amount` | 最大连亏金额 |
+| `current_win_streak` | 当前连盈次数 |
+| `current_win_amount` | 当前连盈金额 |
+| `current_loss_streak` | 当前连亏次数 |
+| `current_loss_amount` | 当前连亏金额 |
+
+### 最大盈亏
+| 变量名 | 说明 |
+|--------|------|
+| `max_profit` | 单笔最大盈利（max(profits)）|
+| `max_loss` | 单笔最大亏损（min(losses)）|
+| `sorted_profits` | 盈利列表降序排列 |
+| `sorted_losses` | 亏损列表升序排列（负数越小越大）|
+| `top10_profit_avg` | 前十平均盈利 |
+| `top10_loss_avg` | 前十平均亏损 |
+| `top10_avg` | 前十平均盈亏 |
+
+## 关键代码位置
+
+### while 循环 UI 显示
+- 位置：约第325-509行
+- 用途：实时显示交易状态和日志
+
+### 报告生成
+- 位置：约第762-906行
+- 用途：保存交易报告和日志
+- 注意：这里也需要定义 profits、losses、top10_avg 等变量
+
+## 常见问题
+
+### Q: 为什么 profits/losses 要用 if xxx else 0？
+A: 如果列表为空，max() 和 min() 会报错。用 `if profits else 0` 确保空列表时返回0。
+
+### Q: 两处都需要定义 profits/losses 吗？
+A: 是的。while循环里和报告生成里是独立的代码块，都需要定义。

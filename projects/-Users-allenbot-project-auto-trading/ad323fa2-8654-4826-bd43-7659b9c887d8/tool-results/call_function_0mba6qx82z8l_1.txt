@@ -1,0 +1,12 @@
+196:    def run_backtest(self, strategy_name: str) -> BacktestResult:
+197-        """运行回测"""
+198-        if not self.klines:
+199-            logger.error("没有K线数据，无法运行回测")
+200-            return None
+201-        
+--
+766:def run_backtest(coin: str, strategy_name: str, interval: str = '1h', days: int = 1095, initial_capital: float = 500):
+767-    """便捷回测函数"""
+768-    engine = BacktestEngine(
+
+[Showing results with pagination = limit: 10, offset: 0]

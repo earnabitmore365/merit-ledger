@@ -1,0 +1,73 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→VWAP Strategy
+     4→
+     5→Simple VWAP strategy.
+     6→- Price above VWAP = BUY
+     7→- Price below VWAP = SELL
+     8→- Otherwise = HOLD
+     9→"""
+    10→
+    11→from typing import Dict, List
+    12→from src.core.strategy.base import Strategy, Signal
+    13→
+    14→
+    15→class VWAPStrategy(Strategy):
+    16→    """VWAP trading strategy"""
+    17→    
+    18→    def __init__(self):
+    19→        super().__init__("vwap")
+    20→    
+    21→    def __init__(self):
+    22→        self.name = "vwap"
+    23→        self.exchange = None
+    24→        self.period = 20
+    25→    
+    26→    def set_exchange(self, exchange):
+    27→        """Set exchange adapter"""
+    28→        self.exchange = exchange
+    29→    
+    30→    def calculate_vwap(self, candles: List[Dict]) -> float:
+    31→        """Calculate VWAP"""
+    32→        if len(candles) < self.period:
+    33→            return sum(c["close"] for c in candles) / len(candles)
+    34→        
+    35→        tp_sum = 0.0
+    36→        vol_sum = 0.0
+    37→        
+    38→        for c in candles[-self.period:]:
+    39→            typical_price = (c["high"] + c["low"] + c["close"]) / 3
+    40→            volume = c.get("volume", 1000)
+    41→            tp_sum += typical_price * volume
+    42→            vol_sum += volume
+    43→        
+    44→        return tp_sum / vol_sum if vol_sum else 0
+    45→    
+    46→    def generate_signal(self, coin: str, candles: List[Dict] = None) -> Signal:
+    47→        """Generate VWAP trading signal
+    48→        
+    49→        Args:
+    50→            coin: Trading pair
+    51→            candles: OHLCV data
+    52→            
+    53→        Returns:
+    54→            Signal: BUY, SELL, or HOLD
+    55→        """
+    56→        # Validate candles
+    57→        if not candles or len(candles) < self.period:
+    58→            return Signal.HOLD
+    59→        
+    60→        vwap = self.calculate_vwap(candles)
+    61→        current_price = candles[-1]["close"]
+    62→        
+    63→        # Simple conditions
+    64→        if current_price > vwap:
+    65→            return Signal.BUY
+    66→        elif current_price < vwap:
+    67→            return Signal.SELL
+    68→        return Signal.HOLD
+    69→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

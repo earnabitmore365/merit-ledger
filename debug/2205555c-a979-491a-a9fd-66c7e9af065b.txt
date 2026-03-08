@@ -1,0 +1,127 @@
+2026-02-25T04:09:05.213Z [DEBUG] Failed to check enabledPlatforms: TypeError: undefined is not an object (evaluating 'pK.join')
+2026-02-25T04:09:05.257Z [DEBUG] [init] configureGlobalMTLS starting
+2026-02-25T04:09:05.257Z [DEBUG] [init] configureGlobalMTLS complete
+2026-02-25T04:09:05.257Z [DEBUG] [init] configureGlobalAgents starting
+2026-02-25T04:09:05.257Z [DEBUG] [init] configureGlobalAgents complete
+2026-02-25T04:09:05.260Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-02-25T04:09:05.261Z [DEBUG] [ToolSearch:optimistic] mode=tst-auto, ENABLE_TOOL_SEARCH=undefined, result=true
+2026-02-25T04:09:05.261Z [DEBUG] [STARTUP] Running setup()...
+2026-02-25T04:09:05.265Z [DEBUG] Loading skills from: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/allenbot/.claude/skills, project=[]
+2026-02-25T04:09:05.270Z [DEBUG] Error log sink initialized
+2026-02-25T04:09:05.271Z [DEBUG] [STARTUP] setup() completed in 10ms
+2026-02-25T04:09:05.271Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-02-25T04:09:05.275Z [DEBUG] [Claude in Chrome] Found chrome profiles: Default
+2026-02-25T04:09:05.275Z [DEBUG] Loaded 13 unique skills (13 unconditional, 0 conditional, managed: 0, user: 13, project: 0, additional: 0, legacy commands: 0)
+2026-02-25T04:09:05.279Z [DEBUG] [Claude in Chrome] Found brave profiles: Default
+2026-02-25T04:09:05.279Z [DEBUG] Git remote URL: null
+2026-02-25T04:09:05.279Z [DEBUG] No git remote URL found
+2026-02-25T04:09:05.287Z [DEBUG] Acquired mtime-based lock on running version: /Users/allenbot/.local/share/claude/versions/2.1.50
+2026-02-25T04:09:05.288Z [DEBUG] Loading plugin ui-ux-pro-max from source: "./"
+2026-02-25T04:09:05.288Z [DEBUG] [Claude in Chrome] Extension not found in any browser
+2026-02-25T04:09:05.289Z [DEBUG] Using manifest version for ui-ux-pro-max@ui-ux-pro-max-skill: 2.0.1
+2026-02-25T04:09:05.289Z [DEBUG] Plugin ui-ux-pro-max@ui-ux-pro-max-skill version 2.0.1 already cached at /Users/allenbot/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/2.0.1
+2026-02-25T04:09:05.289Z [DEBUG] Resolved local plugin ui-ux-pro-max to versioned cache: /Users/allenbot/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/2.0.1
+2026-02-25T04:09:05.290Z [DEBUG] Found 1 plugins (1 enabled, 0 disabled)
+2026-02-25T04:09:05.290Z [DEBUG] getPluginSkills: Processing 1 enabled plugins
+2026-02-25T04:09:05.290Z [DEBUG] Checking plugin ui-ux-pro-max: skillsPath=none, skillsPaths=1 paths
+2026-02-25T04:09:05.290Z [DEBUG] Attempting to load skills from plugin ui-ux-pro-max skillsPaths: /Users/allenbot/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/2.0.1/.claude/skills/ui-ux-pro-max
+2026-02-25T04:09:05.290Z [DEBUG] Loading from skillPath: /Users/allenbot/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/2.0.1/.claude/skills/ui-ux-pro-max for plugin ui-ux-pro-max
+2026-02-25T04:09:05.290Z [DEBUG] Total plugin commands loaded: 0
+2026-02-25T04:09:05.290Z [DEBUG] Registered 0 hooks from 1 plugins
+2026-02-25T04:09:05.290Z [DEBUG] Total plugin agents loaded: 0
+2026-02-25T04:09:05.290Z [DEBUG] Loaded 1 skills from plugin ui-ux-pro-max custom path: /Users/allenbot/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/2.0.1/.claude/skills/ui-ux-pro-max
+2026-02-25T04:09:05.290Z [DEBUG] Total plugin skills loaded: 1
+2026-02-25T04:09:05.292Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.26688.1771992545292
+2026-02-25T04:09:05.292Z [DEBUG] Preserving file permissions: 100600
+2026-02-25T04:09:05.292Z [DEBUG] Temp file written successfully, size: 7564 bytes
+2026-02-25T04:09:05.292Z [DEBUG] Applied original permissions to temp file
+2026-02-25T04:09:05.292Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.26688.1771992545292 to /Users/allenbot/.claude.json
+2026-02-25T04:09:05.292Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-25T04:09:05.292Z [DEBUG] getSkills returning: 13 skill dir commands, 1 plugin skills, 3 bundled skills
+2026-02-25T04:09:05.292Z [DEBUG] [STARTUP] Commands and agents loaded in 21ms
+2026-02-25T04:09:05.294Z [DEBUG] [STARTUP] Running showSetupScreens()...
+2026-02-25T04:09:05.297Z [DEBUG] Not in a GitHub repository, skipping path mapping update
+2026-02-25T04:09:05.303Z [DEBUG] [Perfetto] initializePerfettoTracing called, env value: undefined
+2026-02-25T04:09:05.303Z [DEBUG] [3P telemetry] isTelemetryEnabled=false (CLAUDE_CODE_ENABLE_TELEMETRY=undefined)
+2026-02-25T04:09:05.304Z [DEBUG] [STARTUP] showSetupScreens() completed in 10ms
+2026-02-25T04:09:05.304Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-02-25T04:09:05.304Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-02-25T04:09:05.304Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-02-25T04:09:05.304Z [DEBUG] Failed to fetch org fast mode status, defaulting to disabled
+2026-02-25T04:09:05.305Z [DEBUG] [STARTUP] MCP configs loaded in 45ms
+2026-02-25T04:09:05.306Z [DEBUG] All plugins already exist, skipping migration
+2026-02-25T04:09:05.307Z [DEBUG] Getting matching hook commands for SessionStart with query: startup
+2026-02-25T04:09:05.307Z [DEBUG] Found 0 hook matchers in settings
+2026-02-25T04:09:05.307Z [DEBUG] Matched 0 unique hooks for query "startup" (0 before deduplication)
+2026-02-25T04:09:05.307Z [DEBUG] Loaded 1 installed plugins from /Users/allenbot/.claude/plugins/installed_plugins.json
+2026-02-25T04:09:05.307Z [DEBUG] Initialized versioned plugins system with 1 plugins
+2026-02-25T04:09:05.307Z [DEBUG] [Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)
+2026-02-25T04:09:05.308Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.26688.1771992545308
+2026-02-25T04:09:05.308Z [DEBUG] Preserving file permissions: 100600
+2026-02-25T04:09:05.308Z [DEBUG] Temp file written successfully, size: 7564 bytes
+2026-02-25T04:09:05.308Z [DEBUG] Applied original permissions to temp file
+2026-02-25T04:09:05.308Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.26688.1771992545308 to /Users/allenbot/.claude.json
+2026-02-25T04:09:05.308Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-25T04:09:05.318Z [DEBUG] [keybindings] KeybindingSetup initialized with 103 bindings, 0 warnings
+2026-02-25T04:09:05.403Z [DEBUG] [keybindings] Skipping file watcher - user customization disabled
+2026-02-25T04:09:05.403Z [DEBUG] [REPL:mount] REPL mounted, disabled=false
+2026-02-25T04:09:05.403Z [DEBUG] Official marketplace auto-install skipped: already_attempted
+2026-02-25T04:09:05.404Z [DEBUG] performStartupChecks called
+2026-02-25T04:09:05.404Z [DEBUG] Starting background plugin installations
+2026-02-25T04:09:05.404Z [DEBUG] performBackgroundPluginInstallations called
+2026-02-25T04:09:05.404Z [DEBUG] No CLAUDE.md/rules files found
+2026-02-25T04:09:05.406Z [DEBUG] Watching for changes in setting files /Users/allenbot/.claude/settings.json...
+2026-02-25T04:09:05.407Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
+2026-02-25T04:09:05.407Z [DEBUG] [FileIndex] getFilesUsingGit called
+2026-02-25T04:09:05.423Z [DEBUG] [claudeai-mcp] Checking gate (cached)...
+2026-02-25T04:09:05.423Z [DEBUG] [claudeai-mcp] Gate returned: false
+2026-02-25T04:09:05.423Z [DEBUG] [claudeai-mcp] Disabled via gate
+2026-02-25T04:09:05.423Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-25T04:09:05.426Z [DEBUG] Total LSP servers loaded: 0
+2026-02-25T04:09:05.426Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-02-25T04:09:05.426Z [DEBUG] LSP manager initialized with 0 servers
+2026-02-25T04:09:05.426Z [DEBUG] LSP server manager initialized successfully
+2026-02-25T04:09:05.426Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-02-25T04:09:05.426Z [DEBUG] Found 1 enabled plugins
+2026-02-25T04:09:05.426Z [DEBUG] All plugins already exist, skipping migration
+2026-02-25T04:09:05.426Z [DEBUG] Found 1 installed plugins (V2 format)
+2026-02-25T04:09:05.426Z [DEBUG] Found 0 missing plugins (not installed):
+2026-02-25T04:09:05.426Z [DEBUG] Setting installation status: 0 marketplaces, 0 installable plugins, 0 uninstallable plugins
+2026-02-25T04:09:05.428Z [DEBUG] Security messages are fresh (<1h old), skipping fetch
+2026-02-25T04:09:05.428Z [DEBUG] Watching for changes in skill/command directories: /Users/allenbot/.claude/skills...
+2026-02-25T04:09:05.446Z [DEBUG] [FileIndex] git ls-files (tracked) took 24ms
+2026-02-25T04:09:05.446Z [DEBUG] [FileIndex] git ls-files: 467 tracked files in 39ms
+2026-02-25T04:09:05.447Z [DEBUG] [FileIndex] using git ls-files result (467 files)
+2026-02-25T04:09:05.462Z [DEBUG] Loaded plugins - Enabled: 1, Disabled: 0, Commands: 0, Agents: 0, Errors: 0
+2026-02-25T04:09:05.467Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-25T04:09:05.468Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.1fa; cc_entrypoint=cli; cch=00000;
+2026-02-25T04:09:05.468Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-25T04:09:05.468Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-25T04:09:05.468Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-25T04:09:05.471Z [DEBUG] [FileIndex] background untracked fetch: 133 files
+2026-02-25T04:09:05.471Z [DEBUG] [FileIndex] merged 133 untracked files into JS cache
+2026-02-25T04:09:05.484Z [DEBUG] [FileIndex] cache refresh completed in 78ms (rust index)
+2026-02-25T04:09:05.498Z [DEBUG] Ripgrep first use test: PASSED (mode=builtin, path=/Users/allenbot/.local/share/claude/versions/2.1.50)
+2026-02-25T04:09:12.813Z [DEBUG] Stream started - received first chunk
+2026-02-25T04:09:18.785Z [DEBUG] High write ratio: blit=0, write=1002 (100.0% writes), screen=19x160
+2026-02-25T04:09:20.315Z [WARN] [3P telemetry] Event dropped (no event logger initialized): api_request
+2026-02-25T04:09:43.434Z [DEBUG] High write ratio: blit=0, write=1525 (100.0% writes), screen=32x160
+2026-02-25T04:09:43.436Z [DEBUG] Plugin autoupdate: skipped (auto-updater disabled)
+2026-02-25T04:14:05.317Z [DEBUG] Failed to check metrics opt-out status: Auth error: No API key available
+2026-02-25T04:14:05.317Z [DEBUG] Metrics export disabled by organization setting
+2026-02-25T04:15:30.756Z [DEBUG] Detected change to /Users/allenbot/.claude/settings.json
+2026-02-25T04:15:30.761Z [DEBUG] Getting matching hook commands for ConfigChange with query: user_settings
+2026-02-25T04:15:30.761Z [DEBUG] Found 0 hook matchers in settings
+2026-02-25T04:15:30.761Z [DEBUG] Matched 0 unique hooks for query "user_settings" (0 before deduplication)
+2026-02-25T04:15:30.763Z [DEBUG] Settings changed from userSettings, updating app state
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all allow rules for destination 'userSettings' with 0 rule(s): []
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all deny rules for destination 'userSettings' with 0 rule(s): []
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all ask rules for destination 'userSettings' with 0 rule(s): []
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all allow rules for destination 'projectSettings' with 0 rule(s): []
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all deny rules for destination 'projectSettings' with 0 rule(s): []
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all ask rules for destination 'projectSettings' with 0 rule(s): []
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all allow rules for destination 'localSettings' with 0 rule(s): []
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all deny rules for destination 'localSettings' with 0 rule(s): []
+2026-02-25T04:15:30.765Z [DEBUG] Replacing all ask rules for destination 'localSettings' with 0 rule(s): []
+2026-02-25T04:15:30.784Z [DEBUG] High write ratio: blit=0, write=1517 (100.0% writes), screen=32x160
+2026-02-25T04:15:44.811Z [DEBUG] [REPL:unmount] REPL unmounting

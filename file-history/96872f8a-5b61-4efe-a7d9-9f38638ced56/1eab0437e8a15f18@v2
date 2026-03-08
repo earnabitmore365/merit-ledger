@@ -1,0 +1,46 @@
+"""Volume Momentum — 量加权价格动量"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class VolumeMomentumConfig:
+    period: int = 10
+
+
+class VolumeMomentum(Strategy):
+    def __init__(self, exchange=None, config: Optional[VolumeMomentumConfig] = None):
+        self.exchange = exchange
+        self.config = config or VolumeMomentumConfig()
+
+    @property
+    def name(self) -> str:
+        return "volumemomentum"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        p = self.config.period
+        if not klines or len(klines) < p + 2:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0)
+
+        def _vwm(bars):
+            total_vol = sum(c["volume"] for c in bars[-p:])
+            if total_vol == 0:
+                return 0
+            vw_price = sum(c["close"] * c["volume"] for c in bars[-p:]) / total_vol
+            return (bars[-1]["close"] - vw_price) / vw_price * 100
+
+        vwm = _vwm(klines)
+        prev_vwm = _vwm(klines[:-1])
+
+        if vwm > 0 and prev_vwm <= 0:
+            signal = Signal.BUY
+        elif vwm < 0 and prev_vwm >= 0:
+            signal = Signal.SELL
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(signal=signal, confidence=min(abs(vwm) / 1.0, 1.0),
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"vwm_pct": vwm, "prev_vwm": prev_vwm})

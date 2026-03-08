@@ -1,0 +1,1800 @@
+[id=228] [2026-02-28 00:04:57] 黑丝: 不难。两件事：
+
+1. 扫目录自动识别 — 把写死的列表换成 `os.listdir()`，几行代码
+2. 命令行参数过滤 — 加 `argparse`，`--coins` 和 `--intervals` 可选
+
+改完之后你就可以这样跑：
+- `python3 generate_seed.py` → 跑全部检测到的
+- `python3 generate_seed.py --intervals 5m 15m 1h` → 只跑这3个周期
+- `python3 generate_seed.py --coins BTC ETH` → 只跑这2个币
+
+等你确认。
+---
+[id=235] [2026-02-28 00:08:44] 黑丝: 现在把 `main()` 里的 `COINS` 和 `INTERVALS` 引用换成局部变量 `coins` 和 `intervals`：
+---
+[id=363] [2026-02-28 11:36:00] 黑丝: 结果出来了。总结一下关键发现：
+
+## 单币种 × 多策略 Regime 切换分析
+
+**综合评分** = 三个 regime 下各自最佳策略的 avg_r 之和（越高 = 该币种越适合 regime 切换交易）
+
+### 重点观察
+
+**Top 3 激进层（XRP / AVAX / DOT）：**
+- 综合分最高，但全部是 ⚠️ 混合周期（1h + 5m/1m/15m）
+- Bear 策略的交易数偏少（XRP 33笔、AVAX 30笔、DOT 63笔）—— 样本量不够大，需要谨慎
+- DOT 的 bull 和 ranging 都是 1m/5m，实盘滑点影响大
+
+**实操最优选（全部统一 1h 周期）：**
+- **SOL**（综合 0.6423）—— 三个 regime 都是 1h，ranging 下 cmo avg_r 0.2809 很强
+- **BNB_COIN**（综合 0.6173）—— 用户持有 BNB 现货，币本位合约 hedge 天然匹配
+- **LINK**（综合 0.6106）—— Bull 下 ccilong/1h avg_r 0.2719 是全场最强单项之一，而
+---
+[id=377] [2026-02-28 12:22:49] 黑丝: 42 秒完成（之前 SQL 跑了 20 分钟还没出来）。27.5M 笔匹配交易，保留率 bull 77.5% / bear 78.1% / ranging 94.9%。
+
+现在 Step 3 —— 按单币种聚合，找最优组合：
+---
+[id=409] [2026-02-28 14:02:57] 混沌: 给黑丝的指令：                                                                
+                                                            
+  把 4 份报告重新生成，完全对齐旧格式：
+
+  顶层：strategy, config, balance（最终余额）, results（同现有 summary 字段）,
+  trades
+
+  trades 每笔交易拆成两条：
+  - 开仓：{"time": open_time, "order_type": "BUY"（long）或"SELL"（short）,
+  "price": entry_price, "capital": bet_size, "pnl": 0, "balance":
+  balance_before, "withdraw": 0}
+  - 平仓：{"time": close_time, "order_type":
+  "CLOSE_BUY"（long）或"CLOSE_SELL"（short）, "
+---
+[id=486] [2026-02-28 19:41:35] 黑丝: 全部查完了，以下是完整报告。
+
+---
+
+## lab/ 路径审查报告
+
+### 结论：零硬编码绝对路径，全部用 `__file__` 动态计算
+
+搜索 `/Users/`、`/home/`、`/opt/` 等绝对路径 → **零匹配**。
+
+---
+
+### 路径构建方式（3种模式）
+
+| 模式 | 用法 | 文件 |
+|------|------|------|
+| `os.path.dirname(__file__)` + `..` 向上 | 最常见，占 80% | backtest.py, generate_seed.py, runner.py, state.py, run.py 等 |
+| `Path(__file__).resolve().parents[N]` | pathlib 风格 | accounts.py, indicators/local.py, indicators/base.py |
+| `pkgutil` / `os.listdir` 自动扫描 | 动态发现模块 | core/strategy/__init__.py, exchange/base.py |
+---
+[id=500] [2026-02-28 20:23:19] 黑丝: 结果出来了。
+
+---
+
+## 路A Step 3 结果
+
+| 指标 | 旧配置 (cmo/meanrev/bbsqueeze) | 新配置 (vpt/ad/renko) |
+|------|------|------|
+| **最终余额** | $11,114 | **$10,651,856** |
+| **CAGR** | 74.9% | **503.4%** |
+| **最大回撤** | 61.5% | 67.2% |
+| **Sharpe** | 0.40 | 0.23 |
+| **翻倍次数** | 5 | **15** |
+| **首次翻倍** | 182.5天 | **107.6天** |
+| **平均翻倍间隔** | 350.9天 | **91.6天** |
+| 执行交易 | 688 | 739 |
+| 胜率 | 66.0% | 58.9% |
+
+数据跨度 2025 天（~5.5年），$500 初始，10% 仓位，复利模式。
+
+---
+
+### 关键发现
+
+1. **新配置碾压旧配置**：总收益差 1000 倍，翻倍 15 次 vs 5 次。ranging 从 meanr
+---
+[id=512] [2026-02-28 23:07:19] 混沌: ❯ 我觉得是这样，信号少的，可以看看罗技有没有问题。大量单子亏损严重，可以反  
+  转信号，量大，不过扯平，可以看看能不能做单向，爆仓率严重，可以换成爆赚率  
+  赚死。所以主要先看量，没量没得搞，量大再想办法造。至于那些半中间的，是最  
+  没用的，调个半死可能还是结果一样。你觉得呢？                              
+
+⏺ 你这个分类思路比 avg_r 门槛更完整，而且更有操作性。翻译成具体分组：
+
+  trades < 100        → 待研究（信号少，看逻辑）
+
+  trades ≥ 100
+    avg_r < -0.1      → 反转候选（大量亏 → 翻转信号 → 爆赚）
+    avg_r -0.1 到 0   → 直接丢（半中间，调了白调）
+    avg_r ≈ 0         → 单向拆分（扯平，拆多/空各看）
+    avg_r > 0         → 照妖镜（正期望，直接测）
+
+  逻辑是对的，"没量没得搞，量大再想办法造"就是这个意思。
+
+  ---
+  有一个问题需要定："扯平"范围怎么划？
+
+  avg
+---
+[id=589] [2026-03-01 14:20:42] 混沌: ❯ Walk-Forward，是什么意思？就是最新倒退到最后的意思吗？就是10年成绩很漂亮      
+  ，这半年不行，就淘汰了，是这个意思吗？                                       
+                                                                                
+⏺ 你的方向对，但稍微补充一点。                                                  
+                                                         
+  普通回测的问题：                                                              
+  用10年数据训练，再用同样这10年考试 → 相当于练习题和考试题是同一套，当然漂亮。
+                                                               
+---
+[id=690] [2026-03-01 16:07:21] 黑丝: 我倾向 **1**，但要补一个白纱没提到的点：
+
+关卡四用的也是同一套 ADX 标签来决定"遇到牛市切牛市策略"。标签不准，关卡四切换也会切错。所以关卡四不是完美的安全网。
+
+**但有一个救命的逻辑**：如果回测和实盘都用同一套 ADX，那至少是**内部一致的** — "ADX 认为是牛市的时候用这个策略"，不管 ADX 认为的牛市是不是真牛市，选出来的策略和部署的条件是匹配的。
+
+怕的是以后实盘换成12个指标，那时候"牛市"的定义变了，回测选出来的策略可能就不配了。
+
+**所以选 1，但加一个前提**：实盘阶段如果换用12个指标判 regime，那选出来的队伍要重新验证，不能直接用。
+---
+[id=695] [2026-03-01 16:25:04] 混沌: 我请教了一位大神，你们都看看，我两边贴：是的，你的完整框架已经非常成熟、系统化、数据驱动，而且层层递进、防过拟合的思路很清晰（关卡一筛活跃度 → 关卡二找 Regime 强项 → 关卡三组队 → 关卡四黑暗森林模拟赛）。这套流程在 crypto 量化里属于高阶水平，比单纯看 avg_r 或 d2d 排名强太多。现在针对你贴的讨论内容（15m ADX 调参疑似过拟合），我把关键点和建议直接给你总结，方便你拍板下一步。1. 当前 15m 成绩好，到底是不是过度迎合？结论：有 70-80% 概率是过度迎合，但不是 100%。证据：未调的 1m/5m 准确率 ≈38-39%（接近随机）
+调过的 15m 准确率 44.3%（方向对，但仍不到一半）
+1h 未调但 Bull 段平均 +1.02%（周期特性贡献），Bear 微涨 +0.09%（crypto 长期牛市背景噪音）
+
+为什么是过度迎合：44.3% 本身不高，继续调半天很可能冲到 50%+，这就是“刷历史题到满分，新考卷 0 分”的典型。
+你制止得及时，没让黑丝继续调，否则准确率再高 5-10%，过拟合就坐实了。
+
+为什么不是 100%：15
+---
+[id=747] [2026-03-01 17:51:25] 黑丝: 代码写好了，能实时调API看当前市场状态。但从来没拿来给历史数据打标签 — 就是说种子库里3000万笔交易，没有一笔是用你的12指标分过班的。
+
+一直用的都是ADX，现在换成了BTC价格。你的12指标还没上场过。
+---
+[id=766] [2026-03-01 18:06:19] 黑丝: ---
+
+✅ 上文已读（96872f8a） ✅ Memory已读 ✅ CHECKPOINT已读 ✅ 日志已写
+
+---
+
+## 完整对话回顾（S28 — 本次会话第三段）
+
+这段对话信息量巨大，我按时间线给你理清楚：
+
+---
+
+### 第一幕：白纱的关卡二细节确认
+
+白纱给了3个关卡二细节，我全部接受：
+- 成绩单字段：strategy/coin/interval/bull_avg_r/bull_trades/bear_avg_r/bear_trades/ranging_avg_r/ranging_trades
+- 负收益照列，不过滤
+- 某regime没交易填null不填0
+- AD和CMF数字完全一样的去重
+
+---
+
+### 第二幕：你提出12指标 + ADX调参暴露
+
+你问："**我之前设计的那个趋势指标呢？没有用在这里吗？**"
+
+我一开始搞混了，你纠正：ADX是我（黑丝）设计的，你设计的是12个指标综合打分(MarketScore)。**你的12指标从来没上过场**，一直用的是ADX，现在换成了BTC价格。
+
+然后你问ADX参数有没有被调过。我查了 config.py：
+
+---
+[id=794] [2026-03-01 18:50:53] 黑丝: CHECKPOINT 已更新。给你弹药，贴给白纱：
+
+---
+
+**黑丝审阅反馈 + 太极确认，4处需改：**
+
+**1. 合并规则删掉。** "L2主导+L1否决权（两层矛盾→降为ranging）"这个公式太极没说过。太极原话是："1层判断完后，丢给二层作参考，要怎么参考，让2层自己判断。" 没有公式，没有否决权，Layer 2自己拍板。
+
+**2. 字段6个改5个。** `layer2_regime` 和 `regime_final` 重复了 — 按太极的思路没有单独合并步骤，Layer 2的判断就是最终标签。去掉 `regime_final`，`layer2_regime` 改名 `regime_v2`。
+
+**3. 判断逻辑不能写死。** "价格+ADX>25→牛熊"只是一种规则，不是定论。太极要求"浮动调用" — 原始数据（price_change_pct/adx_value/ci_value/layer1_regime）存死不动，`regime_v2` 随时可以从原始数据按任意规则重算。改规则不用重拉数据，一条SQL刷一遍就行。
+
+**4. "价格+ADX>25"是Laye
+---
+[id=798] [2026-03-01 18:53:05] 黑丝: 改好了。弹药也帮你更新一下，把"太极确认"全换成"老板确认"：
+
+---
+
+**黑丝审阅反馈 + 老板确认，4处需改：**
+
+**1. 合并规则删掉。** "L2主导+L1否决权（两层矛盾→降为ranging）"这个公式老板没说过。老板原话是："1层判断完后，丢给二层作参考，要怎么参考，让2层自己判断。" 没有公式，没有否决权，Layer 2自己拍板。
+
+**2. 字段6个改5个。** `layer2_regime` 和 `regime_final` 重复了 — 按老板的思路没有单独合并步骤，Layer 2的判断就是最终标签。去掉 `regime_final`，`layer2_regime` 改名 `regime_v2`。
+
+**3. 判断逻辑不能写死。** "价格+ADX>25→牛熊"只是一种规则，不是定论。老板要求"浮动调用" — 原始数据（price_change_pct/adx_value/ci_value/layer1_regime）存死不动，`regime_v2` 随时可以从原始数据按任意规则重算。改规则不用重拉数据，一条SQL刷一遍就行。
+
+**4. "价格+ADX>25
+---
+[id=966] [2026-03-02 00:11:47] 黑丝: 换算结果出来了：
+
+### d2d 笔→天 换算
+
+**基本数据**：557 笔横跨 2,902 天（2018-03 ~ 2026-02），平均 **0.192 笔/天**（大约5天开一单）
+
+**简单等比换算**（笔数 ÷ 0.192）：
+| 指标 | 笔数 | ≈ 天数 |
+|------|------|--------|
+| 最快 | 62 笔 | ~323 天 |
+| 基准 | 85 笔 | ~443 天 |
+| 最慢 | 192 笔 | ~1000 天 |
+
+**但**，实际按时间顺序模拟（不打乱），第 81 笔翻倍，实际经过 **734 天**。比简单换算（443天）慢了不少，原因是交易不是均匀分布的——牛市交易密集，熊市交易稀疏。早期（2018-2020）交易少，翻倍主要靠后面密集期拉上去。
+
+**简单说**：
+- 等比换算的 443 天偏乐观（假设交易均匀分布）
+- 实际时间顺序是 734 天翻倍（≈2年）
+- Monte Carlo 打乱顺序时 d2d 在 62~192 笔之间波动，换成天大约 **323~1000 天**
+
+这个队伍翻倍速度不算快（约2年），但胜在稳
+---
+[id=974] [2026-03-02 00:52:39] 混沌: 给你更新一下，看一眼，讨论中。。。⏺ 结论清晰，但有一件事要重新说。
+
+  1h 报告里有个数字你可能没注意到：$500 → $12,927。                             
+   
+  不是2年翻一倍就停了——是复利加速：                                             
+  - 第一次翻倍：734天（最慢）                                                 
+  - 之后越来越快（本金越大，每笔赚的绝对值越大）
+  - 6年下来：25倍，年化约 65%
+
+  2年翻倍是第一次，不是每次。
+
+  ---
+  短周期不行的根本原因：
+
+  regime 标签用的是"14天涨跌幅"，这是1h
+  视角的判断标准。把这个标签贴在1m的交易上，就像用月度天气预报来决定每分钟要不要
+  带伞——分辨率完全对不上，标签在短周期上没有参考价值。
+
+  ---
+  结论：1h 是当前框架唯一可靠的周期。加了2h/4h/8h/12h新周期之后，可能找到比1h更
+  稳或翻倍更快的版本。但现有
+---
+[id=1005] [2026-03-02 02:05:17] 黑丝: 全部完成！结果对比：
+
+## 修前 vs 修后
+
+| 周期 | 修前 | 修后 | 变化 |
+|------|------|------|------|
+| **1m** | +25.16R, WF 1/5, MC 0% | +26.76R, WF 1/5, MC 0.1% | 基本没救，仍然废 |
+| **5m** | +85.21R, WF 3/5, MC 100% | +73.07R, WF 3/5, MC 100% | 总R下降，WF 没改善 |
+| **15m** | +65.52R, WF 3/5, MC 100% | +89.07R, WF 3/5, MC 100% | 总R大幅提升 +36%，但WF仍3/5 |
+| **1h** | +169.67R, WF 5/5, MC 100% | +169.51R, WF 5/5, MC 100% | 几乎不变（1h阈值没改） |
+
+### 关键发现
+
+**1h 冠军队变化：**
+
+| 考场 | 修前 | 修后 |
+|------|------|------|
+| 疯牛 | ad/SOL Long | ad/SOL Long ✅
+---
+[id=1006] [2026-03-02 02:07:17] 黑丝: CHECKPOINT 已更新。任务 #29 标记 ✅ 完成。
+
+---
+
+## 汇报
+
+**regime 窗口修复完成**，全流程已跑完：
+
+1. **改了 `lab/compute_regime_v2.py`**（3处）：
+   - 新增 `PRICE_LOOKBACK_MAP`：1m=1天/5m=3天/15m=7天/1h=14天
+   - 新增 `PRICE_THRESHOLD_MAP`：1m=±3%/5m=±5%/15m=±7%/1h=±10%（√时间缩放）
+   - `process_coin_interval()` 分离 price_change 和 ADX/CI 的计算窗口
+
+2. **重跑 regime_v2**（30M 笔，173 秒）+ **重跑 regime_5d**（30M 笔，63 秒）
+
+3. **Gate 2→4 四周期全量重跑**：
+   - **1h：仍然一骑绝尘**（+169.51R, WF 5/5, MC 100%翻倍），冠军队 4/5 不变，慢熊代表从 ccishort/ETH 换成 advancedkline/SOL
+   - **1m：仍然废*
+---
+[id=1017] [2026-03-02 02:23:42] 混沌: 那现在要不专攻一下1m 5m 15m，换成个策略？
+---
+[id=1020] [2026-03-02 02:25:57] 黑丝: 对，准确说是：**现有的 43 个策略都是基于技术指标的趋势/动量型策略**（CMO、TRIX、CCI、MACD 这类），它们需要一定的价格趋势才能赚钱。
+
+1h 给了足够的时间让趋势形成 → 信号有效。
+
+短周期（1m/5m/15m）价格波动主要是噪音，趋势还没形成就反转了 → 同样的信号在短线上就是乱猜。
+
+这不是调参数能解的——是策略类型和周期不匹配。
+---
+[id=1026] [2026-03-02 02:32:09] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me chronologically analyze the conversation:
+
+1. **Session Recovery (start)**: I (黑丝/Opus) executed the CLAUDE.md recovery protocol:
+   - Found latest JSONL (96872f8a)
+   - Read CHECKPOINT.md, MEMORY.md, session_summaries.md
+   - Converted JSONL to markdown, read last 1000 lines
+   - Previous session had completed Gate 2→4, Monte C
+---
+[id=1128] [2026-02-28 10:06:49] 白纱: 看完了。这是标准的 SQLite 生产级优化，每一步都正确。以我的评估：
+
+---
+
+## 架构评估
+
+**VACUUM — 强烈同意，而且建议用 INTO 版本**
+
+生成时 WAL + 大量 insert + 每策略 commit，碎片是肯定有的。`VACUUM INTO` 更安全（原文件不动，出问题就删新文件），而且 MEMORY.md 记录硬盘还有 133GB 空间，需要的 8-16GB 完全没压力。
+
+**ANALYZE — 同意，必做**
+
+VACUUM 完之后统计信息会被清空，必须重跑 ANALYZE，顺序应该是：VACUUM → ANALYZE，不能反过来。
+
+**PRAGMA 设置 — 同意，但 mmap_size 要注意**
+
+`mmap_size = 4GB` 要求内存里有 4GB 可映射。不知道你机器的 RAM 是多少，如果是 16GB+ 开 4GB 没问题，8GB 的话建议降到 1-2GB，不然会压别的进程。
+
+**一个补充**
+
+VACUUM 完建议跑一条快速校验（比如 `SELECT COUNT(*) FROM combo_summary` 和 `SELE
+---
+[id=1171] [2026-02-28 10:50:08] 白纱: 分析种子库，挖掘策略价值。
+
+可选方向（你选一个或多个）：
+
+1. **Top 策略筛选** — 按 expectancy_ratio / sharpe_ratio / avg_r 排序，找出最强组合
+2. **Regime 甜点** — 每个策略在 bull/bear/ranging 下各自表现，找最佳市况匹配
+3. **TTP 效果** — ttp_count 高的策略 vs 纯信号策略，TTP 到底有没有帮到你
+4. **币本位 vs USDT** — BTC_COIN/ETH_COIN/BNB_COIN 和对应 USDT 合约的策略表现差异
+5. **周期适应性** — 同一策略在 1m/5m/15m/1h 的表现，找最适合的周期
+
+你想从哪个开始？
+---
+[id=1188] [2026-02-28 11:08:48] 白纱: 现在完整了。把所有要求拼在一起：
+
+---
+
+## 行动 3 完整目标
+
+**第一层：找有真实 Edge 的策略**
+从 2236 组里筛出统计上可靠、期望值持续为正的策略。
+
+**第二层：按 Regime 分组**
+用种子库里的 `regime_at_open` 数据，找出每个策略在 bull / bear / ranging 各自的表现——谁在牛市最强、谁在熊市最强、谁在盘整最强。
+
+**第三层：组建 3-5 个策略的投资组合**
+每个 regime 都有对应的最强策略，配合已有的 Regime v2 自动检测系统（`src/trading/regime/`），实现市况切换 → 自动换策略。
+
+**第四层：按投资阶段分组**
+- 早期阶段（$500翻倍）：选 Edge 强 + regime 甜点明显 + 速度快的组合
+- 后期阶段：逐步换成 Edge 稳 + 回撤低的组合
+
+---
+
+这个分析需要的数据种子库全部有，`regime_at_open` + `r_value` + `expectancy_ratio` + `sharpe_ratio` 都在里面。
+
+白纱现在出完整的 S
+---
+[id=1210] [2026-02-28 11:30:38] 白纱: 完成。现在三个文件都干净了：
+
+- **investment_plan.md** — 旧 Top 5 全部清空，改为三层占位结构，等行动3填入
+- **CHECKPOINT.md** — 注意事项里的旧数据说明换成"填入第四节"
+- **README.md** — 早已更新，没有旧数据
+
+黑丝跑完行动3，直接把结果写进 `investment_plan.md` 第四节，不会再有混淆了。
+---
+[id=1281] [2026-02-28 12:21:38] 白纱: 看到问题了。range JOIN 太重是因为 30M × 93K 范围匹配，SQLite 扛不住。
+
+黑丝转 Python 二分查找方向是对的，但有个更简单的方案可以告诉他：
+
+**直接 JOIN 两次 `regime_timeline`，不需要 segments CTE：**
+
+```sql
+SELECT cs.strategy, cs.coin, cs.interval,
+    rt_open.regime,
+    COUNT(*) AS trade_count,
+    ROUND(AVG(pt.r_value), 4) AS avg_r,
+    ROUND(100.0 * SUM(CASE WHEN pt.pnl > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) AS win_rate
+FROM paired_trades pt
+JOIN combo_summary cs ON pt.combo_id = cs.id
+JOIN regime_timeline rt_open
+    ON cs.coin = rt_open.coin
+    AN
+---
+[id=1282] [2026-02-28 12:22:04] 混沌: ⏺ Bash(python3 -u -c "                                                          
+      import sqlite3, time, json, bisect…)                                      
+  ⎿  200/2236 combos, 1,132,748 匹配交易, 2s                                 
+       400/2236 combos, 3,381,640 匹配交易, 5s                                  
+       600/2236 combos, 5,724,952 匹配交易, 9s                                  
+       800/2236 combos, 6,988,034 匹配交易, 11s                  
+     +5 lines (38s · timeout 10m)               
+---
+[id=1292] [2026-02-28 12:24:24] 混沌: ⏺ Bash(python3 -u -c "
+      import sqlite3, time, json, bisect…)
+  ⎿  Step 1: 取 segments...
+       93631 个段, 26.5s
+       52 个 (coin, interval) 组
+     … +25 lines (ctrl+o to expand)
+  ⎿  (timeout 10m)
+
+⏺ 42 秒完成（之前 SQL 跑了 20 分钟还没出来）。27.5M 笔匹配交易，保留率 bull
+  77.5% / bear 78.1% / ranging 94.9%。
+
+  现在 Step 3 —— 按单币种聚合，找最优组合：
+
+⏺ Bash(python3 -c "
+      import json…)
+  ⎿  Error: Exit code 1
+       File "<string>", line 55
+         print(f'{'币种':<12} {'加权分':>6} {'简单和':>6} │ {'Bull 策略':<26}
+     {'R':>7}
+---
+[id=1293] [2026-02-28 12:24:33] 白纱: f-string 里嵌套了同类引号冲突，Python 3.11 不支持。
+
+修法很简单：把 f-string 外层的单引号改成双引号：
+
+```python
+# 改前（报错）
+print(f'{'币种':<12} {'加权分':>6} ...')
+
+# 改后
+print(f"{'币种':<12} {'加权分':>6} ...")
+```
+
+让黑丝把那行 `print(f'...')` 的最外层引号全换成双引号就好了。
+---
+[id=1401] [2026-02-28 14:02:07] 白纱: 明白了，旧格式每笔交易是**两条记录**：
+- 开仓：`BUY`/`SELL`，pnl=0，balance=开仓前余额
+- 平仓：`CLOSE_BUY`/`CLOSE_SELL`，pnl=实际盈亏，balance=平仓后余额
+
+**给黑丝的指令：**
+
+> 把 4 份报告重新生成，完全对齐旧格式：
+>
+> 顶层：`strategy`, `config`, `balance`（最终余额）, `results`（同现有 summary 字段）, `trades`
+>
+> `trades` 每笔交易拆成两条：
+> - 开仓：`{"time": open_time, "order_type": "BUY"（long）或"SELL"（short）, "price": entry_price, "capital": bet_size, "pnl": 0, "balance": balance_before, "withdraw": 0}`
+> - 平仓：`{"time": close_time, "order_type": "CLOSE_BUY"（long）或"CLOSE_SELL"（short）
+---
+[id=1410] [2026-02-28 15:58:27] 白纱: 记下来，Step 5 先放着。
+
+**给黑丝的指令：**
+
+> 用和 SOL 完全一样的框架，跑 BNB_COIN 专项分析：
+>
+> 1. Step 3（BNB_COIN）：从已有的 27.5M 纯趋势段交易里，筛出 BNB_COIN 所有策略组合（无爆仓：min_balance > 0，total_trades ≥ 30），输出 bull/bear/ranging 各 Top 3，按 days_to_double 升序排列，包含字段：策略/周期/avg_r/胜率/笔数/trades_per_day/days_to_double
+>
+> 2. Step 4（BNB_COIN）：锁定 Top1 组合（bull/bear/ranging 各选最强，同一周期优先），生成 4 条模拟曲线（3个单策略独跑 + 1个自动切换版），$500 起，max(余额×10%, $100)×10x 杠杆
+>
+> 3. 生成 4 份回测报告（旧格式），存 `reports/backtest/`，文件名前缀 `bnb_coin_`
+---
+[id=1455] [2026-02-28 18:19:45] 白纱: 两个一起回答。
+
+**时间周期：1h（1小时K线）**
+这个在第2层标题就写了"BNB_COIN / 1h"，报告文件名也有 `_1h_`，我以为你看到了，确实没单独说清楚。
+
+---
+
+**资金建议：$500，但不是第一优先**
+
+核心逻辑：
+
+| 对比维度 | SOL/1h 切换版（第1层） | BNB_COIN/1h 独跑（第2层） |
+|----------|----------------------|--------------------------|
+| 首次翻倍 | **12天** | 52天 |
+| 最终余额 | $114K | $170K |
+| 最大回撤 | 55.6% | 56.0% |
+| 适合阶段 | Phase 1 首轮 | Phase 1 完成后 |
+
+**建议：按顺序跑，不要同时拆资金。**
+
+1. Phase 1 先跑 SOL（12天翻倍，快狠准）
+2. SOL 翻倍提出本金$500后，剩余$500利润继续跑 SOL
+3. **同时或之后**，拿一笔 BNB 现货开 BNB_COIN 币本位仓
+
+**BNB_COIN 的特殊优势：** 你持有 BN
+---
+[id=1511] [2026-02-28 19:38:32] 白纱: ## 多币种 Regime 轮动——从零讲清楚
+
+---
+
+### 一、用最简单的例子讲明白
+
+**一句话定义：哪个市场现在最适合赚钱，就去那里。**
+
+想象你是个摊贩，手里只有一摊钱。
+- 今天牛市，SOL 动得最猛 → 去做 SOL
+- 市场转震荡，XRP 的震荡策略稳得一批 → 平掉 SOL，去做 XRP
+- 熊市来了，BNB 的做空策略最准 → 平掉 XRP，去做 BNB
+
+你永远在"当前环境下最能赚钱的那个摊位"待着，不是死守一个摊。
+
+**具体数字举例**（假设种子库里的数据）：
+
+| Regime | SOL 最优策略 d2d | XRP 最优策略 d2d | BNB 最优策略 d2d | 轮动选择 |
+|--------|-----------------|-----------------|-----------------|----------|
+| Bull | 15天 | 25天 | 30天 | → 选 SOL |
+| Ranging | 45天 | 18天 | 40天 | → 切 XRP |
+| Bear | 60天（归零）| 35天 | 12天 | → 切 
+---
+[id=1512] [2026-02-28 19:50:30] 混沌: 白纱给的 4 步基本就是最优路径：从 paired_trades 里统计“纯净 Regime 段”（开仓=平仓 Regime）的表现 → 建“Regime → Top Combo”表
+实时每根 K 线更新 Regime → 查表 → 切换到当前 Regime 的 Top 1（或 Top 3 平均）
+写一个新回测脚本，模拟历史轮动效果
+对比“轮动版 vs SOL 单币版”的资金曲线
+
+整个过程不需要重跑种子库，只是在现有 db 上做聚合统计 + 写一个“轮动模拟器”。最大的坑（白纱列得很准，我再补充实操角度）切换永远晚半拍（滞后）
+→ 你的 Regime v2 有 dwell + confirm，切换至少晚 6 根 K 线（1h 就是 6 小时）。
+→ 接受它，别试图优化成“0 滞后”，那是过拟合死路。
+切换成本吃利润
+→ 每次切换 ≈ 0.1–0.15% 摩擦（平仓 + 开仓费 + 滑点）。
+→ 你的 Regime 防抖已经很强（一年可能只切 20–50 次），成本可控。
+历史最优 ≠ 未来最优
+→ 2023–2025 数据里 SOL bull 最猛，不代表 2026 bull 还是它
+---
+[id=1515] [2026-02-28 19:53:05] 白纱: 数据说话了，关键发现有几个，直接讲：
+
+---
+
+**发现1：多币种轮动潜力是真实的**
+
+| Regime | 全局Top1 | avg_r | SOL当前用的策略 | SOL avg_r | 差距 |
+|--------|----------|-------|----------------|-----------|------|
+| Bull | AVAX/trix | 0.306 | cmo | 0.173 | **+77%** |
+| Ranging | AVAX/cmo | 0.321 | meanreversion | 0.021 | **+15倍** |
+| Bear | ETH_COIN/demandindexshort | 0.223 | bbsqueeze | 0.042 | **+5倍** |
+
+Bull 差77%已经很可观，Ranging 差15倍这个……不太对劲。
+
+---
+
+**发现2：Phase 1 的策略选择可能有问题（更紧急）**
+
+看 SOL/1h 自己内部的最优：
+
+| Regime | 当前用的 | avg_r | SOL内最优 | avg_r
+---
+[id=1518] [2026-02-28 19:57:06] 混沌: 以下是我的分析和倾向建议。我会先用表格对比两条路的优缺点/优先级，然后说明我的理由，最后给出执行建议（假设你用 Claude 协作）。两条路的对比维度
+路 A（验证 Phase 1，换 Ranging/Bear 策略）
+路 B（验证多币轮动，用 AVAX 替 SOL + 找 Bear 做空）
+我的优先级打分（满分 10）
+紧急性
+高：当前 Phase 1 配置可能有问题（Ranging 13 倍差距、Bear 4 倍），直接影响你的 SOL 自动切换系统。如果不修，后面所有优化都白搭。
+中：多币轮动是新方向，但前提是单币基础稳固。如果 Phase 1 都没优好，轮动效果会打折。
+A: 9/10
+B: 6/10
+潜在收益提升
+中-高：换 avg_r 最优策略后，d2d 可能降 20-50%（Ranging 从 0.021 → 0.281，影响大）。
+高：全局 Top1 差距大（Ranging 15 倍），如果轮动成功，年化可能翻倍。但需验证成本吃利润。
+A: 7/10
+B: 8/10
+实施成本
+低：只在 SOL/1h 内换策略，重跑单个回测 + 对比 d2d/曲线。1-2 小时搞定。
+中
+---
+[id=1519] [2026-02-28 19:57:45] 白纱: Grok 分析得很透，方向对。按协议先出精简方案，你确认后再展开。
+
+---
+
+**精简方案：路A + 路B 先后执行**
+
+```
+目标：验证 Phase 1 策略是否已是最优（路A），再探索跨币轮动潜力（路B）
+
+核心步骤：
+
+路A — SOL 内部策略优化（先跑，1-2小时）
+  1. SQL 重新统计：SOL/1h 各 regime 下，用 avg_r × trades
+     复合排序（防止只看单笔质量忽略频率）
+  2. 对比当前配置 vs 新候选（ranging/bear 各取 Top 2）
+  3. 用 backtest.py 重跑：换 ranging=cmo, bear=trix
+     生成新4份报告，对比 d2d / 最终余额 / max_dd
+  4. 结论：如果 d2d 没提升 → 原选择已是最优；
+           如果提升 >20% → 更新 Phase 1 策略配置
+
+路B — 多币种轮动模拟（路A出结论后再跑，3-5小时）
+  1. SQL 建 Regime → Top3 Combo 映射表（13币 × 1h）
+  2. 写轮动模拟器：按 re
+---
+[id=1521] [2026-02-28 20:00:34] 白纱: 决策点清晰，直接出完整方案。
+
+---
+
+## 完整实施方案：路A + 路B
+
+> 工作目录：`lab/`，不动原系统。输出报告写到 `lab/reports/`。
+
+---
+
+### 路A：SOL/1h 策略内部优化
+
+**目标**：验证换 ranging/bear 策略后，d2d 是否真的提升。
+
+#### Step 1：补充 SQL 统计（执行前先跑，确认数据）
+
+用**总R值**（avg_r × trades）作为综合排序，而不只看 avg_r——防止高单笔低频次误导：
+
+```
+SOL/1h 各 regime 统计：
+  - 字段：strategy, regime_at_open, avg_r, trades, total_r(=avg_r×trades), 
+          avg_holding_bars, liquidation_count, liq_rate(=liquidation/trades)
+  - 筛选：trades ≥ 30
+  - 排序：total_r DESC
+  - 分组：bull / ranging / bear 各出一张表
+```
+
+同时验证
+---
+[id=1623] [2026-02-28 22:56:00] 混沌: 我刚补充了一些东西，他现在的回答是这个是的，你补充的这个信息很重要：TTP 是固定会开的（你实盘每次都开移动止盈，不关）。基于这个新事实，我重新给你分析“还要不要重跑纯信号版”的必要性。快速结论不需要重跑纯信号版（无 TTP 版），现有种子库已经足够贴合你实盘了。理由总结如下（按优先级）：优先级
+理由
+解释
+1
+TTP 实盘固定开启
+你每次都开 TTP，和种子库里 ENABLE_TTP=True 完全一致。TTP 的平仓时机、持仓时长、pnl 影响都和实盘匹配，不需要去掉它来“纯信号”。
+2
+费用部分可以后处理
+手续费、滑点、资金费虽然种子库加了，但你可以 SQL 直接算 gross_pnl（pnl + fee + funding + slippage），得到“去费用版”信号质量。费用是可分离的，不影响核心信号。
+3
+风险控制已对齐
+如上一条所说，10% 逐仓 + 10x 杠杆 + 10% 止损风险 = 本金 10% 固定风险，和 Van Tharp $1 注码等价。种子库模拟的就是这个逻辑。
+4
+重跑成本不值
+重跑无 TTP 版会改变所有平仓时机、pnl、r_value、d2d 等，
+---
+[id=1629] [2026-02-28 23:03:30] 混沌: 我觉得是这样，信号少的，可以看看罗技有没有问题。大量单子亏损严重，可以反转信号，量大，不过扯平，可以看看能不能做单向，爆仓率严重，可以换成爆赚率赚死。所以主要先看量，没量没得搞，量大再想办法造。至于那些半中间的，是最没用的，调个半死可能还是结果一样。你觉得呢？
+---
+[id=1720] [2026-03-01 14:05:37] 白纱: 对不起，我说错了，让我重新说。
+
+Walk-Forward **不是故意把牛市策略放到熊市考**。
+
+真正的意思是这样：
+
+```
+用第1-3年练习 → 第4年考试（策略从没见过这段）
+用第1-4年练习 → 第5年考试（策略从没见过这段）
+```
+
+就是纯粹按时间顺序，用策略**从来没见过的未来数据**来考。那段恰好是牛市还是熊市，不是人为安排的，就是真实历史。
+
+---
+
+所以你第一次的理解才是对的：
+
+> "10年成绩很漂亮，但这半年（策略没见过的那段）不行，就淘汰"
+
+不是故意选不匹配的市场来刁难，是用真实的"未来"来验证——你没见过这段，能不能继续赚？
+---
+[id=1811] [2026-03-01 16:07:47] 混沌: ⏺ 我倾向 1，但要补一个白纱没提到的点：
+
+  关卡四用的也是同一套 ADX 标签来决定"遇到牛市切牛市策略"。标签不准，关卡四切换
+  也会切错。所以关卡四不是完美的安全网。
+
+  但有一个救命的逻辑：如果回测和实盘都用同一套 ADX，那至少是内部一致的 — "ADX
+  认为是牛市的时候用这个策略"，不管 ADX
+  认为的牛市是不是真牛市，选出来的策略和部署的条件是匹配的。
+
+  怕的是以后实盘换成12个指标，那时候"牛市"的定义变了，回测选出来的策略可能就不配
+  了。
+
+  所以选 1，但加一个前提：实盘阶段如果换用12个指标判
+  regime，那选出来的队伍要重新验证，不能直接用。
+---
+[id=1814] [2026-03-01 16:10:21] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me analyze the conversation thoroughly to create a comprehensive summary.
+
+The conversation started with a context restoration (恢复协议) after compression. The main thread involved:
+
+1. Session restoration from JSONL
+2. Answering user's question about "123方案" (why white纱 didn't list three options)
+3. User confirming fusion team strate
+---
+[id=1820] [2026-03-01 16:25:25] 混沌: 我请了个大神，你们都看看，我两边贴：是的，你的完整框架已经非常成熟、系统化、数据驱动，而且层层递进、防过拟合的思路很清晰（关卡一筛活跃度 → 关卡二找 Regime 强项 → 关卡三组队 → 关卡四黑暗森林模拟赛）。这套流程在 crypto 量化里属于高阶水平，比单纯看 avg_r 或 d2d 排名强太多。现在针对你贴的讨论内容（15m ADX 调参疑似过拟合），我把关键点和建议直接给你总结，方便你拍板下一步。1. 当前 15m 成绩好，到底是不是过度迎合？结论：有 70-80% 概率是过度迎合，但不是 100%。证据：未调的 1m/5m 准确率 ≈38-39%（接近随机）
+调过的 15m 准确率 44.3%（方向对，但仍不到一半）
+1h 未调但 Bull 段平均 +1.02%（周期特性贡献），Bear 微涨 +0.09%（crypto 长期牛市背景噪音）
+
+为什么是过度迎合：44.3% 本身不高，继续调半天很可能冲到 50%+，这就是“刷历史题到满分，新考卷 0 分”的典型。
+你制止得及时，没让黑丝继续调，否则准确率再高 5-10%，过拟合就坐实了。
+
+为什么不是 100%：15m 
+---
+[id=1823] [2026-03-01 16:31:43] 白纱: 决策已拍板，我出完整方案给黑丝。
+
+---
+
+## 完整实施方案
+
+**目标**：用BTC 1h K线（14天/10%）重新给所有交易打regime标签，验证后决定走关卡二还是路C。
+
+**工作环境**：lab（不动源代码）
+
+**新增脚本**：`lab/relabel_regime.py`
+**输出报告**：`lab/results/regime_relabel_report.json`
+
+---
+
+### Step 1 — 预建BTC regime时间轴
+
+- 加载 `src/backtest/data/historical/BTC/1h.json`
+- 对每根1h K线（索引i），取第i根与第i-336根（14天前）的收盘价
+- 计算变化率 = (close[i] - close[i-336]) / close[i-336]
+- 标签：>10% → bull，<-10% → bear，否则 → ranging
+- 前336根K线（历史不足14天）→ 'unknown'
+- 输出：`{timestamp: regime}` 字典，timestamp = 该1h K线开盘时间（Uni
+---
+[id=1875] [2026-03-01 18:23:02] 白纱: 黑丝解释得清楚。两条路确实是不同的东西。
+
+**我的推荐是第一条：每个币看自己的价格涨跌。**
+
+理由：
+- 你否决ADX是因为"被改过了"——换一个用起来还是ADX，问题没解决
+- 价格涨跌零公式、零调参，跟Layer 1完全一套逻辑
+- 越简单越难过拟合
+
+---
+
+**两层现在都清楚了：**
+
+| 层 | 看什么 | 怎么判 |
+|---|---|---|
+| Layer 1 | BTC 14天涨跌 | 涨>10%=bull，跌>10%=bear，中间=ranging |
+| Layer 2 | 这个币自己 14天涨跌 | 同上，换成各自的币 |
+
+合并规则上一条你还没确认——**两层说的不一样就降为盘整，你同意吗？**
+
+同意了这套设计就完整了，可以给黑丝出完整方案。
+---
+[id=1882] [2026-03-01 18:55:17] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - 恢复协议执行：白纱读取黑丝的完整会话记录（96872f8a JSONL），完整回顾黑丝这段会话所有内容
+   - 设计并确认两层Regime检测系统，解决关卡二分班错误问题
+   - 最终目标：给3000万笔交易打上准确的牛/熊/盘整标签，再重跑关卡二~四
+
+2. Key Technical Concepts:
+   - **四关筛选框架**：关卡一（活跃度门槛）→ 关卡二（考场成绩）→ 关卡三（组队）→ 关卡四（整队照妖镜）
+   - **两层Regime检测**：Layer 1（12指标宏观投票）+ Layer 2（每币种自己的价格+ADX+CI）
+   - **Layer 1**：12指标历
+---
+[id=2037] [2026-03-02 00:00:16] 白纱: 你说得对，我没说准。
+
+总收益其实低了：174.53 → 169.67，差了约5 R。这个方向跟你预期一致。
+
+"改善"的只有两个局部指标：
+- **S1 大幅跳升**（+10 → +29）：因为币本位合约历史数据短（BNB_COIN 约2020年才上线），S1 段（2018~2019）数据不完整，Walk-Forward 在那段数据上有空洞。换成 USDT 本位的 ETH 和 BNB，历史更长，S1 那段数据完整了，所以那段收益跳上去了。
+- **通过率从 93.4% → 98.4%**：同理，数据更完整，更多队伍能跑完5段。
+
+---
+
+所以不是"换掉币本位之后策略更强"，是"换掉历史数据短的合约，Walk-Forward 各段数据更完整，数字更可靠"。总收益本身是低了，你的直觉对。
+---
+[id=2050] [2026-03-02 00:11:58] 混沌: ⏺ 换算结果出来了：                
+                                                                                
+  d2d 笔→天 换算                                                                
+   
+  基本数据：557 笔横跨 2,902 天（2018-03 ~ 2026-02），平均 0.192                
+  笔/天（大约5天开一单）                                    
+
+  简单等比换算（笔数 ÷ 0.192）：
+
+  ┌──────┬────────┬──────────┐
+  │ 指标 │  笔数  │  ≈ 天数  │
+  ├──────┼────────┼──────────┤
+  │ 最快 │ 62 笔  │ ~323 天  │
+  ├──────┼────────┼──────────┤
+  │ 基准 │ 85 笔  │ ~443 天 
+---
+[id=2073] [2026-03-02 00:28:42] 白纱: 我说错了，lab 里没有 backtest 目录。
+
+黑丝，输出到 `lab/results/` 下，文件名 `champion_team_report.json`，格式按 MEMORY.md 回测报告规范。
+---
+[id=2085] [2026-03-02 00:45:50] 白纱: 你说得对，这是一个真正的问题。
+
+现在的做法是：所有周期统一用"14天涨跌幅"来判断市场状态。
+
+但14天对不同周期意义完全不同：
+- **1h 交易**：14天是合理的中期趋势窗口，匹配
+- **1m 交易**：1m的机会可能在几小时内出现，14天太粗了，早就错过了
+
+应该按周期匹配时间窗口：
+
+| 周期 | 建议窗口 |
+|------|---------|
+| 1m | 1~2天 |
+| 5m | 3~5天 |
+| 15m | 7天 |
+| 1h | 14天（当前） |
+
+这样每个周期用"和自己量级匹配"的时间来判断市场状态，1m 不用拿14天的大趋势来分班。
+
+---
+
+这个改动会影响 price_change_pct 的计算方式，改完要重新跑 regime 验证 + 四关。
+
+现在改，还是等新周期数据补完再一起改？
+---
+[id=2089] [2026-03-02 00:49:56] 白纱: 最省事的方案：
+
+**等新周期数据补完，两件事一起做**：
+1. 加新周期（30m/2h/4h/8h/12h/1d）
+2. 同时修 price_change_pct 窗口（按周期匹配）
+
+两件事合并，只重跑一次数据。
+
+---
+
+现在不用动，结论也不会丢：
+- 1h 冠军队已经出来了（5/5通过，$500→$12,927，MC100%）
+- 这个结果先写入 investment_plan.md 保存
+- 等新周期数据到了，改窗口，重跑全套，看有没有更好的答案
+
+要先写入 investment_plan.md 吗？
+---
+[id=2098] [2026-03-02 01:04:22] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - 白纱（Sonnet）恢复上下文：读取 c0cabf8d JSONL，更新 session_summaries，完成恢复协议
+   - 等待黑丝完成 Layer 1 接入 regime_v2 规则修改（L2永远主导，L1只在ranging时介入）
+   - 讨论并验证 Regime 两层检测系统（5维度标签：crazy_bull/slow_bull/slow_bear/crazy_bear/ranging）
+   - 执行四关筛选框架（关卡一→二→三→四），找出5人冠军队
+   - 用户决策：先修 regime 窗口（按周期分），再加新周期，不同时进行
+
+2. Key Technical Conce
+---
+[id=2103] [2026-03-02 01:11:32] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me analyze the entire conversation chronologically, covering all sections from the beginning to the current point.
+
+**Session Start (02-27 22:32):**
+- New session, user ran /claude to restore context
+- White纱 (Sonnet) restored context: found 3 unrecorded sessions (S21/S22/S23), recorded them
+- S21: CLAUDE.md compliance fix
+- S22: v
+---
+[id=2104] [2026-03-02 01:14:53] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me analyze the full conversation chronologically to create a comprehensive summary.
+
+The conversation started with a session restoration from a previous context. The user asked white纱 (Sonnet) to review the complete transcript. I was in the process of reading through the transcript file at /tmp/current_session.md when the summary w
+---
+[id=2112] [2026-03-02 01:24:37] 白纱: 好，读完了。这500行的核心内容梳理如下：
+
+---
+
+**上一段会话最后发生的事（03-01 13:01~13:41）**：
+
+1. **Monte Carlo 第一版失败**：固定注码 $1 打乱顺序总和不变（加法交换律），黑丝自己发现了问题 → 改成复利模式（f=2%）重跑
+
+2. **最终结果确立**：
+   - 冠军队：ad/SOL + cmo/LINK + ad/LINK + ccishort/ETH + demandindex/BNB（全1h）
+   - Walk-Forward：+169.67R / 557笔 / 5/5段全过 ✅
+   - Monte Carlo：翻倍率100% / d2d 62~192笔 / max_dd 9.1~20.2% / 爆仓率0% ✅
+
+3. **d2d换算**：基准85笔 ≈ 443天（等比），但实际时间顺序是**734天（约2年）**翻倍（因为交易不均匀，早期数据稀疏）
+
+4. **用户反应**："2年太慢，等有500K再用这套"
+
+5. **用户要求**：另跑 1m/5m/15m 各自冠军，黑丝执行：
+   - 1m → WF 1/5
+---
+[id=2122] [2026-03-02 01:38:53] 白纱: **人话版：**
+
+现在的问题是：不管你是1分钟的交易还是1小时的交易，系统都拿"过去14天涨了多少"来判断市场是牛是熊。
+
+14天对1小时来说刚好合适——1小时的交易本来就是跟着中期趋势走的。
+
+但对1分钟来说，14天太粗了。就像你出门买瓶水（1分钟的事），系统却告诉你"这个月整体天气好"，然后叫你不用带伞——但此刻外面在下雨。信息和实际情况完全对不上。
+
+---
+
+**PRICE_WINDOW_MAP 做的事**：
+
+给每个周期配一个"合适的回看时间"：
+
+| 周期 | 回看多久 | 含义 |
+|------|---------|------|
+| 1分钟 | 回看1天 | 1分钟的机会，用今天的涨跌来判断 |
+| 5分钟 | 回看3天 | 这周的趋势来判断 |
+| 15分钟 | 回看7天 | 这一周的趋势来判断 |
+| 1小时 | 回看14天 | 两周的趋势来判断（原来就是这个，不变） |
+
+---
+
+简单说就是：**不同周期用匹配自己节奏的时间窗口，而不是全部用同一把尺子量。**
+---
+[id=2129] [2026-03-02 02:06:24] 混沌: ⏺ 全部完成！结果对比：
+
+  修前 vs 修后
+
+  ┌──────┬───────────────────┬───────────────────┬──────────────────────────┐
+  │ 周期 │       修前        │       修后        │           变化           │
+  ├──────┼───────────────────┼───────────────────┼──────────────────────────┤
+  │ 1m   │ +25.16R, WF 1/5,  │ +26.76R, WF 1/5,  │ 基本没救，仍然废         │
+  │      │ MC 0%             │ MC 0.1%           │                          │
+  ├──────┼───────────────────┼───────────────────┼──────────────────────────┤
+  │ 5m   │ +85.21R, WF
+---
+[id=2130] [2026-03-02 02:06:57] 白纱: 结果很清晰，先给你分析完再等黑丝更新。
+
+---
+
+**核心结论：1h 冠军队稳住了**
+
+4/5 不变，总R几乎一样（169.67→169.51），5/5全过。这个结果说明：1h 冠军队不是靠错误的 regime 标签撑起来的——标签修正后依然成立，更可信了。
+
+---
+
+**慢熊代表换人（ccishort/ETH → advancedkline/SOL）**
+
+这个变化需要多看一眼：原来 ccishort/ETH 有已知问题（40笔/3段<10笔，样本太稀疏）。换成 advancedkline/SOL 可能更好，也可能有同样的稀疏问题。
+
+黑丝，advancedkline/SOL 在慢熊考场有多少笔？Walk-Forward 5段里各段各多少笔？
+
+---
+
+**短周期结论一锤定音**
+
+窗口修了之后 1m/5m/15m 还是过不了 WF，这说明短周期的问题不是 regime 标签，是策略本身在时间切片上不够稳定。这是确认，不是失败。
+
+15m 总R大幅提升（+36%）值得记一笔——标签改善了，只是 WF 稳定性还不够。等新周期（2h/4h）数据补进来，说不定能找到比 1h 更快翻
+---
+[id=2131] [2026-03-02 02:07:51] 混沌: 汇报
+                                                                                
+  regime 窗口修复完成，全流程已跑完：                                        
+
+  1. 改了 lab/compute_regime_v2.py（3处）：
+    - 新增 PRICE_LOOKBACK_MAP：1m=1天/5m=3天/15m=7天/1h=14天
+    - 新增 PRICE_THRESHOLD_MAP：1m=±3%/5m=±5%/15m=±7%/1h=±10%（√时间缩放）
+    - process_coin_interval() 分离 price_change 和 ADX/CI 的计算窗口
+  2. 重跑 regime_v2（30M 笔，173 秒）+ 重跑 regime_5d（30M 笔，63 秒）
+  3. Gate 2→4 四周期全量重跑：
+    - 1h：仍然一骑绝尘（+169.51R, WF 5/5, MC 100%翻倍），冠军队 4/5
+---
+[id=2136] [2026-03-02 02:12:16] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me chronologically analyze the conversation:
+
+1. Session started with white纱 (Sonnet) executing the restoration protocol (CLAUDE.md steps 1-4)
+2. Found JSONL c0cabf8d, converted to markdown (19,647 lines), read tail
+3. Read Memory (MEMORY.md), CHECKPOINT.md, session_summaries.md
+4. Wrote S34 log entry to session_summaries.md and up
+---
+[id=2201] [2026-03-02 03:22:41] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me chronologically analyze this conversation to create a comprehensive summary.
+
+1. Session started with compression recovery protocol - white纱 (Sonnet) executed CLAUDE.md steps 1-4
+2. Found JSONL c0cabf8d, confirmed CHECKPOINT state: 1h champion team confirmed, waiting for user to approve
+3. User confirmed champion team ("加吧") → w
+---
+[id=2237] [2026-03-02 05:45:53] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me chronologically analyze this conversation to create a comprehensive summary.
+
+1. Session started with context restoration protocol (CLAUDE.md steps 1-4)
+2. Read JSONL file c0cabf8d, read Memory + CHECKPOINT + session_summaries
+3. Wrote S37 session log
+4. Continued task from previous session: analyzing bad/diff strategies
+
+Key se
+---
+[id=2239] [2026-03-02 05:47:03] 白纱: ✅ 上文已读（c0cabf8d） ✅ Memory已读 ✅ CHECKPOINT已读 ✅ 日志已写（S38）
+
+对照一致：上文 = CHECKPOINT = 支线C差生修复（_2yi方案进行中）。
+
+---
+
+收到，**handoff.md 不写了**。
+
+那黑丝直接按这个规则改就好：
+
+- **命名规则**：文件名 `strategy_xxx_2yi.py`，class 名加 `2yi`，`name` 属性返回 `"xxx_2yi"`
+- **工作路径**：`lab/src/core/strategy/`
+- **旧版**：保留不动，作对照组
+
+需要你帮黑丝整理一下要改名/新建的清单，还是他已经知道范围了？（10个修复版 + 删掉 lstm/cci）
+---
+[id=2243] [2026-03-02 05:59:40] 白纱: 清楚了，整理一下现状：
+
+**现状**：lab 10个策略全是原版，修复代码已丢，handoff.md 有完整规格
+
+**唯一出路**：黑丝按 handoff.md 重新建 10 个 `_2yi` 文件（不动原版）
+
+之前你说"不用handoff了，直接改名"是基于以为有改过的版本可以用，现在没有了，所以 handoff.md 还是要用。
+
+**要不要直接让黑丝按 handoff.md 开始建？** 确认一声我就 handoff 过去。
+---
+[id=2248] [2026-03-02 06:12:28] 白纱: 先读一下黑丝的完整结果确认一下细节。
+
+**_2yi 完成情况**
+
+10个全到位，导入验证86个策略，看起来正常。但发现一个疑点：
+
+结果表里写的是 `klinestick_2yi`，方案写的是 `candlestick_2yi`。这个是黑丝打错字了还是文件名真的建错了？需要黑丝确认一下实际文件名。
+
+---
+
+**TTP 讨论 — 白纱的看法**
+
+黑丝建议 TTP=False，理由是"裸跑更严格，遮盖弱策略"。这个逻辑有道理，但有一个关键问题黑丝没提：
+
+**问题：混库比较会失去公平性**
+
+| 情况 | TTP | 影响 |
+|------|-----|------|
+| 旧 2236 组种子 | True | TTP 帮忙锁利润，d2d 偏短 |
+| 新 ~9400 组种子 | False（黑丝提议） | 纯信号平仓，d2d 偏长 |
+
+进 Gate 管线时，这两批数据混在一起比 d2d、WF、MC，新策略会因为少了 TTP 保护而天然处于劣势。**不是比谁强，是比谁的 TTP 开了。**
+
+**白纱建议：TTP=True，与旧种子保持一致**
+
+理由：
+1. 实盘本来就开 
+---
+[id=2267] [2026-03-02 06:47:56] 白纱: 方案写好了，可以 handoff 给黑丝。
+
+**方案核心**：
+
+1. **三个代码缺口** — 给了具体参数值，黑丝直接填进去
+2. **币本位长周期** — 建议跳过 8h/12h/1d（数据太少），用 `--min-bars 500` 或让 Gate 自然淘汰
+3. **执行顺序** — 四阶段：代码修复 → 等你确认旧库 → 全量重跑 → 验证
+
+**还有一个需要你拍板**：旧 `seed_report.db` 物理删除还是改名备份？黑丝等你确认才会动。
+---
+[id=2272] [2026-03-02 06:51:09] 白纱: 好，handoff.md 更新完毕，黑丝看到就能直接开工了。
+
+**执行顺序已锁定：**
+1. 修三个代码缺口
+2. 单组验证（新周期 regime + generate_seed）
+3. 旧库改名备份（不删）
+4. 后台全量跑 seed_v3.db
+5. verify_seed.py 验证
+6. 写报告
+
+出门顺利，有结果了回来看报告。🚶
+---
+[id=2297] [2026-03-02 04:18:25] 黑丝: 抱歉！从上文和 CHECKPOINT 我已经知道的：
+
+- **原有策略 42 个**（lab 里）
+- **支线A 新增 23 个**（已完成 ✅），但 CHECKPOINT 说放在 `lab/src/core/strategy/`，实际看起来跑到 `src/core/strategy/` 去了（34 个未追踪文件）
+- **支线C = 差生策略修复**，就是白纱分析了 13 个表现烂的策略，出了修复方案写在 `lab/handoff.md`
+
+你说得对，"支线C"这种编号你看不懂。改个人话名字：
+
+| 编号 | 改名 | 内容 |
+|------|------|------|
+| 支线A | **新策略开发** | 23 个新策略，已完成 ✅ |
+| 支线B | **补周期数据** | 下载 30m/2h/4h/8h/12h/1d，后台跑着 |
+| 支线C | **差生修复** | 13 个烂策略：删2个、修6个、大改3个、留2个 |
+
+要我更新 CHECKPOINT 把名字改过来吗？
+---
+[id=2356] [2026-03-02 05:48:56] 混沌: 收到，handoff.md 不写了。                                 
+
+  那黑丝直接按这个规则改就好：
+
+  - 命名规则：文件名 strategy_xxx_2yi.py，class 名加 2yi，name 属性返回
+  "xxx_2yi"
+  - 工作路径：lab/src/core/strategy/
+  - 旧版：保留不动，作对照组
+
+  需要你帮黑丝整理一下要改名/新建的清单，还是他已经知道范围了？（10个修复版 +
+  删掉 lstm/cci）
+---
+[id=2358] [2026-03-02 05:51:36] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me chronologically analyze the conversation:
+
+1. **Session Start**: User invoked `/claude` to execute the context recovery protocol. I found the latest Opus JSONL (925c19b0), converted it, found it only had 2 messages (just the recovery command itself). Read Memory, session_summaries, CHECKPOINT, and validation_suite.
+
+2. **User co
+---
+[id=2360] [2026-03-02 05:53:03] 黑丝: ✅ 上文已读（925c19b0） ✅ Memory已读 ✅ CHECKPOINT已读 ✅ 日志已写
+
+---
+
+收到你的两条指示，我**没动任何东西**。
+
+但有个问题需要跟你说清楚：你说的「先把新改的名字换一下，再把旧的搬回来」这个捷径，**本来是可行的**，但上一轮压缩前我已经执行了**恢复操作** — 把 src 的原始文件全部 `cp` 回了 lab，覆盖掉了之前修改好的版本。
+
+**现在 lab 里全部都是原始版本**（跟 src 一模一样），修改过的版本已经不存在了。
+
+所以现在有两条路：
+
+1. **重新修改 → 改名**：先在 lab 里把 10 个策略按 handoff.md 的规格重新修改一遍，然后把修改后的文件改名为 `_2yi`，再从 src 复制原版回来
+2. **直接新建 _2yi 文件**：基于原始文件 + handoff.md 规格，直接创建 10 个新的 `strategy_xxx_2yi.py` 文件
+
+两条路结果一样，你要哪个？还是你有别的想法？
+---
+[id=2412] [2026-03-02 06:24:52] 黑丝: 这个问题很关键，而且答案是：**大概率不一样。**
+
+回测里的 TTP：
+- 每根 K 线结束时检查 high/low
+- 如果 high 触发激活阈值 → 启动追踪
+- 如果价格从峰值回落超过 trailing % → 按那个价格平仓
+- **一切都是 K 线级别的精度**，1h K 线就是每小时检查一次
+
+实盘的 TTP：
+- 取决于实现方式 — 是交易所原生的 trailing stop？还是 runner.py 自己轮询？
+- 轮询间隔多少？每秒？每10秒？每分钟？
+- 价格是实时 tick，不是 K 线 high/low
+- 滑点、延迟、API 响应时间都会影响实际出场价
+
+**两者的差距：**
+- 回测可能漏掉 K 线内的更高峰值（乐观或悲观都有可能）
+- 实盘轮询频率跟回测 K 线周期不匹配时，行为完全不同
+- 1m 回测的 TTP 跟 1h 回测的 TTP 精度差 60 倍
+
+**这恰恰是 TTP=False 最强的论据：**
+
+纯信号进出 = 策略说买就买、说卖就卖。回测和实盘的行为是一致的（都是等信号触发）。TTP 是额外加的一层，回测里的模拟跟实盘对不上，那 TT
+---
+[id=2439] [2026-03-02 06:55:30] 黑丝: 验证通过。阶段三：旧库改名备份。
+---
+[id=2450] [2026-03-02 07:03:25] 黑丝: 正在运行中。输出还没刷到文件（1m K 线 regime 计算要 140 秒，在初始化阶段）。等它完成后系统会通知我。
+
+种子生成后台跑着，当前状态：
+
+| 步骤 | 状态 |
+|------|------|
+| 1. 修代码缺口（3文件） | ✅ 完成 |
+| 2. 单组验证（BTC/30m + BTC/4h） | ✅ 通过 |
+| 3. 旧库改名备份 | ✅ seed_report_v2_ttp_true.db |
+| 4. 全量种子生成 | ⏳ 后台运行中（task: b3wzq7ssk） |
+| 5. verify_seed.py 验证 | ⬜ 等步骤4 |
+| 6. 写报告 + 白纱审阅 | ⬜ 等步骤5 |
+
+你出门路上放心，回来给你完整报告。
+---
+[id=2504] [2026-03-02 21:56:49] 黑丝: 现在对了：
+
+- `_base` 注册为 `_base` → 跳过规则认得出 ✅
+- `base` 不在注册表 → 基类不会混进策略队列 ✅
+- 3 个 _2yi → 先试原名 `heikinashistrategy2yi` 找到了 → 直接匹配 ✅
+- 老策略 → 原名直接匹配 ✅
+- **84 个有效策略**（86 - _base - adaptive）
+
+逻辑就是：**注册用原名，查找先试原名，找不到再去掉 strategy 和下划线重试**。简单，不乱。
+---
+[id=2513] [2026-03-02 22:07:27] 黑丝: 我看的是 lab。文件名没问题，问题在**类里面的注册名**。让我直接看代码：
+---
+[id=2589] [2026-03-03 00:05:33] 黑丝: 果然，第 99 行 `enable_ttp=True`。seed_v3 是 TTP=False 跑的，verify 用 TTP=True 重跑，结果当然不一样。
+
+**维度 1 重跑不一致不是数据问题，是 verify 脚本参数不匹配。** 其他维度（内部一致性、逻辑合理性、Regime 一致性）都通过了。
+
+总结验证结果：
+
+| 维度 | 结果 | 说明 |
+|------|------|------|
+| 维度1 重跑对比 | ⚠️ 参数不匹配 | verify 用 TTP=True 重跑，seed_v3 是 TTP=False，不是数据问题 |
+| 维度2 内部一致性 | ✅ | PnL 不一致仅 2 组（浮点精度） |
+| 维度3 逻辑合理性 | ✅ | holding_bars≤0 仅 560/89M = 0.0006% |
+| 维度4 Regime一致性 | ✅ 100/100 | |
+
+需要改 verify_seed.py 第 99 行 `enable_ttp=True` → `enable_ttp=False` 再跑一次维度1，还是直接认可？
+---
+[id=2713] [2026-03-03 21:30:37] 黑丝: 数据跑出来了。老板的直觉有道理，但实际规律比想象的更有意思：
+
+---
+
+### 初牛：前后半对比
+
+| 初牛段 | 前半段 | 后半段 | 符合"前盘整后牛"？ |
+|--------|--------|--------|-----|
+| #3 (2019-01~03) | 1月 -7.2% 底部不动 | 2-3月 +9.3% 开始回暖 | **符合** |
+| #7 (2020-04~09) | 4-6月 +13.6% V型反弹 | 7-9月 +6.4% 反而慢下来 | **反过来** — 前半更猛 |
+| #13 (2022-12~23-03) | 12-1月 +18.1% (1月暴涨40%) | 2-3月 +11.5% 趋缓 | **反过来** — 前半更猛 |
+
+**发现**：3个初牛里，只有1个符合"前盘整后牛"。另外2个反而是**前半段更猛**（COVID后V弹、2023-01暴涨40%）。因为初牛的起点往往是恐慌底部——反弹最猛的恰恰是刚站起来的那一刻。
+
+### 初熊：前后半对比
+
+| 初熊段 | 前半段 | 后半段 | 规律 |
+|--------|--------
+---
+[id=2739] [2026-03-03 22:16:07] 黑丝: 当前脚本有严重的性能问题：89M 条 × Python datetime 解析 × LIMIT/OFFSET（O(N²)扫描）= 可能跑 **几小时**。
+
+改用纯 SQL JOIN 方案——open_time 格式是 `'YYYY-MM-DD HH:MM'`，直接 `substr(open_time, 1, 7)` 提取年月匹配 regime 即可，单条 SQL 搞定：
+---
+[id=2745] [2026-03-03 22:20:10] 黑丝: **regime_fact_labels 完成！**
+
+| 项目 | 结果 |
+|------|------|
+| 总标签 | **89,482,144** (100% 匹配，零 unknown) |
+| 耗时 | ~152s (SQL JOIN 64s + 索引 62s) |
+| 盘整 | 31.9M (35.6%) |
+| 牛 | 31.1M (34.8%) |
+| 熊 | 13.9M (15.6%) |
+| 初熊 | 6.7M (7.5%) |
+| 初牛 | 5.8M (6.5%) |
+| 叠加标签 | 36.1M (40.3%) |
+
+分布合理：牛+盘整占 70%（加密货币历史多数在涨或震荡），初牛/初熊作为转折期占比小，40% 叠加标签说明边界模糊处理在工作。
+
+现在执行 Gate v4 管线：
+---
+[id=2774] [2026-03-03 22:54:21] 黑丝: **sub_phase_labels 完成！**
+
+| 项目 | 结果 |
+|------|------|
+| 总标签 | **69,387,876** (100% 匹配，零 unknown) |
+| 耗时 | ~204s（映射69s + JOIN 82s + 索引49s）|
+
+**子阶段分布**（从高到低）：
+
+| 子阶段 | 数量 | 占比 | 人话 |
+|--------|------|------|------|
+| rest | 22.7M | 32.8% | 趋势中的横盘（牛+熊的歇脚段）|
+| flat | 18.1M | 26.2% | 盘整中的横盘 |
+| sprint | 11.9M | 17.1% | 顺趋势加速（牛冲/熊砸）|
+| dip | 6.0M | 8.6% | 牛市回调 |
+| bounce | 4.4M | 6.3% | 熊市反弹 |
+| down | 3.2M | 4.7% | 盘整下跌 |
+| up | 3.0M | 4.4% | 盘整上涨 |
+
+注意：总量 69.4M（非 89.5M），因为排除了币本位的 20M 笔交易（Gate 管线只看合约
+---
+[id=2983] [2026-03-03 01:13:08] 混沌: 问你一件事，以上出个这些文件名字或者格式有一个统一的吗？
+---
+[id=2986] [2026-03-03 01:15:25] 白纱: 明白。汇报格式：**混沌定的名字（人话）→ 文件名**。
+
+例如：
+> 初考（门槛）完成 → `gate1.json`
+> 专考（成绩单）1h周期 → `gate2_1h.json`
+> 组考（组队）中期队 → `gate3_mid.json`
+> 照妥镜（WF）短期 → `gate4_wf_short.json`
+
+更新 CHECKPOINT 的命名约定：
+---
+[id=2989] [2026-03-03 01:16:11] 白纱: 已记录。以后汇报统一格式：
+
+> 「初考（门槛）完成 → gate1.json」
+
+不会单独甩文件名给你，每次都带着你定的名字。
+---
+[id=3035] [2026-03-03 18:37:19] 白纱: 还有两处：
+
+**1. MC报告命名有误**
+`gate_mc_winners.json` 这个名字只记录通过的，但混沌说每一个都要列出来为什么过关不过关——应该是 `gate_mc_all.json`，组考候选全部记录，通过的和没通过的都在。
+
+**2. 命名规范要同步更新**
+MEMORY.md 和 CHECKPOINT 静态区里锁定的命名是旧流程的（`gate4_wf_short/mid/long`），现在新流程改成了全量 WF，文件名也变了（`gate_wf_all`），两个地方要跟着改，不然下次黑丝和白纱按旧规范找文件会找错。
+
+---
+
+补充后完整结构：
+
+```
+lab/results/
+├── gate_index.json          ← 目录
+├── gate1_all.json           ← 初考全量（8400个，通过/不通过+理由）
+├── gate2_1m.json ~ gate2_1d.json   ← 专考成绩（10份）
+├── gate2_summary.json       ← 专考汇总
+├── gate_wf_all.json    
+---
+[id=3037] [2026-03-03 18:40:25] 白纱: 继续自审...
+
+发现又漏了一个：
+
+**WF通过但没进组考的，查不到为什么没入选**
+
+WF全量跑完后，通过的可能有几百个，但组考只选了几十个候选。那些WF通过、但排名不够高没进组考的，现在在报告里找不到理由。
+
+加一个字段在gate3报告里解决：不只记录入选的候选，也记录WF通过但未入选的，附上"全程/牛/熊/盘整4个维度均排名TOP5以外"这类说明。
+
+---
+
+还有一个命名冲突：
+
+**gate1.json（黑丝已跑的汇总版）和新的gate1_all.json并存**，两个文件容易混淆。直接用gate1.json覆盖成全量版，把汇总数字写在同一个文件的头部，一个文件搞定。
+
+---
+
+现在完整结构：
+
+```
+lab/results/
+├── gate_index.json             ← 目录
+├── gate1.json                  ← 初考全量（头部汇总+8400个逐条记录）
+├── gate2_1m.json ~ gate2_1d.json  ← 专考成绩（10份）
+├── gate2_summary.json          ← 专
+---
+[id=3039] [2026-03-03 18:42:22] 白纱: 这次认真过了一遍，报告结构上我觉得完整了，没有新遗漏。
+
+但有两件配套的事要同步做：
+
+**1. 命名规范要更新**
+MEMORY.md 和 CHECKPOINT 静态区里锁定的旧命名（`gate4_wf_short/mid/long`）和新文件名（`gate_wf_all`）对不上，要同步改掉，否则以后黑丝白纱按旧规范找文件会找错。
+
+**2. gate3 代码要重写**
+黑丝之前写的 `gate3_team.py` 是旧流程（专考后直接选TOP5），新流程要改成"只有 WF 通过的才参与组考排名"。旧代码不能直接用，要提醒黑丝重写这一块。
+
+---
+
+这两件事不是报告结构的问题，是执行时要注意的。报告结构本身我认为没有漏洞了。
+
+确认后白纱把命名规范更新，然后把完整方案传给黑丝执行？
+---
+[id=3041] [2026-03-03 18:46:42] 混沌: This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   混沌（用户）本次会话的主要意图：
+   - 确认Gate管线方案并推进执行（白纱出完整方案→黑丝审阅→执行）
+   - 确立Gate报告文件命名规范（gate{N}_前缀）并写入MEMORY.md和CHECKPOINT静态区永久保存
+   - 汇报规范：向混沌汇报时必须用关卡名（初考/专考/组考/照妥镜）+人话→再跟文件名
+   - 黑丝完成Gate v3四关执行（25个冠军）
+   - 白纱审阅Gate v3结果，发现1h完全缺席、短期队d2d太长、币种集中度风险
+   - 混沌发现流程顺序错误：应为初考→专考→照妀镜WF全量→组考→MC，而非初考→专考→组考→照妀镜
+   - 初考和专考结果已有，
+---
+[id=3253] [2026-03-04 20:13:27] 白纱: 看到了。现在 `gate3v41_team.py:22` — `TOP_N = 5`，逻辑是：
+
+> 在 13 个维度（6 regime + 7 sub_phase）里，任意一个维度排进 top5 → 入选
+
+换成 top15，就是任意维度排进 top15 即入选，候选数量大概会从 135 增加到 ~400。
+
+---
+
+**我的看法：**
+
+**有必要，但不是因为候选多。**
+
+现在是 TOP5 → 135人 → WF → 119人，WF 几乎没淘汰。说明 135 里面大多数质量还可以，TOP5 这把刀还不够钝。
+
+但问题是：**OOS 要嵌进来**。
+
+OOS 是真刀——拿后 20% 的数据验，很多候选会在 OOS 这关倒下。如果进 OOS 只有 135 人，短周期那组可能淘汰完。换 top15，进去的人多，OOS 之后剩下的才够用。
+
+**结论：换 top15，主要是为 OOS 留余量，不是为了凑人头。**
+
+不过还有一个问题要想：top15 候选会变多，组考的**分组逻辑**要不要一起改？现在是 13 维度，维度太多感觉有点散——你想过这个吗？
+---
+[id=3313] [2026-03-04 21:54:33] 白纱: 对，9000行根本没法读。这些文件生成出来是给人看的，不是给AI读的。
+
+问题是：每个策略一张卡 × ~800个策略 = 9000行。这格式对你也太长了。
+
+**更实用的方案：换成紧凑表格**
+
+每个周期一张表，每个策略一行：
+
+```
+=== 1h 周期 ===
+排名  策略               币种   全程PnL   牛市PnL   熊市PnL   盘整PnL   初牛PnL   初熊PnL
+1     vpt                SOL   +823R    +730R     +4.8R    +89R     -15R     +7R
+2     accumulationdist.  SOL   +600R    +601R     +0R      +0R      -9R      +0R
+...
+```
+
+这样每个周期只有 ~800行变成 ~85行（策略数+表头），10个周期合一起也就 ~900行，我能读，你也能扫一眼。
+
+要这样改吗？
+---
+[id=3383] [2026-03-04 23:58:12] 黑丝: 看完了。回复太极：
+
+---
+
+**1. 推荐方案 A（关键词规则匹配）。**
+
+理由：tags 的核心价值是"以后能精准搜到"，B 等于没做，C 跟现有字段重复没意义。A 唯一的成本是维护词表，但 auto-trading 的术语相对稳定，不会经常变。
+
+**2. 初版词表（按实际使用频率排）：**
+
+| 分类 | 关键词 |
+|------|--------|
+| **流程** | 初考, 专考, 组考, 照妖镜, 分班, 冠军, gate |
+| **技术** | 回测, 种子, WF, MC, OOS, regime, intrabar |
+| **市场状态** | 牛市, 熊市, 盘整, 初牛, 初熊 |
+| **数据** | K线, 下载, 数据, DB, SQLite |
+| **决策** | 拍板, 确认, 决定, 不用, 砍掉, 保留 |
+| **协作** | handoff, checkpoint, 方案, 报告, 白纱, 黑丝 |
+| **策略** | 策略, vpt, ad, meanreversion, SOL, BTC, ETH |
+
+**补充建议：**
+-
+---
+[id=3391] [2026-03-05 00:10:11] 混沌: ad策略不换，cmf把正数换成负数，把做多换成做空。这里不就把策略改好了，对吗？然后再做2个策略分别为真正的ad和真正的cmf，明不明白？回答
+---
+[id=3397] [2026-03-05 00:12:17] 混沌: 你先不改，太极哪里有问题要问你，我贴给你吧。⏺ 完成。结果：                                       
+                                                                                
+  - 3378 条历史记录回填：2365 条有标签（70%），1013 条无标签（短消息/纯数字等） 
+  - TOP 标签：策略(744) / 数据(709) / 黑丝(584) / regime(518) / 周期(463) /
+  checkpoint(460)                                                               
+                                                                  
+  有一个小问题要说：决策词中"确认"这个词匹配率高但误伤多（比如"我就确认一下"这种
+  不是拍板）。要不要把"确认"从决策词里去掉？其他词如"拍板"/"就这么定了
+---
+[id=3398] [2026-03-05 00:12:24] 黑丝: 好。这个涉及新增2个文件 + 改名2个文件，老板要我直接改，还是先给白纱出方案？
+---
+[id=3448] [2026-03-05 01:11:48] 白纱: 读完了，完整过了一遍。来龙去脉清楚了：
+
+---
+
+**00:00 ~ 00:25 黑丝做的事（我上次没完整看到的部分）：**
+
+1. **4个策略全部创建完成 ✅**
+   - `accumulationdistribution` → 改名为 `alwayslong`（永远做多，保持原逻辑）
+   - `cmf` → 改名为 `alwaysshort`（反转做空，正负对调）
+   - 新建真正的 `ad`（正确的 MFM 公式）
+   - 新建真正的 `cmf`（正确的 CMF 公式）
+   - 80个策略全部加载 ✅（自动注册=类名转小写，无需手动配置）
+
+2. **种子没跑成**
+   - 老板让黑丝跑 alwaysshort + ad + cmf 三个的种子
+   - **黑丝第一次**：去改了源代码，被你抓住停下
+   - **黑丝第二次**：老板说"跑种子"，黑丝跑 generate_seed.py，但跑的是源代码那边，不是 lab
+   - 你说"你已经同一个错犯第二次了"，停下了
+
+---
+
+**当前状态：**
+
+- 4个新策略已在 **lab** 里创建 ✅（黑丝说放
+---
+[id=3727] [2026-03-06 01:23:00] 白纱: 对，白纱确认：
+
+**上次已完成（lab 里）：**
+- `lab/src/core/strategy/strategy_matriple.py` ✅ — 原 `strategy_adx.py` 改名，真实逻辑是 MA20/MA50 三段排列（current > MA20 > MA50），类名 `MATriple`，name=`"matriple"`
+- `lab/src/core/strategy/strategy_adx.py` ✅ — 全新写的真实 Wilder ADX，信号：ADX>25 且 +DI>-DI→BUY；ADX>25 且 -DI>+DI→SELL；否则 HOLD
+
+**还没做的：** 两个新策略都没跑种子，老板说等之后一起跑。
+
+记录进 CHECKPOINT：
+---
+[id=3738] [2026-03-06 17:40:26] 黑丝: 对话种子更新了。白纱后来有补记：
+
+1. **白纱已确认 adx 修改**（id=3727）：matriple.py（原adx改名）+ adx.py（真实Wilder ADX），两个都在 lab，待跑种子
+2. **老板补充指示**（id=3730）：aroon_2yi 之前跑了种子但没做对比，等啃完骨头后统一跑对比
+3. **白纱更新了 CHECKPOINT**（我刚看到的系统提醒，加了策略审计修改文件清单 + 骨头啃完后统一行动）
+
+CHECKPOINT 现在是完整的。
+
+---
+
+老板回来了，当前状态：
+
+| 待推进 | 说明 |
+|--------|------|
+| 1. WF新方案 | 每个市场状态单独WF验证（三方已确认方向，白纱出方案） |
+| 2. 14个❌策略 | 逐个决定修复/重命名/保留 |
+| 3. 对比跑种子 | adx vs matriple / aroon vs aroon_2yi / 其他修复版 |
+
+老板要先搞哪个？
+---
+[id=3742] [2026-03-06 17:45:28] 白纱: 有了！完整14個❌：
+
+| 策略 | bug描述 | 狀態 |
+|------|---------|------|
+| adx | MA交叉假冒ADX | ✅ 已改名matriple + 新建真實ADX |
+| aroon | 用closes不用highs/lows | 🔍 已分析，有_2yi版已跑種子，待對比 |
+| ad | typical_price永遠正→永遠BUY | ✅ 已確認不可用 |
+| cmf | 同上，MFM=alwayslong | ✅ 已確認不可用 |
+| cmo | if/elif鏈錯誤 | ⏳ 待審計 |
+| ehlers_itl | 變量索引bug | ⏳ 待審計 |
+| hma | HMA算法錯誤 | ⏳ 待審計 |
+| ichimoku | SMA替代midpoint | ⏳ 待審計 |
+| mass_index | BUY/SELL反轉 | ⏳ 待審計 |
+| orb | 數據源混淆 | ⏳ 待審計 |
+| parabolicsar | SMA冒充SAR | ⏳ 待審計 |
+| supertrend_fast | off-by-one越界 | ⏳ 待
+---
+[id=3747] [2026-03-06 17:52:15] 混沌: 那就换成这个名字，然后你在做一个真的CMO出来。我觉得，如果只是恢复到原本的策略，就不打两仪下去了，他只是纯粹的策略，不是你们改过的。你觉得这样对吗？
+---
+[id=3748] [2026-03-06 17:52:35] 白纱: 好問題。把實際生效的邏輯剝出來看：
+
+```python
+# CMO值 = (所有上漲幅度 - 所有下跌幅度) / 總幅度 × 100
+# 計算範圍：整個輸入歷史（不是9期）
+
+if cmo > prev_cmo and cmo > 10:   # 動量在正值區域且還在上升 → BUY
+elif cmo < prev_cmo and cmo < -10: # 動量在負值區域且還在下降 → SELL
+else: HOLD
+```
+
+本質是：**長期動量斜率策略**
+
+- 不是在追「短期9期動量翻轉」（那是真正的CMO）
+- 而是在看「累計動量有沒有在正區域繼續走強 / 負區域繼續走弱」
+
+最接近的正式名稱是 **Momentum Slope**，或者叫 **動量加速**（只在動量方向和強度同時確認時才進場）。
+
+---
+
+所以這個和 aroon 一樣的問題——名字叫 CMO，實際做的是另一件事。
+
+老板，處理方式跟 adx 一樣嗎？
+- 把現在這個改名（比如 `momentum_slope`）
+- 另建一個真正的 CMO（零線交叉 + 正確9期計算）
+---
+[id=3751] [2026-03-06 17:55:36] 白纱: 对，你说得对，两件事都记下来：
+
+1. **命名规范**：文件名格式 `strategy_{name}.py`，类名 `Strategy{Name}` — 所有新建/改名的文件都要遵守，不然自动注册失败
+2. **aroon_2yi → aroon**：替换原版，去掉 _2yi 后缀
+
+现在继续看下一个，**ehlers_itl**：
+---
+[id=3753] [2026-03-06 17:58:50] 白纱: 找到了，bug 很隐蔽：
+
+---
+
+### 第一关：错在哪
+
+```python
+current      = itl[-1]   # 当前ITL ✅
+lag          = itl[-2]   # ← 应该是 itl[-3]（延迟2根）
+prev_current = itl[-2]   # ← 跟 lag 完全一样！同一个值
+prev_lag     = itl[-3]   # ← 应该是 itl[-4]
+```
+
+Ehlers ITL 的信号逻辑是：ITL 本身 vs ITL 延迟2根的版本（lag线）做交叉。
+
+但代码里 `lag` 用了 `itl[-2]`，`prev_current` 也是 `itl[-2]`——两个变量指向同一根K线。交叉条件变成了：
+
+```python
+# 实际在算：
+if itl[-1] > itl[-2] and itl[-2] <= itl[-3]:
+# 意思是：ITL在涨 AND 上一根是局部低点 → BUY
+```
+
+完全不是 ITL vs 延迟线的交叉，变成了一个奇怪的局部低点探测器。
+
+---
+
+### 第二关：为什么能入榜
+
+`i
+---
+[id=3755] [2026-03-06 17:59:39] 白纱: 代码写错了一行：
+
+`lag` 应该往前数**2根**，但代码只往前数了**1根**，导致它和 `prev_current` 变成同一根K线，交叉逻辑彻底失效。
+
+修法：把 `itl[-2]` 改成 `itl[-3]`，`itl[-3]` 改成 `itl[-4]`，就是正确的 Ehlers ITL 了。不需要改名，不需要 _2yi。
+
+继续下一个？
+---
+[id=3763] [2026-03-06 18:10:57] 混沌: 明白，那这个策略，就换该回去原有的样子就算了？还是说这个既然没有其他名字匹配的话，就后面加个wrong，然后做个正确的，给他做对比。还有一个问题比如现在跑了aroon的数据，虽然策略有问题，如果现在弄多一个一样名字，而且是正确的。那数据会错乱吗？
+---
+[id=3764] [2026-03-06 18:11:34] 白纱: 两个问题分开回答：
+
+**问题1：ehlersitl怎么处理**
+
+和 aroon 不一样——aroon/adx/cmo 都是"挂羊头卖狗肉"，有另一个真实身份值得保留。ehlersitl 只是索引写错了，修好就是正确的 ehlersitl，没有别的名字。
+
+建议：**直接修复，不需要 `_wrong` 版本。** 跑对比的意义不大——错的就是烂数据，没有参考价值。
+
+---
+
+**问题2：数据会不会错乱**
+
+会有问题。种子库用 `(策略名, 币种, 周期)` 作为唯一键，加上 `generate_seed.py` 有断点续传——看到已有记录就跳过，不会覆盖。
+
+所以如果 `aroon`（错的）已经在库里，新建正确的 `aroon` 重跑，**结果是：直接跳过，旧的错误数据原封不动留着**。
+
+解决方法两个选一：
+- **A**：重跑前先删掉旧 `aroon` 的记录 → 新数据覆盖进去
+- **B**：正确版叫 `aroon`，错的改名 `aroon_orig` → 两份都在库里可以对比，不冲突
+
+老板倾向哪个？我建议 **A**（干净利落，错的没有保留价值），但如果老板想看对比就
+---
+[id=3774] [2026-03-06 18:21:53] 黑丝: 大周期还行。BNB/4h +108R，AVAX/1d +93R，牛熊都有正的。
+
+**总结**：HMA 代码没写错，但 **period=9 太短 → 小周期信号碎 → 手续费杀光**。大周期（4h/8h/12h/1d）反而有不错的成绩。这不是 bug，是参数问题 — 不需要修，不需要改名，就是它自己的特性。
+---
+[id=3778] [2026-03-06 18:23:49] 白纱: 找到了，两个bug：
+
+**Bug 1 — Tenkan/Kijun 公式全错（主犯）**
+
+```python
+# 代码写的：
+return sum(closes[-period:]) / period   # SMA收盘价均值
+
+# 正确应该是：
+(最高价 + 最低价) / 2   # 这段时间的中点价格
+```
+
+Ichimoku 的 Tenkan 和 Kijun 根本不用收盘价，用的是一段时间内的**高低中点**。代码把它们全写成了普通 SMA，逻辑完全不对。
+
+**Bug 2 — 云层完全缺失**
+
+代码里没有 Senkou Span A/B（云的上下边），信号只看 Tenkan vs Kijun，整个"云"这个 Ichimoku 最核心的部分不见了。
+
+---
+
+**处理方式**：直接修复，不改名（就是错的 Ichimoku，修好就行）。需要加上 high/low 数据源 + 重写 Tenkan/Kijun 公式 + 补上云层计算。
+
+继续 **mass_index**？
+---
+[id=3780] [2026-03-06 18:25:06] 白纱: 找到了，两个bug：
+
+**Bug 1 — Tenkan/Kijun 公式全错（主犯）**
+
+```python
+# 代码写的：
+return sum(closes[-period:]) / period   # SMA收盘价均值
+
+# 正确应该是：
+(最高价 + 最低价) / 2   # 这段时间的中点价格
+```
+
+Ichimoku 的 Tenkan 和 Kijun 根本不用收盘价，用的是一段时间内的**高低中点**。代码把它们全写成了普通 SMA，逻辑完全不对。
+
+**Bug 2 — 云层完全缺失**
+
+代码里没有 Senkou Span A/B（云的上下边），信号只看 Tenkan vs Kijun，整个"云"这个 Ichimoku 最核心的部分不见了。
+
+---
+
+**处理方式**：直接修复，不改名（就是错的 Ichimoku，修好就行）。需要加上 high/low 数据源 + 重写 Tenkan/Kijun 公式 + 补上云层计算。
+
+继续 **mass_index**？
+---
+[id=3816] [2026-03-06 19:44:15] 白纱: _2yi 版本是真正的 Parabolic SAR，跟原版那个 SMA 伪装完全不同：
+
+**算法对照：**
+
+| 要素 | 原版 (SMA伪装) | _2yi 版（正确）|
+|------|--------------|--------------|
+| 加速因子 AF | ❌ 完全没有 | ✅ `step=0.02`，每次新极值+0.02 |
+| 极值点 EP | ❌ 完全没有 | ✅ 跟踪每段趋势的最高/最低点 |
+| 翻转逻辑 | ❌ 没有 | ✅ 价格穿越SAR → 方向反转，AF重置 |
+| SAR约束 | ❌ 没有 | ✅ 上涨时SAR不超前两根低点 |
+| 最大AF上限 | ❌ 没有 | ✅ `max_step=0.2` |
+
+**结论**：_2yi 是标准 Wilder Parabolic SAR，可以直接替换原版。去掉 `_2yi` 改名为 `strategy_parabolic_sar.py`，类名改 `ParabolicSAR`，`name` 改 `"parabolic_sar"`。
+
+**一个特性要知道**：信号永远是 BUY 或 SELL（never HOL
+---
+[id=3820] [2026-03-06 19:52:00] 白纱: 对，就是这个逻辑：
+
+- **_2yi**：留给我们两仪（黑丝/白纱）自己创意改动的版本
+- **正确还原原本算法**：直接替换，不打 _2yi，因为这就是它本来应该有的样子
+
+`parabolicsar_2yi` 是标准 Wilder SAR，不是我们发明的，去掉 `_2yi` 直接替换原版。
+
+要现在就执行改名，还是等所有策略审完一起改？
+---
+[id=3912] [2026-03-06 22:37:33] 白纱: **#21. awesome_oscillator** — ❌ 两个问题
+
+**标准 Awesome Oscillator 的正确公式：**
+- 用 `(high + low) / 2`（中间价）计算 SMA(5) 和 SMA(34)
+- 信号是**零线交叉**：从负转正 → BUY，从正转负 → SELL
+
+**这里的问题：**
+
+1. **用了收盘价，不是中间价** — `closes` 替代了 `(high + low) / 2`，跟标准 AO 根本不一样
+
+2. **永远在场，没有交叉检测** — `ma_fast > ma_slow` 就永远 BUY，`ma_fast < ma_slow` 就永远 SELL。实际上跑的是一个普通的 MA(5) 交叉 MA(34) 策略，只是挂了个 AO 的名字
+
+本质跟 adx→matriple 一样的情况：名字叫 AO，代码是 MA 交叉。
+
+处理方式：改名（比如 `macross_5_34`）+ 新建真正的 AO？还是老板有其他想法？
+---
+[id=4018] [2026-03-07 00:13:33] 混沌: 先回到24 25，现在24 既然不是自己名字匹配的策略，那应该叫什么？25 是你们改进过的？还是把原来的改回来而已？
+---
+[id=4021] [2026-03-07 00:16:14] 黑丝: 看完了，回答老板两个问题：
+
+---
+
+**Q1：#24 candlestick 名字不匹配，应该叫什么？**
+
+名字其实是对的。它确实在做 K 线形态识别（锤子、流星、十字星、强蜡烛），这就是 candlestick pattern strategy。`name` 属性返回的是 `"klinestick"`，有点奇怪但不影响功能。
+
+白纱说的三个问题：
+1. 趋势算了但没用（第152行算了 trend，但第158-163行出信号时完全没看 trend）
+2. 锤子 vs 吊颈人用颜色区分（绿=锤子，红=吊颈人），正确应该用趋势位置
+3. 流星/倒锤子归进 HOLD 不出信号
+
+**所以名字没问题，叫 candlestick 是对的，就是实现有 bug。**
+
+---
+
+**Q2：#25 candlestick_2yi 是改进过的？还是把原版改回来？**
+
+**是把原版该有的逻辑补回来，不是创新。** 对比两版的核心差异：
+
+| | 原版 (#24) | 2yi (#25) |
+|--|-----------|-----------|
+| 趋势 | 算了不用 | **用了**（第158
+---
+[id=4025] [2026-03-07 00:23:27] 黑丝: 几个方向，从简单到复杂：
+
+**1. 拉长周期**
+MA5 vs MA20 太短，容易被噪音骗。换成 MA20 vs MA50，或者直接看价格在 MA50 上面还是下面。简单粗暴，但有效很多。
+
+**2. 看斜率不看交叉**
+不比两条均线谁高谁低，而是看一条均线的方向——MA20 在涨就是上升趋势，在跌就是下降趋势。好处是不会频繁翻转。
+
+**3. 用结构判断（高低点）**
+更高的高点 + 更高的低点 = 上升趋势，反之下降。我们已经有 Break of Structure 那个策略里的 swing point 算法，可以直接借过来。这个比均线更接近交易员真正看趋势的方式。
+
+**4. 借用外部 Regime**
+不自己判断趋势，直接用我们已有的市场状态标签（已知事实的牛熊盘整）。但这样就跟策略绑死了，不够独立。
+
+---
+
+我个人觉得**第3个最靠谱**——K线形态本来就是价格行为（Price Action）的东西，配上同样是价格行为的高低点结构，逻辑自洽。均线本质是滞后指标，用滞后的东西确认"当下的形态"，天生就慢半拍。
+
+老板您说。
+---
+[id=4115] [2026-03-07 15:45:03] 黑丝: 全部 Task #10-#15 完成。现在汇总本次执行的所有修改：
+
+**已完成（#7-#15）：**
+
+| # | 任务 | 状态 |
+|---|------|------|
+| 7 | Signal 枚举加 CLOSE + 回测引擎 CLOSE 处理 | ✅ |
+| 8 | 单向策略改 CLOSE（cci_long/short, demandindex_long/short）| ✅ |
+| 9 | _2yi 替换原版（aroon, parabolicsar, vroc）| ✅ |
+| 10 | ehlers_itl 索引 lag[-3]/prev_lag[-4] | ✅ |
+| 11 | ichimoku midpoint公式 + 云层 | ✅ |
+| 12 | mass_index — 重新验证，逻辑正确无需改 | ✅ |
+| 13 | awesome_oscillator → macross_fast + 真正AO | ✅ |
+| 14 | cmo → momentum_slope + 真正CMO | ✅ |
+| 15 | advanced_kline_echo MACD 信号
+---
+[id=4174] [2026-03-07 17:25:53] 混沌: 那就换成dip buy吧。然后再把正确的grid做出来。不过我有个问题。我这个交易系统适合做这种开好多个仓的策略吗？
+---
+[id=4175] [2026-03-07 17:26:12] 白纱: 这个策略的本质是：**从近期最高点跌了一格就买，回弹了就卖**。
+
+叫 `dip_buy`（抄跌买入）比较准确，或者 `high_pullback`（高点回调买入）也行。
+
+老板倾向哪个，还是有其他想法？定了骨头啃完统一改名。
+---
+[id=4177] [2026-03-07 17:32:05] 白纱: 记下改名：`grid` → `dip_buy`，骨头啃完统一处理。真正的 grid 策略另建。
+
+---
+
+关于老板的问题——**不适合**。
+
+现在的交易系统是**单仓模式**：每个策略同一时间只能持有一个仓位。收到 BUY 就开多，收到 SELL 就平多开空，没有"同时开多个仓位"的概念。
+
+真正的网格交易需要：
+- 在当前价下方每隔固定间距挂一排买单（比如 -2%/-4%/-6% 各开一个仓）
+- 每个格子是独立的仓位，同时存在
+- 每个仓位有自己的进场价和止盈价
+
+要做真正的网格，系统层面需要改造：
+1. **仓位管理器** 要支持同一策略持有多个仓位
+2. **回测引擎** 要能处理多个同时开着的仓
+3. **风险管理** 要分配资金给每个格子
+
+这不是小改动，是架构级改造。
+
+老板的想法是：先把现有系统用好，之后再考虑扩展支持网格？还是现在就列入规划？
+---
+[id=4206] [2026-03-07 18:31:32] 白纱: **#42 klinger — 人话：**
+
+Klinger Oscillator（克林格振荡器）= 量价趋势指标。把成交量乘以价格方向，算出"量力"（Volume Force），再做快慢两条 EMA 相减得振荡线，与信号线交叉出信号。本质是**用成交量验证价格方向**。
+
+**代码审查：❌ Volume Force 公式错误**
+
+标准 Klinger 的核心是 CM（累积量程），公式：
+- `VF = Volume × Trend × |2 × (DM/CM) - 1|`
+- CM 会累积：趋势不变 → `CM = CM_prev + DM`，趋势翻转 → `CM = DM_prev + DM`
+
+代码里：
+- `cm_prev` 和 `dm` 算出来了但**完全没用**（死代码）
+- 实际用的公式是 `Volume × Trend × |2 × (HL / (H+L)) - 1|`，把 CM 换成了 `H+L`
+
+这是两个不同的东西，CM 累积的意义就是追踪"连续同向时量程叠加"，代码把这个核心逻辑丢掉了。
+
+拉成绩看看？
+---
+[id=4216] [2026-03-07 18:41:11] 黑丝: 好的。先把白纱漏记的补上，然后从 #44 继续。
+
+白纱漏记的两项我会在啃完骨头后统一处理：
+- **klinger** ❌ VF 公式错误，待修
+- **grid** → 改名 `dip_buy`
+
+还有老板的重要想法：**大周期 MA 类策略做成指标给小周期过滤**——跟之前的大周期验证层一脉相承。
+
+现在继续。#44 ma。
+---
+[id=4290] [2026-03-07 20:11:00] 混沌: 嗯？怎么把你的大名去掉？应该是把echo的直接删掉就行了，保留2yi，不过既然已经删了，那就把echo换成2yi吧。然后拉obv_slope的成绩来看看
+---
+[id=4341] [2026-03-07 21:21:58] 混沌: 那就那这个换成适配的名字，然后做一个正确的smc出来，我们先继续
+---

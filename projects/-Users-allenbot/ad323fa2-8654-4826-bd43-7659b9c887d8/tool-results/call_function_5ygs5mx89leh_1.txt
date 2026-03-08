@@ -1,0 +1,83 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→MA RSI Strategy
+     4→
+     5→MA + RSI simple strategy.
+     6→
+     7→Features:
+     8→- Simple MA crossover
+     9→- RSI filter
+    10→- Auto-migrated from echo-auto-trading project
+    11→"""
+    12→
+    13→from typing import Dict, List
+    14→from src.core.strategy import Signal
+    15→
+    16→
+    17→class MARSIStrategy:
+    18→    """MA + RSI simple trading strategy"""
+    19→    
+    20→    def __init__(self):
+    21→        self.name = "ma_rsi"
+    22→        self.ma_period = 20
+    23→        self.rsi_period = 14
+    24→    
+    25→    def calculate_ma(self, closes: List[float]) -> float:
+    26→        """Calculate Simple Moving Average"""
+    27→        if len(closes) < self.ma_period:
+    28→            return sum(closes) / len(closes)
+    29→        return sum(closes[-self.ma_period:]) / self.ma_period
+    30→    
+    31→    def calculate_rsi(self, closes: List[float]) -> float:
+    32→        """Calculate Simple RSI"""
+    33→        if len(closes) < self.rsi_period + 1:
+    34→            return 50.0
+    35→        
+    36→        gains = 0.0
+    37→        losses = 0.0
+    38→        
+    39→        for i in range(1, len(closes)):
+    40→            change = closes[i] - closes[i - 1]
+    41→            if change > 0:
+    42→                gains += change
+    43→            else:
+    44→                losses += abs(change)
+    45→        
+    46→        if losses == 0:
+    47→            return 100.0
+    48→        
+    49→        rs = gains / losses
+    50→        rsi = 100 - (100 / (1 + rs))
+    51→        return rsi
+    52→    
+    53→    def generate_signal(self, coin: str, candles: List[Dict] = None) -> Signal:
+    54→        """Generate MA RSI trading signal
+    55→        
+    56→        Args:
+    57→            coin: Trading pair
+    58→            candles: OHLCV data
+    59→            
+    60→        Returns:
+    61→            Signal: BUY, SELL, or HOLD
+    62→        """
+    63→        # Validate candles
+    64→        if not candles or len(candles) < 30:
+    65→            return Signal.HOLD
+    66→        
+    67→        closes = [c["close"] for c in candles]
+    68→        
+    69→        # Calculate indicators
+    70→        ma = self.calculate_ma(closes)
+    71→        rsi = self.calculate_rsi(closes)
+    72→        
+    73→        # Simple conditions
+    74→        if closes[-1] > ma and rsi < 50:
+    75→            return Signal.BUY
+    76→        if closes[-1] < ma and rsi > 50:
+    77→            return Signal.SELL
+    78→        return Signal.HOLD
+    79→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

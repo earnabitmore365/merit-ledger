@@ -1,0 +1,48 @@
+2026-02-24 18:18:52,829 - HyperLiquidAdapter - INFO - 连接 HyperLiquid: https://api.hyperliquid-testnet.xyz
+2026-02-24 18:18:53,161 - HyperLiquidWebSocket - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:18:53,335 - HyperLiquidWebSocket - INFO - WebSocket 已连接: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:18:53,335 - HyperLiquidAdapter - INFO - WebSocket 已连接: 测试网
+2026-02-24 18:18:54,025 - TradingSystem - INFO - 反手: BUY -> SELL
+2026-02-24 18:18:54,182 - HyperLiquidAdapter - INFO - 反手：平仓 ETH LONG 0.4813
+2026-02-24 18:18:54,763 - HyperLiquidAdapter - INFO - 平仓: 卖出 0.4813 ETH @ $1642
+2026-02-24 18:18:57,198 - HyperLiquidAdapter - INFO - 开始充值 10 USDC 到合约账户...
+2026-02-24 18:18:57,346 - HyperLiquidAdapter - INFO - 充值响应: {'status': 'err', 'response': 'Must deposit before performing actions. User: 0x390034556e1b6932e1b15f67c8e35bf30710d16e'}
+2026-02-24 18:18:59,055 - HyperLiquidAdapter - INFO - 反手：开仓 卖出 ETH 数量: 0.4807 @ $1823.70
+2026-02-24 18:19:02,258 - HyperLiquidAdapter - INFO - 反手成功: ETH
+2026-02-24 18:19:02,258 - TradingSystem - INFO - 反手成功: ETH @ $1787.00 数量: 0.4807
+2026-02-24 18:19:03,282 - TradingSystem - INFO - 反手: SELL -> BUY
+2026-02-24 18:19:03,434 - HyperLiquidAdapter - INFO - 反手：平仓 ETH SHORT 0.4807
+2026-02-24 18:19:04,030 - HyperLiquidAdapter - INFO - 平仓: 买入 0.4807 ETH @ $2005
+2026-02-24 18:19:06,495 - HyperLiquidAdapter - INFO - 开始充值 10 USDC 到合约账户...
+2026-02-24 18:19:06,646 - HyperLiquidAdapter - INFO - 充值响应: {'status': 'err', 'response': 'Must deposit before performing actions. User: 0x390034556e1b6932e1b15f67c8e35bf30710d16e'}
+2026-02-24 18:19:08,500 - HyperLiquidAdapter - INFO - 反手：开仓 买入 ETH 数量: 0.4804 @ $1822.60
+2026-02-24 18:19:09,650 - HyperLiquidAdapter - INFO - 反手成功: ETH
+2026-02-24 18:19:09,650 - TradingSystem - INFO - 反手成功: ETH @ $1859.00 数量: 0.4804
+2026-02-24 18:19:11,111 - HyperLiquidAdapter - INFO - 平仓: 卖出 0.4804 ETH @ $1641
+2026-02-24 18:19:12,053 - TradingSystem - INFO - 平仓: CLOSE_BUY ETH
+2026-02-24 18:19:13,055 - HyperLiquidWebSocket - WARNING - WebSocket 连接关闭: sent 1000 (OK); no close frame received
+2026-02-24 18:19:13,056 - HyperLiquidWebSocket - INFO - WebSocket 已断开
+2026-02-24 18:19:13,056 - HyperLiquidAdapter - INFO - WebSocket 已断开
+2026-02-24 18:19:13,060 - HyperLiquidAdapter - INFO - 已断开 HyperLiquid 连接
+=== 初始余额: 877.18 ===
+
+当前持仓: BUY
+>>> 有持仓，执行反手2次 + 平仓 <<<
+--- 反手1 ---
+余额: 876.00
+--- 反手2 ---
+余额: 874.88
+--- 平仓 ---
+
+==================================================
+初始余额: 877.18
+最终余额: 873.91
+总盈亏: -3.27
+
+=== 各笔交易盈亏 ===
+反手1: -1.17 (成功)
+反手2: -1.12 (成功)
+平仓: -0.97 (完成)
+
+最赚: 平仓 = -0.97
+最亏: 反手1 = -1.17

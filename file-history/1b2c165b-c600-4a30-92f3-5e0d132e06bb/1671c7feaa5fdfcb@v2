@@ -1,0 +1,75 @@
+# 交易系统重构设计（2026-02-20）
+
+**状态**: 待执行
+
+## 核心原则
+
+1. **所有功能都是调用的** — 不直接调用 API，通过适配器
+2. **统一词汇表** — Exchange/Adapter/Strategy/Signal/Position/Order/Stop Loss/TTP/Arbitrage/Executor
+
+## 架构
+
+```
+src/
+├── core/
+│   ├── strategy/          # 策略（生成信号）
+│   │   └── base.py
+│   └── risk/              # 风险管理
+│       ├── base.py
+│       ├── stop_loss.py
+│       └── ttp.py
+├── exchange/              # 交易所适配器
+│   ├── base.py
+│   └── hyperliquid/
+│       └── adapter.py
+├── trading/               # 交易系统
+│   ├── system.py
+│   ├── executor.py
+│   └── arbitrage.py
+└── config/
+    └── config.py
+```
+
+## 适配器基类
+
+```python
+class ExchangeAdapter(ABC):
+    @abstractmethod
+    def get_price(self, coin: str) -> float: pass
+    @abstractmethod
+    def buy(self, coin: str, size: float) -> bool: pass
+    @abstractmethod
+    def sell(self, coin: str, size: float) -> bool: pass
+    @abstractmethod
+    def get_positions(self) -> List[dict]: pass
+    @abstractmethod
+    def get_balance(self) -> dict: pass
+```
+
+## 风险管理基类
+
+```python
+class RiskManager(ABC):
+    @abstractmethod
+    def check_stop_loss(self, position: dict, current_price: float) -> bool: pass
+    @abstractmethod
+    def check_ttp(self, position: dict, current_price: float) -> bool: pass
+```
+
+## 注意事项
+
+1. 不要直接调用 API — 通过适配器
+2. 不要写死配置 — 从配置文件读取
+3. 不要删除已有功能 — 复用已有代码
+4. 不要偏离讨论方向
+
+## 旧系统 vs 新系统关键发现（2026-02-16）
+
+- 旧系统 bb_squeeze 5年回测：1484笔，233%收益，74.26%胜率，4.74%最大回撤
+- 新系统：卡住/崩溃，性能问题
+- 教训：旧系统代码是正确的，应对比旧代码找答案
+
+## 指标库计划（待办）
+
+目的：把指标计算从策略中分离，提高回测性能（避免 O(n^2)），代码复用
+优先级：低（等有空再处理）

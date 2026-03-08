@@ -1,0 +1,80 @@
+"""Mass Index — 反转鼓包检测（>27回落<26.5 = 趋势反转）"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class MassIndexConfig:
+    ema_period: int = 9
+    sum_period: int = 25
+    bulge_trigger: float = 27.0
+    bulge_release: float = 26.5
+
+
+class MassIndex(Strategy):
+    def __init__(self, exchange=None, config: Optional[MassIndexConfig] = None):
+        self.exchange = exchange
+        self.config = config or MassIndexConfig()
+
+    @property
+    def name(self) -> str:
+        return "massindex"
+
+    def _ema_series(self, values, period):
+        if len(values) < period:
+            return list(values)
+        k = 2 / (period + 1)
+        ema = sum(values[:period]) / period
+        result = [ema]
+        for v in values[period:]:
+            ema = v * k + ema * (1 - k)
+            result.append(ema)
+        return result
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        need = self.config.ema_period * 2 + self.config.sum_period + 2
+        if not klines or len(klines) < need:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0)
+
+        hl_range = [c["high"] - c["low"] for c in klines]
+        ema1 = self._ema_series(hl_range, self.config.ema_period)
+        ema2 = self._ema_series(ema1, self.config.ema_period)
+
+        if len(ema2) < self.config.sum_period + 1:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"])
+
+        ratios = []
+        min_len = min(len(ema1), len(ema2))
+        offset = len(ema1) - min_len
+        for i in range(min_len):
+            e2 = ema2[i]
+            e1 = ema1[i + offset]
+            ratios.append(e1 / e2 if e2 != 0 else 1.0)
+
+        if len(ratios) < self.config.sum_period + 1:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"])
+
+        mi = sum(ratios[-self.config.sum_period:])
+        prev_mi = sum(ratios[-(self.config.sum_period + 1):-1])
+
+        closes = [c["close"] for c in klines]
+        ema9 = self._ema_series(closes, self.config.ema_period)
+        trend_up = ema9[-1] > ema9[-2] if len(ema9) >= 2 else True
+
+        bulge_now = mi < self.config.bulge_release
+        bulge_prev = prev_mi >= self.config.bulge_trigger
+
+        if bulge_now and bulge_prev:
+            signal = Signal.BUY if not trend_up else Signal.SELL
+        elif prev_mi < self.config.bulge_release and mi >= self.config.bulge_trigger:
+            signal = Signal.HOLD
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(signal=signal, confidence=min(abs(mi - 25) / 5, 1.0),
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"mass_index": mi, "prev_mi": prev_mi, "trend_up": trend_up})

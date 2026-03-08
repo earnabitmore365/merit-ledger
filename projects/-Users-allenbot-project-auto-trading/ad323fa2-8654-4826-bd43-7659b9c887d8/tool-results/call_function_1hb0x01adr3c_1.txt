@@ -1,0 +1,4 @@
+src/backtest/backtest.py:235:                if hasattr(strategy, 'generate_signal'):
+src/backtest/backtest.py:236:                    signal = strategy.generate_signal(self.coin, self.candles[:i+1])
+
+[Showing results with pagination = limit: 10, offset: 0]

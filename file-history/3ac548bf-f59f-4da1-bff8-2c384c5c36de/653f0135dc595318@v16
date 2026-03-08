@@ -1,0 +1,148 @@
+⛔ **恢复协议优先**：看到此文件 ≠ 已完成恢复协议。必须先完整执行 CLAUDE.md 步骤1-4，才能开始任何工作。
+
+> 太极签：2026-03-01
+
+# CEO / 项目管理 记忆
+
+> 太极最后更新：2026-03-01（待做清单：CHECKPOINT头正式化/步骤9简化/阶段三闭环/白纱全程主导/撞车修复）
+
+## 会话索引（最新在最上面，详见 memory/session_summaries.md）
+| # | ID | 日期 | 核心内容 |
+|---|-----|------|----------|
+| S26（new） | 当前 | 03-01 | CHECKPOINT打磨版块设计 + agentchattr接入 + 规章升级 |
+| S26 | 3ac548bf | 03-01 | 规章全面升级(两格/查漏/自动触发黑丝/专业术语附人话/⛔首行)+agentchattr配置+白纱飘了分析+打磨版块方案 |
+| S25 | 3ac548bf | 03-01 | 规章升级+文件职责简称+CLAUDE.md三段结构+OpenClaw调研+5项待做清单 |
+| S24 | 3ac548bf | 02-28 | CLAUDE.md全面升级+session_summaries双区域重构+项目级CLAUDE.md分层 |
+
+---
+
+## 文件职责定义（公司管理规定）
+
+| 简称 | 文件 | 职责 |
+|------|------|------|
+| 制度 | `CLAUDE.md` | 规则、行为准则 |
+| 交接 | `CHECKPOINT.md` | 任务状态、下一步 |
+| 档案 | `MEMORY.md` | 跨会话知识、决策记录、项目历史 |
+| 日记 | `session_summaries.md` | 每次会话精华摘要 |
+
+---
+
+## CLAUDE.md 文档结构标准（公司管理规定）
+
+每个项目的 `CLAUDE.md` 分三段，新项目照此结构套用：
+
+| 段 | 内容 | 原则 |
+|----|------|------|
+| **头** | 通用内容（核心原则、恢复协议、禁止操作） | 不动，所有项目复用 |
+| **身** | 项目专属核心信息（角色定义、协作流程） | 精炼，控制行数，最重要的内容放这里 |
+| **脚** | 必须写但次要的内容（环境配置、记录优先级等） | 放最后，不影响主体阅读 |
+
+> 头占系统200行限制的大部分 → 身必须精炼 → 脚放次要但必要的内容
+
+---
+
+## 公司架构
+
+```
+老板（最高决策者）
+  └─ 太极（CEO / home Sonnet）— 管规章、管项目、只对老板负责
+       ├─ 白纱（auto-trading Sonnet）— 方案架构师，分析数据，出精简/完整方案
+       └─ 黑丝（auto-trading Opus）— 执行工程师，写代码，跑测试
+```
+
+**规章修改权**：仅限老板及太极。白纱与黑丝只能遵守。
+
+---
+
+## 规章变更日志
+
+| 日期 | 改动摘要 | 原因 |
+|------|----------|------|
+| 2026-03-01 | CHECKPOINT加🔨打磨板块（并行于⬜当前步骤）+ CLAUDE.md模板/协作流程同步更新 | 打磨对话太长，两边窗口靠CHECKPOINT共享背景，不需来回贴文 |
+| 2026-03-01 | 两个CLAUDE.md加压缩优先级声明（点名continuation prompt / Optional Next Step） | 压缩带偏问题，两人均被系统指令绕过恢复协议 |
+| 2026-03-01 | 协作流程改三阶段（打磨→查漏→开工），白纱先出精简版再出完整版 | 黑丝惯性直接执行，缺乏多轮打磨机制 |
+| 2026-03-01 | 白纱角色加主动触发+直接推荐原则 | 白纱读完CHECKPOINT不主动分析，给对比表不给答案 |
+| 2026-03-01 | 黑丝审阅加创新原则（不局限三选一，数据支撑下可融合/提新方案） | 建议过于被动，缺乏创新空间 |
+| 2026-03-01 | 太极署名制度确立，项目CLAUDE.md标注CEO权限 | 明确修改权归属 |
+| 2026-02-28 | session_summaries.md重构为白纱/黑丝双区域 | 防止角色串记录 |
+| 2026-02-28 | JSONL过滤改为按模型名精准匹配 | 黑丝恢复时读到白纱的会话 |
+
+---
+
+## 系统性问题追踪
+
+| 问题 | 状态 | 方案 |
+|------|------|------|
+| 压缩带偏：summary + continuation prompt 绕过恢复协议 | 🧪 测试中 | 两个CLAUDE.md恢复协议顶部加优先级声明，点名具体指令 |
+
+## 待做（明天继续）
+
+1. **CHECKPOINT.md 头部正式化** — 建立通用交接规范头，包含：
+   - 标记规范（✅ 完成 vs ⚠️ 执行完成待确认，卡在哪、谁接手）
+   - 交接填写要求
+2. **CLAUDE.md 步骤9简化** — 改为"按 CHECKPOINT 头部标记规范更新"，逻辑不重复写
+3. **阶段三补完整** — 加步骤10：白纱接收结果→分析→给下一步（闭环）
+4. **白纱角色定义** — 加"全程主导"定位，职责链：分析→出方案→推执行→审结果→给下一步
+5. **撞车修复** — "不擅自行动" vs 白纱"主动触发"，明确后者是有意例外
+
+---
+
+## 项目状态摘要
+
+| 项目 | 主线 | 当前阶段 |
+|------|------|----------|
+| auto-trading | 分层投资组合分析（快狠准翻倍） | 第二层加考 + Regime组队，脚本已写好，等黑丝执行 |
+
+---
+
+## 工具库（调研备用）
+
+| 工具 | 用途 | 适合场景 | 备注 |
+|------|------|----------|------|
+| agentchattr | 多AI共享聊天室（@路由） | 黑丝白纱跨窗口协作 | 已配置，待cashflowAPP测试 |
+| PicoClaw | 超轻量AI agent（Go，10MB） | 服务端/低配硬件，支持Ollama本地模型 | 不适合手机APP内嵌 |
+| react-native-ai | React Native内嵌本地LLM | 手机APP + React Native | 基于MLC LLM引擎 |
+| react-native-executorch | React Native内嵌本地LLM | 手机APP + React Native | 基于ExecuTorch，Meta出品 |
+| RunAnywhere SDK | 跨框架本地LLM SDK | Flutter / React Native / 原生 | 支持streaming、RAG、函数调用 |
+| Gemini Nano-2 | 系统级内置模型 | Android 15原生APP | 免费，无需下载，Android 15内置 |
+| Gemma 3 1B | 手机本地模型 | iOS/Android，只要529MB | 速度快，够用 |
+| MLC LLM | 手机本地模型引擎 | iOS/Android/浏览器 | 编译模型到各平台 |
+| **Cactus SDK** | 本地LLM+工具调用+RAG+语音，一体化 | 手机APP嵌入，完全离线，装好下载一次模型永久用 | YC投资，React Native/Flutter均支持 ⭐最符合需求 |
+| picoLLM | 跨平台本地LLM推理引擎 | iOS/Android/Web，完全离线 | Picovoice出品，有Python/Node/Android/iOS SDK |
+| Semantic Kernel | 轻量agent框架，嵌入现有应用 | 后端agent，Python/C# | 微软开源，免费 |
+| CrewAI | 多agent协作框架 | 多AI角色分工 | 开源免费 |
+| LangGraph | 状态图工作流agent | 复杂多步骤任务 | 开源免费 |
+
+| **NexaSDK** | 多模态：文字+视觉+音频，NPU加速，一步出结构化结果 | 拍账单→直接返回{商品,金额}，iOS/Android | 比Cactus更专注多模态 |
+| Apple Vision Framework | 系统内置OCR | iOS，免费，只认字不理解 | 可配合LLM做二次理解 |
+| Google ML Kit OCR | 系统内置OCR | Android，免费，只认字不理解 | 同上 |
+| Whisper（OpenAI开源） | 离线语音转文字，多语言 | 语音记账，本地跑，无需联网 | 可嵌APP，中文支持好 |
+| react-native-gifted-charts | 柱/线/饼/环/雷达图 | React Native图表 ⭐ | 最全面，免费 |
+| fl_chart | 柱/线/饼/散点图 | Flutter图表 ⭐ | 最流行，高度自定义，免费 |
+
+> cashflowAPP框架由cashflow两仪定，框架定了再选对应SDK。
+> 首选方案：Cactus SDK（本地LLM+agent+语音）+ NexaSDK（多模态视觉）+ Gemma 3 1B / LLaMA 3.2 1B-3B
+
+---
+
+## cashflowAPP 功能需求库（调研备用）
+
+| 功能 | 描述 | 推荐工具 |
+|------|------|----------|
+| 拍照记账 | 拍账单→AI识别商品+金额→结构化→用户确认/修改 | NexaSDK（多模态）或 Apple Vision/ML Kit + 本地LLM |
+| 语音记账 | 说"今天买了飞机五百万"→提取商品+金额→自动打标签（飞机=交通/旅游/贵重物品等）→用户确认 | Whisper（语音转文字）+ 本地LLM（提取实体+打标签）|
+| AI agent | 财务问答、分析、自动化操作 | Cactus SDK（工具调用+RAG+离线）|
+| 数据可视化 | 饼图/柱图/走势图/表格，用户查看财务报表 | react-native-gifted-charts（RN）/ fl_chart（Flutter），全免费 |
+| 商城 | 中后期功能，用户可购买产品/服务 | 待定，中后期再调研 |
+
+---
+
+## 全局配置文件
+- `~/.claude/CLAUDE.md` — CEO 层规则（核心原则、通用恢复协议）
+- `~/.claude/scripts/convert_conversation.py` — JSONL 转 Markdown 工具
+- `~/.claude/commands/checkpoint.md` — `/checkpoint` slash command
+
+## 管理中的项目
+- **auto-trading**: `/Users/allenbot/project/auto-trading` — 加密货币自动交易系统
+  - 项目 memory: `~/.claude/projects/-Users-allenbot-project-auto-trading/memory/`
+  - 项目 CLAUDE.md: `/Users/allenbot/project/auto-trading/CLAUDE.md`

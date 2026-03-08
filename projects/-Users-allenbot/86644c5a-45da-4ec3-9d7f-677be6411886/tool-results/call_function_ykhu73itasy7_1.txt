@@ -1,0 +1,6 @@
+161:    def run(self, interval_seconds: int = 60, max_iterations: int = None):
+165:            interval_seconds: 执行间隔（秒）
+189:                self._sleep(interval_seconds)
+364:        interval = self.config.get('interval', '1h')
+366:        return self.exchange.get_klines(coin, interval, limit)
+564:    parser.add_argument('--interval', type=int, default=60, help='执行间隔（秒）')

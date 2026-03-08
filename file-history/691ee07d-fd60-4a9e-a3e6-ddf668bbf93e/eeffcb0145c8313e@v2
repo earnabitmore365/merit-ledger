@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""
+交易策略预设方案
+
+基于回测分析结果的推荐策略配置
+- 主力方案：demandindex/5m（稳定型，12/12 币种盈利，87% 胜率）
+- 进攻方案：proc/15m（ETH 专用，243% 回报，Sharpe 4.34）
+"""
+
+from dataclasses import dataclass
+from typing import List
+
+
+@dataclass
+class TradingPreset:
+    """交易预设配置"""
+    name: str               # 预设名称
+    description: str         # 描述
+    coin: str               # 币种
+    strategy: str           # 策略名
+    interval: str           # K线周期
+    leverage: int           # 杠杆倍数
+    position_pct: float     # 仓位比例 (0.0-1.0)
+    stop_loss_pct: float    # 止损比例 (0.0-1.0, 0=不设)
+    enable_ttp: bool        # 是否启用 TTP
+    network: str = "testnet"  # 网络
+    account: str = "default"  # 账号
+
+
+# ==================== 推荐预设 ====================
+
+PRESETS: List[TradingPreset] = [
+    # === 主力方案：demandindex / 5m ===
+    TradingPreset(
+        name="[主力] BNB · demandindex · 5m",
+        description="稳定型 | 回测12/12币盈利 87%胜率 | BNB表现最佳",
+        coin="BNB",
+        strategy="demand_index_echo",
+        interval="5m",
+        leverage=10,
+        position_pct=0.10,
+        stop_loss_pct=0.05,
+        enable_ttp=True,
+    ),
+    TradingPreset(
+        name="[主力] BTC · demandindex · 5m",
+        description="稳定型 | 回测12/12币盈利 87%胜率 | BTC稳健之选",
+        coin="BTC",
+        strategy="demand_index_echo",
+        interval="5m",
+        leverage=10,
+        position_pct=0.10,
+        stop_loss_pct=0.05,
+        enable_ttp=True,
+    ),
+    TradingPreset(
+        name="[主力] ETH · demandindex · 5m",
+        description="稳定型 | 回测12/12币盈利 87%胜率 | ETH经典配置",
+        coin="ETH",
+        strategy="demand_index_echo",
+        interval="5m",
+        leverage=10,
+        position_pct=0.10,
+        stop_loss_pct=0.05,
+        enable_ttp=True,
+    ),
+
+    # === 进攻方案：proc / 15m ===
+    TradingPreset(
+        name="[进攻] ETH · proc · 15m",
+        description="高回报型 | 回测243%回报 Sharpe 4.34 | ETH专用",
+        coin="ETH",
+        strategy="proc",
+        interval="15m",
+        leverage=10,
+        position_pct=0.10,
+        stop_loss_pct=0.05,
+        enable_ttp=True,
+    ),
+
+    # === 备选方案 ===
+    TradingPreset(
+        name="[备选] SOL · demandindex · 5m",
+        description="稳定型 | 回测盈利 86%胜率 | SOL波动大收益高",
+        coin="SOL",
+        strategy="demand_index_echo",
+        interval="5m",
+        leverage=10,
+        position_pct=0.10,
+        stop_loss_pct=0.05,
+        enable_ttp=True,
+    ),
+    TradingPreset(
+        name="[备选] ETH · cci · 5m",
+        description="稳定型 | 回测12/12币盈利 | CCI策略替代方案",
+        coin="ETH",
+        strategy="cci",
+        interval="5m",
+        leverage=10,
+        position_pct=0.10,
+        stop_loss_pct=0.05,
+        enable_ttp=True,
+    ),
+]
+
+
+def get_presets() -> List[TradingPreset]:
+    """获取所有预设方案"""
+    return PRESETS
+
+
+def get_preset(index: int) -> TradingPreset:
+    """按索引获取预设"""
+    if 0 <= index < len(PRESETS):
+        return PRESETS[index]
+    raise IndexError(f"预设索引无效: {index}")

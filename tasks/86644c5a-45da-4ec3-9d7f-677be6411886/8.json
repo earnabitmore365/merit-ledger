@@ -1,0 +1,9 @@
+{
+  "id": "8",
+  "subject": "Adapter 集成账号管理",
+  "description": "修改 adapter.py，让它调用 accounts.py 获取账号配置",
+  "activeForm": "集成账号管理",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

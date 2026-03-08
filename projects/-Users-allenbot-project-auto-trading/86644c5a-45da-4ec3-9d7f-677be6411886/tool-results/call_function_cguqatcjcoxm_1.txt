@@ -1,0 +1,5 @@
+total 8
+drwxr-xr-x   4 allenbot  staff  128 Feb 21 21:28 .
+drwxr-xr-x  15 allenbot  staff  480 Feb 21 21:28 ..
+drwxr-xr-x   3 allenbot  staff   96 Feb 21 21:28 .claude-plugin
+-rw-r--r--   1 allenbot  staff  178 Feb 21 21:28 .mcp.json

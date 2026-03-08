@@ -1,0 +1,13 @@
+{
+  "id": "6",
+  "subject": "单组验证新周期",
+  "description": "用一个币种一个新周期跑一次generate_seed，确认regime计算正常、种子正常写入",
+  "activeForm": "验证新周期",
+  "status": "completed",
+  "blocks": [
+    "7"
+  ],
+  "blockedBy": [
+    "5"
+  ]
+}

@@ -1,0 +1,14 @@
+                                                            2026-02-24 15:24:19,050 - TradingSystem - INFO - ==================================================
+                                                                               2026-02-24 15:24:19,952 - TradingSystem - ERROR - 执行错误: 'Position' object has no attribute 'get'
+                   Traceback (most recent call last):
+                                                       File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 185, in run_once
+                                                                   risk_result = self._check_risk()
+                                     ^^^^^^^^^^^^^^^^^^
+                                                         File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 330, in _check_risk
+                                                                        return self.risk_manager.check(
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^
+                                                            File "/Users/allenbot/project/auto-trading/src/core/risk/ttp.py", line 97, in check
+                                                                   coin = position.get('coin', '') if position else ''
+                                                 ^^^^^^^^^^^^
+                                                             AttributeError: 'Position' object has no attribute 'get'
+

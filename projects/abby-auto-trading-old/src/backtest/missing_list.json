@@ -1,0 +1,602 @@
+[
+  {
+    "coin": "BTC",
+    "strategy": "renko_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "renko_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "renko_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "renko_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "renko_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "renko_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "vroc",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "vroc",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "vroc",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "vroc",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "vroc",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "vroc",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "ma",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "ma",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "ma",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "ma",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "ma",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "ma",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "stddev",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "stddev",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "stddev",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "stddev",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "stddev",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "stddev",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "proc",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "proc",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "proc",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "proc",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "proc",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "proc",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "roc",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "roc",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "roc",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "roc",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "roc",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "roc",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "ulcer",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "ulcer",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "ulcer",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "ulcer",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "ulcer",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "ulcer",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "vpt",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "vpt",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "vpt",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "vpt",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "vpt",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "vpt",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "klinger_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "klinger_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "klinger_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "klinger_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "pivot_points_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "pivot_points_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "pivot_points_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "pivot_points_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "pivot_points_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "pivot_points_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "tvi",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "tvi",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "tvi",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "tvi",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "tvi",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "tvi",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "woodie_pivot_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "woodie_pivot_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "woodie_pivot_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "woodie_pivot_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "woodie_pivot_echo",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "woodie_pivot_echo",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "ultimate_oscillator",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "ultimate_oscillator",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "ultimate_oscillator",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "ultimate_oscillator",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "ultimate_oscillator",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "ultimate_oscillator",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "kline",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "kline",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "trix",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "trix",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "trix",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "trix",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "trix",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "trix",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "stoch_rsi",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "stoch_rsi",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "stoch_rsi",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "stoch_rsi",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "stoch_rsi",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "stoch_rsi",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "rsi_divergence",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "rsi_divergence",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "rsi_divergence",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "rsi_divergence",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "rsi_divergence",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "rsi_divergence",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "mean_reversion",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "mean_reversion",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "mean_reversion",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "mean_reversion",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "mean_reversion",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "mean_reversion",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "parabolic_sar",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "parabolic_sar",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "parabolic_sar",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "parabolic_sar",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "parabolic_sar",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "parabolic_sar",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "base",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "base",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "base",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "base",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "base",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "base",
+    "interval": "1h"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "williams_r",
+    "interval": "15m"
+  },
+  {
+    "coin": "BTC",
+    "strategy": "williams_r",
+    "interval": "1h"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "williams_r",
+    "interval": "15m"
+  },
+  {
+    "coin": "ETH",
+    "strategy": "williams_r",
+    "interval": "1h"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "williams_r",
+    "interval": "15m"
+  },
+  {
+    "coin": "BNB",
+    "strategy": "williams_r",
+    "interval": "1h"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "id": "8",
+  "subject": "Step 5: 写入 investment_plan.md",
+  "description": "结果写入 ~/project/trading-research/investment_plan.md 第四节",
+  "activeForm": "写入投资计划",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": []
+}

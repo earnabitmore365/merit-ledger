@@ -1,0 +1,5 @@
+total 16
+drwxr-xr-x   4 allenbot  staff   128 Feb 19 18:03 .
+drwxr-xr-x  17 allenbot  staff   544 Feb 20 15:23 ..
+-rw-r--r--@  1 allenbot  staff  2776 Feb 19 15:58 SKILL.md
+-rw-r--r--@  1 allenbot  staff   524 Feb 19 18:03 config.json

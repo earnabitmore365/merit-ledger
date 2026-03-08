@@ -1,0 +1,38 @@
+                                                            
+  完整任务线                                                                          
+                                                                                      
+  1. Regime v1（MA+RSI）→ 切换太频繁（1680次/年），大部分币跑不过单 proc              
+  2. 你问："市面上有没有更好的指标判断市场？比如 AHR999、链上数据、稳定币"            
+  3. 研究了 12 个指标 → 做了指标库 src/indicators/（已完成 ✅）                       
+  4. 下一步（未做）：用这些真实指标来改进 Regime Detection，让交易机器人能根据
+  MarketScore 综合打分来判断市场趋势、验证信号、切换策略
+
+  所以指标库只是基础设施，真正的目标是：
+  - 用 MarketScore（链上+衍生品+情绪+市场结构）替代简单的 MA+RSI 来判断
+  bull/bear/ranging
+  - 回测时可以用历史指标数据验证
+  - 实盘时实时获取指标辅助决策
+
+  要我先做个方案，看看怎么把指标库整合进 RegimeStrategy 和回测系统？比如：
+  - RegimeDetector v2 用 ADX 三层复合 + MarketScore 辅助
+  - 回测引擎支持带指标验证的模式
+  - 交易面板实时显示综合打分
+
+✻ Crunched for 41s
+
+❯ 这个方案我想把他丢给sonnet的claude，让他做好了详细的方案，我在复制给你，让你执      
+  行。可以吗？                                                                       
+                                                                                      
+⏺ 可以，完全没问题。Sonnet 做方案、我来执行，效率更高还省你的 Opus 用量。             
+                                                                                      
+  给 Sonnet 的时候建议把这些喂给它：                                                  
+                                         
+  1. 指标库现状：src/indicators/ 12 个指标已完成，verify.py 验证 12/12 通过           
+  2. Regime v1 问题：MA+RSI 切换 1680 次/年，跑不过单 proc                            
+  3. 研究结论：memory/regime_detection_research.md +
+  memory/onchain_indicators_research.md
+  4.
+  关键文件：src/trading/regime/、src/backtest/backtest.py、src/trading/trade_menu.py
+  5. 目标：用 MarketScore 综合打分整合进交易和回测，替代简单 MA+RSI
+
+  Sonnet 出方案后直接贴给我，我执行。

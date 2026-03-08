@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""
+Backtesting Engine for Abby Auto Trading
+=========================================
+
+回测系统 - 自动导入
+"""
+
+import pkgutil
+from pathlib import Path
+
+_CURRENT_DIR = Path(__file__).parent
+
+# 自动扫描所有模块
+_modules = []
+for module_info in pkgutil.iter_modules([str(_CURRENT_DIR)]):
+    module_name = module_info.name
+    if not module_name.startswith('_'):
+        _modules.append(module_name)
+
+__all__ = _modules
+
+# 延迟导入所有模块
+for module_name in _modules:
+    try:
+        exec(f"from .{module_name} import *")
+    except Exception as e:
+        pass  # 忽略导入错误

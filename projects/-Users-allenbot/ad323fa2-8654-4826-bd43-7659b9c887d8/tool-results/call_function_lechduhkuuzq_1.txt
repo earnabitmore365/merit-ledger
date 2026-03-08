@@ -1,0 +1,173 @@
+     1→{
+     2→  "numStartups": 3,
+     3→  "installMethod": "native",
+     4→  "autoUpdates": false,
+     5→  "theme": "light-ansi",
+     6→  "hasSeenTasksHint": true,
+     7→  "tipsHistory": {
+     8→    "new-user-warmup": 1,
+     9→    "plan-mode-for-complex-tasks": 1,
+    10→    "memory-command": 1,
+    11→    "theme-command": 1,
+    12→    "status-line": 1,
+    13→    "prompt-queue": 1,
+    14→    "enter-to-steer-in-relatime": 1,
+    15→    "todo-list": 2,
+    16→    "install-github-app": 2,
+    17→    "install-slack-app": 2,
+    18→    "drag-and-drop-images": 2,
+    19→    "paste-images-mac": 2,
+    20→    "double-esc-code-restore": 2,
+    21→    "continue": 2,
+    22→    "shift-tab": 2,
+    23→    "image-paste": 2,
+    24→    "desktop-app": 2,
+    25→    "web-app": 2,
+    26→    "mobile-app": 2
+    27→  },
+    28→  "promptQueueUseCount": 47,
+    29→  "cachedGrowthBookFeatures": {
+    30→    "tengu_1p_event_batch_config": {
+    31→      "scheduledDelayMillis": 5000,
+    32→      "maxExportBatchSize": 200,
+    33→      "maxQueueSize": 8192
+    34→    },
+    35→    "tengu_mcp_tool_search": false,
+    36→    "tengu_scratch": false,
+    37→    "tengu_brass_pebble": false,
+    38→    "tengu_event_sampling_config": {},
+    39→    "tengu_log_segment_events": false,
+    40→    "tengu_log_datadog_events": true,
+    41→    "tengu_marble_anvil": true,
+    42→    "tengu_tool_pear": false,
+    43→    "tengu_scarf_coffee": false,
+    44→    "tengu_keybinding_customization_release": true,
+    45→    "tengu_thinkback": false,
+    46→    "tengu_pid_based_version_locking": true,
+    47→    "tengu_disable_bypass_permissions_mode": false,
+    48→    "tengu_c4w_usage_limit_notifications_enabled": true,
+    49→    "tengu-top-of-feed-tip": {
+    50→      "tip": "",
+    51→      "color": ""
+    52→    },
+    53→    "tengu_react_vulnerability_warning": false,
+    54→    "tengu_code_diff_cli": true,
+    55→    "tengu_pr_status_cli": true,
+    56→    "tengu_marble_kite": false,
+    57→    "tengu_post_compact_survey": false,
+    58→    "tengu_claudeai_mcp_connectors": true,
+    59→    "enhanced_telemetry_beta": false,
+    60→    "tengu_tool_search_unsupported_models": [
+    61→      "haiku"
+    62→    ],
+    63→    "tengu_system_prompt_global_cache": false,
+    64→    "tengu_attribution_header": false,
+    65→    "tengu_workout": false,
+    66→    "tengu_coral_fern": false,
+    67→    "tengu_cache_plum_violet": false,
+    68→    "tengu_streaming_tool_execution2": true,
+    69→    "tengu_session_memory": false,
+    70→    "tengu_plank_river_frost": "user_intent"
+    71→  },
+    72→  "userID": "5429ac891d45577b38d0799046aa3be9b667da015eb242cd74390252b36231c6",
+    73→  "firstStartTime": "2026-02-02T08:34:09.224Z",
+    74→  "sonnet45MigrationComplete": true,
+    75→  "opus45MigrationComplete": true,
+    76→  "opusProMigrationComplete": true,
+    77→  "thinkingMigrationComplete": true,
+    78→  "cachedChromeExtensionInstalled": false,
+    79→  "changelogLastFetched": 1771669875771,
+    80→  "autoUpdatesProtectedForNative": true,
+    81→  "appleTerminalSetupInProgress": false,
+    82→  "appleTerminalBackupPath": "/Users/allenbot/Library/Preferences/com.apple.Terminal.plist.bak",
+    83→  "optionAsMetaKeyInstalled": true,
+    84→  "hasCompletedOnboarding": true,
+    85→  "lastOnboardingVersion": "2.1.29",
+    86→  "lastReleaseNotesSeen": "2.1.50",
+    87→  "projects": {
+    88→    "/Users/allenbot": {
+    89→      "allowedTools": [],
+    90→      "mcpContextUris": [],
+    91→      "mcpServers": {},
+    92→      "enabledMcpjsonServers": [],
+    93→      "disabledMcpjsonServers": [],
+    94→      "hasTrustDialogAccepted": false,
+    95→      "projectOnboardingSeenCount": 2,
+    96→      "hasClaudeMdExternalIncludesApproved": false,
+    97→      "hasClaudeMdExternalIncludesWarningShown": false,
+    98→      "exampleFiles": [],
+    99→      "reactVulnerabilityCache": {
+   100→        "detected": false,
+   101→        "package": null,
+   102→        "packageName": null,
+   103→        "version": null,
+   104→        "packageManager": null
+   105→      },
+   106→      "lastCost": 5.710583999999999,
+   107→      "lastAPIDuration": 5986550,
+   108→      "lastAPIDurationWithoutRetries": 5986346,
+   109→      "lastToolDuration": 924366,
+   110→      "lastDuration": 60260095,
+   111→      "lastLinesAdded": 29,
+   112→      "lastLinesRemoved": 60,
+   113→      "lastTotalInputTokens": 1419723,
+   114→      "lastTotalOutputTokens": 96761,
+   115→      "lastTotalCacheCreationInputTokens": 0,
+   116→      "lastTotalCacheReadInputTokens": 0,
+   117→      "lastTotalWebSearchRequests": 0,
+   118→      "lastFpsAverage": 1.28,
+   119→      "lastFpsLow1Pct": 58.14,
+   120→      "lastModelUsage": {
+   121→        "minimax-m2.5:cloud": {
+   122→          "inputTokens": 1419723,
+   123→          "outputTokens": 96761,
+   124→          "cacheReadInputTokens": 0,
+   125→          "cacheCreationInputTokens": 0,
+   126→          "webSearchRequests": 0,
+   127→          "costUSD": 5.710583999999999
+   128→        }
+   129→      },
+   130→      "lastSessionId": "e5cd5291-b522-4166-9367-ed23898bbf3f",
+   131→      "lastSessionMetrics": {
+   132→        "frame_duration_ms_count": 75339,
+   133→        "frame_duration_ms_min": 0.2200410000514239,
+   134→        "frame_duration_ms_max": 110.02033399790525,
+   135→        "frame_duration_ms_avg": 3.134988625624953,
+   136→        "frame_duration_ms_p50": 2.693437500158325,
+   137→        "frame_duration_ms_p95": 5.24112234986387,
+   138→        "frame_duration_ms_p99": 15.990130160348487,
+   139→        "pre_tool_hook_duration_ms_count": 281,
+   140→        "pre_tool_hook_duration_ms_min": 0,
+   141→        "pre_tool_hook_duration_ms_max": 5,
+   142→        "pre_tool_hook_duration_ms_avg": 2.0355871886120998,
+   143→        "pre_tool_hook_duration_ms_p50": 2,
+   144→        "pre_tool_hook_duration_ms_p95": 3,
+   145→        "pre_tool_hook_duration_ms_p99": 4,
+   146→        "hook_duration_ms_count": 98,
+   147→        "hook_duration_ms_min": 0,
+   148→        "hook_duration_ms_max": 3,
+   149→        "hook_duration_ms_avg": 0.16326530612244897,
+   150→        "hook_duration_ms_p50": 0,
+   151→        "hook_duration_ms_p95": 1,
+   152→        "hook_duration_ms_p99": 1.0600000000000023
+   153→      }
+   154→    }
+   155→  },
+   156→  "officialMarketplaceAutoInstallAttempted": true,
+   157→  "officialMarketplaceAutoInstalled": true,
+   158→  "sonnet1m45MigrationComplete": true,
+   159→  "clientDataCache": {
+   160→    "data": null,
+   161→    "timestamp": 1771733611934
+   162→  },
+   163→  "skillUsage": {
+   164→    "agent-browser": {
+   165→      "usageCount": 1,
+   166→      "lastUsedAt": 1771673796712
+   167→    }
+   168→  }
+   169→}
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

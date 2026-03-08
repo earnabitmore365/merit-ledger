@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""
+市场 Regime 配置
+
+RegimeDetectorConfig — 检测器参数
+RegimeConfig — 整体配置（策略映射+检测器+冷却）
+"""
+
+from dataclasses import dataclass, field
+from typing import Dict
+
+
+@dataclass
+class RegimeDetectorConfig:
+    """Regime 检测器参数"""
+    short_period: int = 7        # MA 短周期
+    long_period: int = 25        # MA 长周期
+    rsi_period: int = 14
+    bull_rsi_threshold: float = 55.0
+    bear_rsi_threshold: float = 45.0
+    ranging_ma_gap_pct: float = 0.005  # MA差距 < 0.5% → ranging
+    min_klines: int = 30
+
+
+# 默认策略映射（基于1521份全矩阵回测结果）
+DEFAULT_REGIME_MAP: Dict[str, str] = {
+    "bull": "proc",                  # 牛市做多，ETH/15m 243% Sharpe 4.34
+    "bear": "demandindex_short",     # 熊市做空最优
+    "ranging": "mean_reversion",     # 震荡回归
+}
+
+
+@dataclass
+class RegimeConfig:
+    """Regime 整体配置"""
+    regime_map: Dict[str, str] = field(default_factory=lambda: dict(DEFAULT_REGIME_MAP))
+    detector: RegimeDetectorConfig = field(default_factory=RegimeDetectorConfig)
+    cooldown_bars: int = 3  # 连续 N 次相同检测才切换

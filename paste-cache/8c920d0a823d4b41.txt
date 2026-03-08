@@ -1,0 +1,16 @@
+Sessions
+┌──────────────────────────────────────────────────┬────────┬─────────┬────────────────────────┬──────────────────────────────────┐
+│ Key                                              │ Kind   │ Age     │ Model                  │ Tokens                           │
+├──────────────────────────────────────────────────┼────────┼─────────┼────────────────────────┼──────────────────────────────────┤
+│ agent:main:main:thread:6677                      │ direct │ 7m ago  │ MiniMax-M2.5           │ 154k/200k (77%) · 🗄️ 99% cached  │
+│ agent:main:main                                  │ direct │ 8m ago  │ MiniMax-M2.5           │ 46k/200k (23%)                   │
+│ agent:main:main:thread:5548                      │ direct │ 57m ago │ MiniMax-M2.5           │ 83k/200k (41%) · 🗄️ 129% cached  │
+│ agent:main:main:thread:6672                      │ direct │ 34h ago │ MiniMax-M2.5           │ 173k/200k (87%) · 🗄️ 100% cached │
+│ agent:598cf47e-5ea3-490e-b1b5-e…                 │ direct │ 46h ago │ MiniMax-M2.5-highspeed │ unknown/200k (?%)                │
+│ agent:1b9b63f4-6374-4658-b408-5…                 │ direct │ 46h ago │ MiniMax-M2.5-highspeed │ unknown/200k (?%)                │
+│ agent:60b292d3-aa07-4689-9428-c…                 │ direct │ 46h ago │ MiniMax-M2.5-highspeed │ unknown/200k (?%)                │
+│ agent:4cecac2b-09ce-45ef-9ad5-0…                 │ direct │ 46h ago │ MiniMax-M2.5-highspeed │ unknown/200k (?%)                │
+│ agent:8e2ba32c-8910-4e20-9129-a…                 │ direct │ 46h ago │ MiniMax-M2.5-highspeed │ unknown/200k (?%)                │
+│ agent:201be374-8eb5-42ec-b737-9…                 │ direct │ 46h ago │ MiniMax-M2.5-highspeed │ unknown/200k (?%)                │
+└──────────────────────────────────────────────────┴────────┴─────────┴────────────────────────┴──────────────────────────────────┘
+

@@ -1,0 +1,13 @@
+{
+  "id": "8",
+  "subject": "全量种子重跑",
+  "description": "86策略×13币×10周期=11,180组，TTP=False，后台运行，输出seed_v3.db",
+  "activeForm": "全量跑种子",
+  "status": "in_progress",
+  "blocks": [
+    "9"
+  ],
+  "blockedBy": [
+    "7"
+  ]
+}

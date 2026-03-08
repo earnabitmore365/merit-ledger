@@ -1,0 +1,52 @@
+"""Volume Surge — 量放大突破"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class VolumeSurgeConfig:
+    period: int = 14
+    surge_mult: float = 2.0
+
+
+class VolumeSurge(Strategy):
+    def __init__(self, exchange=None, config: Optional[VolumeSurgeConfig] = None):
+        self.exchange = exchange
+        self.config = config or VolumeSurgeConfig()
+
+    @property
+    def name(self) -> str:
+        return "volumesurge"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        p = self.config.period
+        if not klines or len(klines) < p + 1:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0)
+
+        avg_vol = sum(c["volume"] for c in klines[-(p + 1):-1]) / p
+        cur_vol = klines[-1]["volume"]
+        cur_close = klines[-1]["close"]
+        prev_close = klines[-2]["close"]
+
+        is_surge = cur_vol > avg_vol * self.config.surge_mult and avg_vol > 0
+        price_up = cur_close > prev_close
+        price_down = cur_close < prev_close
+
+        prev_avg_vol = sum(c["volume"] for c in klines[-(p + 2):-2]) / p
+        prev_vol = klines[-2]["volume"]
+        prev_surge = prev_vol > prev_avg_vol * self.config.surge_mult and prev_avg_vol > 0
+
+        if is_surge and price_up and not prev_surge:
+            signal = Signal.BUY
+        elif is_surge and price_down and not prev_surge:
+            signal = Signal.SELL
+        else:
+            signal = Signal.HOLD
+
+        vol_ratio = cur_vol / avg_vol if avg_vol > 0 else 0
+        return TradingSignal(signal=signal, confidence=min(vol_ratio / 4, 1.0),
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"vol_ratio": vol_ratio, "is_surge": is_surge,
+                                        "price_change_pct": (cur_close - prev_close) / prev_close * 100 if prev_close else 0})

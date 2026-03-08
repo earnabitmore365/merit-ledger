@@ -1,0 +1,530 @@
+#!/usr/bin/env python3
+"""
+compute_regime_v2.py — 计算两层 Regime 标签，写入 paired_trades
+
+Phase A: Layer 1 每日投票（12张椅子，来几个坐几个）
+Phase B: Layer 2 每根K线（价格涨跌 + ADX + CI）
+Phase C: 初始规则算 regime_v2
+Phase D: 5个新字段写入 paired_trades
+
+用法：python3 lab/compute_regime_v2.py
+"""
+
+import json
+import math
+import sqlite3
+import time
+from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+# === 路径 ===
+PROJECT = Path(__file__).parent.parent
+DB_PATH = PROJECT / "reports" / "seed_report.db"
+KLINE_DIR = PROJECT / "src" / "backtest" / "data" / "historical"
+
+# 各周期等价14天的K线数（Wilder的14日 → 换算到各周期）
+PERIOD_MAP = {
+    '1m':  20160,   # 14 × 24 × 60
+    '5m':   4032,   # 14 × 24 × 12
+    '15m':  1344,   # 14 × 24 × 4
+    '1h':    336,   # 14 × 24
+}
+
+
+# ============================================================
+# Phase A: Layer 1 每日投票
+# ============================================================
+
+# 初始阈值（分班逻辑：现在是什么市场，不是该买还是卖）
+# bull = 市场正在涨，bear = 市场正在跌
+THRESHOLDS = {
+    'fear_greed':       {'bull': ('>', 70),      'bear': ('<', 30)},
+    'ahr999':           {'bull': ('>', 1.2),     'bear': ('<', 0.45)},
+    'mvrv':             {'bull': ('>', 3.5),     'bear': ('<', 1)},
+    'nupl':             {'bull': ('>', 0.75),    'bear': ('<', 0)},
+    'puell':            {'bull': ('>', 2.0),     'bear': ('<', 0.5)},
+    'btc_dominance':    {'bull': ('<', 40),      'bear': ('>', 55)},
+    'pi_cycle_top':     {'bull': ('>', 20),      'bear': ('<', 5)},
+    'exchange_netflow': {'bull': ('<', 0),       'bear': ('>', 0)},
+    'funding_rate':     {'bull': ('>', 0.0005),  'bear': ('<', -0.0001)},
+    # stablecoin_supply: 30日趋势，单独处理
+    # oi: 无阈值定义，不投票
+}
+
+
+def _vote_one(value, bull_spec, bear_spec):
+    """单个指标投票：返回 'bull' / 'bear' / None(neutral)"""
+    bull_op, bull_th = bull_spec
+    bear_op, bear_th = bear_spec
+
+    if bull_op == '>' and value > bull_th:
+        return 'bull'
+    if bull_op == '<' and value < bull_th:
+        return 'bull'
+    if bear_op == '<' and value < bear_th:
+        return 'bear'
+    if bear_op == '>' and value > bear_th:
+        return 'bear'
+    return None  # neutral
+
+
+def compute_layer1(conn):
+    """读 indicator_daily，计算每天的 Layer 1 投票结果
+    返回 dict: date_str → 'bull'/'bear'/'ranging'/'unknown'
+    """
+    # 加载所有数据: {indicator: {date: value}}
+    indicator_data = defaultdict(dict)
+    rows = conn.execute("SELECT date, indicator, value FROM indicator_daily").fetchall()
+    for date, indicator, value in rows:
+        indicator_data[indicator][date] = value
+
+    print(f"  indicator_daily: {len(rows):,} 条，{len(indicator_data)} 个指标")
+    for name, dates in sorted(indicator_data.items()):
+        dlist = sorted(dates.keys())
+        print(f"    {name:<22s} {len(dlist):>5,} 天  ({dlist[0]} ~ {dlist[-1]})")
+
+    # 收集所有日期
+    all_dates = sorted(set(d for dates in indicator_data.values() for d in dates))
+    print(f"  日期范围: {all_dates[0]} ~ {all_dates[-1]} ({len(all_dates):,} 天)")
+
+    # 每天投票
+    layer1_daily = {}
+
+    for date in all_dates:
+        bull_votes = 0
+        bear_votes = 0
+
+        # 标准阈值指标
+        for indicator, specs in THRESHOLDS.items():
+            value = indicator_data.get(indicator, {}).get(date)
+            if value is None:
+                continue  # 空椅子，不投票
+            vote = _vote_one(value, specs['bull'], specs['bear'])
+            if vote == 'bull':
+                bull_votes += 1
+            elif vote == 'bear':
+                bear_votes += 1
+
+        # Stablecoin Supply: 30日趋势
+        sc_today = indicator_data.get('stablecoin_supply', {}).get(date)
+        if sc_today is not None:
+            try:
+                dt = datetime.strptime(date, '%Y-%m-%d')
+                date_30 = (dt - timedelta(days=30)).strftime('%Y-%m-%d')
+                sc_30 = indicator_data.get('stablecoin_supply', {}).get(date_30)
+                if sc_30 is not None and sc_30 > 0:
+                    if sc_today > sc_30:
+                        bull_votes += 1
+                    elif sc_today < sc_30:
+                        bear_votes += 1
+            except ValueError:
+                pass
+
+        # 投票结果
+        if bull_votes > bear_votes:
+            layer1_daily[date] = 'bull'
+        elif bear_votes > bull_votes:
+            layer1_daily[date] = 'bear'
+        else:
+            layer1_daily[date] = 'ranging'
+
+    # 统计
+    counts = defaultdict(int)
+    for r in layer1_daily.values():
+        counts[r] += 1
+    print(f"  Layer 1 投票结果: bull={counts.get('bull',0):,}  "
+          f"bear={counts.get('bear',0):,}  ranging={counts.get('ranging',0):,}")
+
+    return layer1_daily
+
+
+# ============================================================
+# Phase B: Layer 2 per-candle 计算
+# ============================================================
+
+def _wilder_smooth_full(values, period):
+    """Wilder 平滑，返回完整序列（前 period-1 为 None）
+    values: list of float
+    """
+    n = len(values)
+    if n < period:
+        return [None] * n
+
+    result = [None] * (period - 1)
+    first = sum(values[:period]) / period
+    result.append(first)
+    for i in range(period, n):
+        result.append((result[-1] * (period - 1) + values[i]) / period)
+    return result
+
+
+def compute_adx_series(klines, period):
+    """Wilder标准ADX，返回每根K线的ADX值（warmup期=None）"""
+    n = len(klines)
+    if n < period * 2 + 1:
+        return [None] * n
+
+    # +DM / -DM / TR（n-1 个值，index j → kline j+1）
+    plus_dm = []
+    minus_dm = []
+    trs = []
+    for i in range(1, n):
+        h = klines[i]['high']
+        l = klines[i]['low']
+        ph = klines[i - 1]['high']
+        pl = klines[i - 1]['low']
+        pc = klines[i - 1]['close']
+
+        up = h - ph
+        down = pl - l
+        plus_dm.append(up if up > down and up > 0 else 0.0)
+        minus_dm.append(down if down > up and down > 0 else 0.0)
+        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+
+    # Wilder 平滑 DM 和 TR
+    smooth_tr = _wilder_smooth_full(trs, period)
+    smooth_plus = _wilder_smooth_full(plus_dm, period)
+    smooth_minus = _wilder_smooth_full(minus_dm, period)
+
+    # DX = |+DI - -DI| / (+DI + -DI) × 100
+    dx_list = []
+    for i in range(len(smooth_tr)):
+        st = smooth_tr[i]
+        sp = smooth_plus[i]
+        sm = smooth_minus[i]
+        if st is None or sp is None or sm is None or st == 0:
+            dx_list.append(None)
+            continue
+        plus_di = 100 * sp / st
+        minus_di = 100 * sm / st
+        di_sum = plus_di + minus_di
+        if di_sum > 0:
+            dx_list.append(abs(plus_di - minus_di) / di_sum * 100)
+        else:
+            dx_list.append(0.0)
+
+    # 去掉 None 前缀，再做一次 Wilder 平滑 → ADX
+    first_valid = 0
+    while first_valid < len(dx_list) and dx_list[first_valid] is None:
+        first_valid += 1
+
+    valid_dx = dx_list[first_valid:]
+    if len(valid_dx) < period:
+        return [None] * n
+
+    adx_smooth = _wilder_smooth_full(valid_dx, period)
+
+    # 映射回 kline 索引
+    # dx_list[j] → kline j+1；valid_dx[k] = dx_list[first_valid + k] → kline first_valid+k+1
+    # adx_smooth[k] → kline first_valid + k + 1
+    result = [None] * n
+    for k, adx_val in enumerate(adx_smooth):
+        if adx_val is not None:
+            kline_idx = first_valid + k + 1
+            if 0 <= kline_idx < n:
+                result[kline_idx] = round(adx_val, 4)
+
+    return result
+
+
+def compute_ci_series(klines, period):
+    """Choppiness Index：100 × log10(TR之和 / 价格区间) / log10(n)
+    值高=横盘（乱走），值低=趋势（一路走）
+    """
+    n = len(klines)
+    if n < period + 1:
+        return [None] * n
+
+    result = [None] * n
+
+    # TR（n-1 个值）
+    trs = []
+    for i in range(1, n):
+        h = klines[i]['high']
+        l = klines[i]['low']
+        pc = klines[i - 1]['close']
+        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+
+    highs = [k['high'] for k in klines]
+    lows = [k['low'] for k in klines]
+    log_n = math.log10(period) if period > 1 else 1.0
+
+    # 初始窗口：candle period（TR窗口 = trs[0:period]，价格窗口 = klines[1:period+1]）
+    tr_sum = sum(trs[:period])
+
+    max_dq = deque()
+    min_dq = deque()
+    for i in range(1, period + 1):
+        while max_dq and highs[i] >= highs[max_dq[-1]]:
+            max_dq.pop()
+        max_dq.append(i)
+        while min_dq and lows[i] <= lows[min_dq[-1]]:
+            min_dq.pop()
+        min_dq.append(i)
+
+    range_val = highs[max_dq[0]] - lows[min_dq[0]]
+    if range_val > 0 and tr_sum > 0:
+        ci = 100 * math.log10(tr_sum / range_val) / log_n
+        result[period] = round(ci, 4)
+
+    # 滑动窗口
+    for c in range(period + 1, n):
+        tr_sum += trs[c - 1]
+        tr_sum -= trs[c - 1 - period]
+
+        left = c - period + 1
+
+        while max_dq and max_dq[0] < left:
+            max_dq.popleft()
+        while max_dq and highs[c] >= highs[max_dq[-1]]:
+            max_dq.pop()
+        max_dq.append(c)
+
+        while min_dq and min_dq[0] < left:
+            min_dq.popleft()
+        while min_dq and lows[c] <= lows[min_dq[-1]]:
+            min_dq.pop()
+        min_dq.append(c)
+
+        range_val = highs[max_dq[0]] - lows[min_dq[0]]
+        if range_val > 0 and tr_sum > 0:
+            ci = 100 * math.log10(tr_sum / range_val) / log_n
+            result[c] = round(ci, 4)
+
+    return result
+
+
+def compute_price_change_series(klines, lookback):
+    """价格涨跌百分比：当前close vs lookback根前的close"""
+    n = len(klines)
+    result = [None] * n
+    for i in range(lookback, n):
+        prev_close = klines[i - lookback]['close']
+        if prev_close > 0:
+            pct = (klines[i]['close'] - prev_close) / prev_close * 100
+            result[i] = round(pct, 4)
+    return result
+
+
+# ============================================================
+# Phase C: regime_v2 初始规则
+# ============================================================
+
+def regime_v2_rule(price_change, adx):
+    """初始规则（可随时从原始数据重算）
+    price_change > +10% → bull
+    price_change < -10% → bear
+    其他 → ranging
+    price_change=NULL → unknown
+
+    注：ADX原始值已存入 adx_value 列，不参与分类（因等价周期压缩导致阈值无效）。
+    未来可随时从 price_change_pct + adx_value + ci_value 重新组合规则。
+    """
+    if price_change is None:
+        return 'unknown'
+    if price_change > 10:
+        return 'bull'
+    elif price_change < -10:
+        return 'bear'
+    else:
+        return 'ranging'
+
+
+# ============================================================
+# Phase D: 写入 paired_trades
+# ============================================================
+
+def add_columns(conn):
+    """ALTER TABLE 添加5个新列（幂等，已存在跳过）"""
+    new_cols = [
+        ('layer1_regime', 'TEXT'),
+        ('price_change_pct', 'REAL'),
+        ('adx_value', 'REAL'),
+        ('ci_value', 'REAL'),
+        ('regime_v2', 'TEXT'),
+    ]
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(paired_trades)")}
+    added = 0
+    for col_name, col_type in new_cols:
+        if col_name not in existing:
+            conn.execute(f"ALTER TABLE paired_trades ADD COLUMN {col_name} {col_type}")
+            print(f"    新增列: {col_name} ({col_type})")
+            added += 1
+    conn.commit()
+    if added == 0:
+        print("    5个列已存在，跳过")
+
+
+def process_coin_interval(conn, coin, interval, combo_ids, layer1_daily, klines_cache):
+    """处理一个 coin/interval 组合的所有交易"""
+    period = PERIOD_MAP.get(interval)
+    if period is None:
+        print(f"    ⚠️ 未知周期 {interval}，跳过")
+        return 0
+
+    # 加载 K线（带缓存避免重复读取）
+    cache_key = f"{coin}/{interval}"
+    if cache_key not in klines_cache:
+        kline_path = KLINE_DIR / coin / f"{interval}.json"
+        if not kline_path.exists():
+            print(f"    ⚠️ K线不存在: {kline_path}，跳过")
+            return 0
+        klines_cache[cache_key] = json.load(open(kline_path))
+
+    klines = klines_cache[cache_key]
+    n_klines = len(klines)
+
+    # 计算 Layer 2 per-candle 值
+    t0 = time.time()
+    price_changes = compute_price_change_series(klines, period)
+    t1 = time.time()
+    adx_values = compute_adx_series(klines, period)
+    t2 = time.time()
+    ci_values = compute_ci_series(klines, period)
+    t3 = time.time()
+
+    print(f"    计算: price={t1-t0:.1f}s  ADX={t2-t1:.1f}s  CI={t3-t2:.1f}s  ({n_klines:,}根K线, period={period})")
+
+    # 清理 K线 缓存（1m 数据很大，用完即丢）
+    if interval == '1m':
+        del klines_cache[cache_key]
+
+    # 获取所有交易（只取需要的字段）
+    placeholders = ','.join('?' * len(combo_ids))
+    trades = conn.execute(f"""
+        SELECT id, open_candle_idx, open_time
+        FROM paired_trades
+        WHERE combo_id IN ({placeholders})
+    """, combo_ids).fetchall()
+
+    # 批量计算更新值
+    updates = []
+    for trade_id, candle_idx, open_time in trades:
+        # Layer 1: 按日期查
+        date = open_time[:10] if open_time else None
+        l1 = layer1_daily.get(date, 'unknown') if date else 'unknown'
+
+        # Layer 2: 按 candle_idx 查
+        if candle_idx is not None and 0 <= candle_idx < n_klines:
+            pc = price_changes[candle_idx]
+            adx = adx_values[candle_idx]
+            ci = ci_values[candle_idx]
+        else:
+            pc = adx = ci = None
+
+        # regime_v2
+        rv2 = regime_v2_rule(pc, adx)
+
+        updates.append((l1, pc, adx, ci, rv2, trade_id))
+
+    # 批量写入（每1万行commit）
+    batch_size = 10000
+    for i in range(0, len(updates), batch_size):
+        batch = updates[i:i + batch_size]
+        conn.executemany("""
+            UPDATE paired_trades SET
+                layer1_regime = ?,
+                price_change_pct = ?,
+                adx_value = ?,
+                ci_value = ?,
+                regime_v2 = ?
+            WHERE id = ?
+        """, batch)
+        conn.commit()
+
+    return len(updates)
+
+
+# ============================================================
+# Main
+# ============================================================
+
+def main():
+    print("=" * 60)
+    print("compute_regime_v2.py — 计算两层 Regime 标签")
+    print(f"DB: {DB_PATH}")
+    print("=" * 60)
+
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+
+    # Phase A: Layer 1 每日投票
+    print("\n📊 Phase A: Layer 1 每日投票")
+    print("  12张椅子，来几个坐几个...")
+    layer1_daily = compute_layer1(conn)
+
+    # Phase D prep: 添加列
+    print("\n📋 添加5个新字段...")
+    add_columns(conn)
+
+    # 获取 coin/interval 分组
+    combos = conn.execute("SELECT id, coin, interval FROM combo_summary").fetchall()
+    ci_groups = defaultdict(list)
+    for combo_id, coin, interval in combos:
+        ci_groups[(coin, interval)].append(combo_id)
+
+    total_groups = len(ci_groups)
+    total_updated = 0
+    start_time = time.time()
+
+    # K线缓存（同一 coin/interval 共享，处理完释放1m的）
+    klines_cache = {}
+
+    print(f"\n📈 Phase B+C+D: 处理 {total_groups} 个 coin/interval 组合")
+
+    for i, ((coin, interval), combo_ids) in enumerate(sorted(ci_groups.items())):
+        elapsed = time.time() - start_time
+        eta = elapsed / (i + 1) * (total_groups - i - 1) if i > 0 else 0
+        print(f"\n  [{i+1}/{total_groups}] {coin}/{interval} "
+              f"({len(combo_ids)}个策略)  "
+              f"[已用{elapsed:.0f}s, 预计剩{eta:.0f}s]")
+
+        count = process_coin_interval(conn, coin, interval, combo_ids, layer1_daily, klines_cache)
+        total_updated += count
+        print(f"    ✅ {count:,} 笔交易已更新")
+
+    total_time = time.time() - start_time
+
+    # ============ 验证 ============
+    print("\n" + "=" * 60)
+    print("📋 验证")
+    print("=" * 60)
+
+    print("\n  regime_v2 分布:")
+    for row in conn.execute(
+        "SELECT regime_v2, COUNT(*) FROM paired_trades GROUP BY regime_v2 ORDER BY regime_v2"
+    ):
+        pct = row[1] / total_updated * 100 if total_updated > 0 else 0
+        print(f"    {(row[0] or 'NULL'):<12s} {row[1]:>10,}  ({pct:.1f}%)")
+
+    print("\n  layer1_regime 分布:")
+    for row in conn.execute(
+        "SELECT layer1_regime, COUNT(*) FROM paired_trades GROUP BY layer1_regime ORDER BY layer1_regime"
+    ):
+        pct = row[1] / total_updated * 100 if total_updated > 0 else 0
+        print(f"    {(row[0] or 'NULL'):<12s} {row[1]:>10,}  ({pct:.1f}%)")
+
+    print("\n  做多策略在 regime_v2='bear' 的 avg_r（应为负数 → 标签有效）:")
+    for row in conn.execute("""
+        SELECT cs.strategy, AVG(pt.r_value) as avg_r, COUNT(*) as cnt
+        FROM paired_trades pt
+        JOIN combo_summary cs ON pt.combo_id = cs.id
+        WHERE pt.regime_v2 = 'bear' AND pt.direction = 'long'
+        GROUP BY cs.strategy
+        ORDER BY avg_r DESC
+        LIMIT 10
+    """):
+        sign = "+" if row[1] >= 0 else ""
+        print(f"    {row[0]:<30s} avg_r={sign}{row[1]:.4f}  ({row[2]:,}笔)")
+
+    conn.close()
+
+    print(f"\n  💾 总计 {total_updated:,} 笔交易，5个字段全部更新")
+    print(f"  ⏱️ 耗时 {total_time:.1f} 秒 ({total_time/60:.1f} 分钟)")
+    print("=" * 60)
+
+
+if __name__ == '__main__':
+    main()

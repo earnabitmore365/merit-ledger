@@ -1,0 +1,101 @@
+"""Volatility Reversion（波动率均值回归）— 黑丝原创
+
+不预测价格方向，交易波动率本身。
+波动率（ATR）会回归均值：极低→必爆发，极高→必回落。
+
+Logic:
+- ATR percentile < 10%（极度压缩）+ 方向确认 → 跟方向进场
+- ATR percentile > 90%（极度扩张）+ 方向确认 → 逆向进场（波动率将回落）
+- 方向确认：价格相对 SMA(50) 位置
+
+Author: 黑丝 (Opus)
+"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+from core.indicator_cache import get_indicator
+
+
+@dataclass
+class VolReversionConfig:
+    atr_period: int = 14
+    lookback: int = 100       # ATR 百分位排名的回看窗口
+    sma_period: int = 50      # 方向判断
+    low_pct: float = 10.0     # 压缩阈值（百分位）
+    high_pct: float = 90.0    # 扩张阈值（百分位）
+
+
+class VolReversion(Strategy):
+
+    REQUIRES = ['atr', 'sma']
+
+    def __init__(self, exchange=None, config: Optional[VolReversionConfig] = None):
+        self.exchange = exchange
+        self.config = config or VolReversionConfig()
+
+    @property
+    def name(self) -> str:
+        return "vol_reversion"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = self.config.lookback + self.config.atr_period + 5
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        idx = self.current_idx
+        atr_series = get_indicator('atr', period=self.config.atr_period)
+        sma_series = get_indicator('sma', period=self.config.sma_period)
+
+        current_atr = atr_series[idx]
+        current_sma = sma_series[idx]
+        current_price = klines[-1]["close"]
+
+        # ATR 百分位排名（最近 lookback 根的 ATR 中，当前排第几）
+        start = max(0, idx - self.config.lookback + 1)
+        atr_window = atr_series[start:idx + 1]
+        if not atr_window or current_atr == 0:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"],
+                                 metadata={"reason": "ATR window empty"})
+
+        rank = sum(1 for v in atr_window if v < current_atr)
+        percentile = rank / len(atr_window) * 100.0
+
+        signal = Signal.HOLD
+        confidence = 0.0
+        trigger = "none"
+
+        if percentile < self.config.low_pct:
+            # 波动率极度压缩 → 即将爆发，跟方向进场
+            if current_price > current_sma:
+                signal = Signal.BUY
+                trigger = "compression_bullish"
+            elif current_price < current_sma:
+                signal = Signal.SELL
+                trigger = "compression_bearish"
+            confidence = (self.config.low_pct - percentile) / self.config.low_pct
+
+        elif percentile > self.config.high_pct:
+            # 波动率极度扩张 → 即将回落，逆向进场（fade the move）
+            if current_price > current_sma:
+                signal = Signal.SELL
+                trigger = "expansion_fade_up"
+            elif current_price < current_sma:
+                signal = Signal.BUY
+                trigger = "expansion_fade_down"
+            confidence = (percentile - self.config.high_pct) / (100.0 - self.config.high_pct)
+
+        return TradingSignal(
+            signal=signal,
+            confidence=min(confidence, 1.0),
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "atr": current_atr, "atr_percentile": percentile,
+                "sma": current_sma, "price": current_price,
+                "trigger": trigger,
+            },
+        )

@@ -1,0 +1,13 @@
+total 120
+drwxrwxrwx  12 allenbot  staff    384 Feb 23 13:06 .
+drwxr-xr-x   9 allenbot  staff    288 Feb 23 13:11 ..
+-rwxrwxrwx@  1 allenbot  staff  14340 Feb 22 18:13 .DS_Store
+-rwxrwxrwx   1 allenbot  staff     16 Feb 18 19:53 .gitignore
+-rwxrwxrwx@  1 allenbot  staff   1182 Feb 23 13:06 CLAUDEmd.md
+-rwxrwxrwx@  1 allenbot  staff  28934 Feb 20 18:51 README.md
+drwxrwxrwx   4 allenbot  staff    128 Feb 15 19:03 __pycache__
+drwxrwxrwx   7 allenbot  staff    224 Feb 20 01:26 logs
+drwxrwxrwx   6 allenbot  staff    192 Feb 22 16:44 reports
+-rwxrwxrwx@  1 allenbot  staff    184 Feb 15 08:24 requirements.txt
+drwxrwxrwx  11 allenbot  staff    352 Feb 22 16:30 src
+drwxrwxrwx   3 allenbot  staff     96 Feb 20 15:27 user_interface

@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""
+MA RSI Strategy
+
+MA + RSI 策略
+- 简单移动平均线判方向
+- RSI 过滤器确认未过热/未超卖
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class MARSIConfig:
+    ma_period: int = 20
+    rsi_period: int = 14
+
+
+class MARSI(Strategy):
+    """MA + RSI 交易策略"""
+
+    def __init__(self, exchange=None, config: Optional[MARSIConfig] = None):
+        self.exchange = exchange
+        self.config = config or MARSIConfig()
+
+    @property
+    def name(self) -> str:
+        return "ma_rsi"
+
+    def _calc_rsi(self, closes: List[float]) -> float:
+        """Wilder标准RSI：period窗口 + 递推平滑"""
+        period = self.config.rsi_period
+        if len(closes) < period + 1:
+            return 50.0
+
+        # 第一个平均值：前 period 根的简单平均
+        gains = 0.0
+        losses = 0.0
+        for i in range(1, period + 1):
+            change = closes[i] - closes[i - 1]
+            if change > 0:
+                gains += change
+            else:
+                losses += abs(change)
+
+        avg_gain = gains / period
+        avg_loss = losses / period
+
+        # Wilder递推平滑
+        for i in range(period + 1, len(closes)):
+            change = closes[i] - closes[i - 1]
+            gain = change if change > 0 else 0.0
+            loss = abs(change) if change < 0 else 0.0
+            avg_gain = (avg_gain * (period - 1) + gain) / period
+            avg_loss = (avg_loss * (period - 1) + loss) / period
+
+        if avg_loss == 0:
+            return 100.0
+
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = max(self.config.ma_period, self.config.rsi_period + 1)
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        closes = [k["close"] for k in klines]
+        ma = sum(closes[-self.config.ma_period:]) / self.config.ma_period
+        rsi = self._calc_rsi(closes)
+
+        if closes[-1] > ma and rsi < 50:
+            signal = Signal.BUY
+        elif closes[-1] < ma and rsi > 50:
+            signal = Signal.SELL
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(
+            signal=signal,
+            confidence=0.7,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={"ma": ma, "rsi": rsi, "price": closes[-1]},
+        )

@@ -1,0 +1,7 @@
+31:    平多仓 CLOSE_BUY
+35:    TTP平多 TTP_CLOSE_BUY
+44:    CLOSE_BUY = "CLOSE_BUY"       # 平多仓
+52:    TTP_CLOSE_BUY = "TTP_CLOSE_BUY"   # TTP平多仓
+390:                return Action.TTP_CLOSE_BUY if not is_reverse else Action.REVERSE_BUY
+396:            return Action.REVERSE_BUY if is_reverse else Action.CLOSE_BUY
+448:            action: 平仓操作类型 (CLOSE_BUY, CLOSE_SELL, TTP_CLOSE_BUY, TTP_CLOSE_SELL, REVERSE_BUY, REVERSE_SELL)

@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""
+Elder-Ray Strategy
+
+Bull/Bear power indicator.
+
+Features:
+- EMA-based power measurement
+- Bull/Bear power comparison
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class ElderRayConfig:
+    """Elder-Ray configuration"""
+    ema_period: int = 13
+
+
+class ElderRay(Strategy):
+    """Elder-Ray trading strategy"""
+    
+    def __init__(self, exchange=None, config: Optional[ElderRayConfig] = None):
+        """Initialize Elder-Ray strategy
+        
+        Args:
+            exchange: Exchange adapter
+            config: Strategy configuration
+        """
+        self.exchange = exchange
+        self.config = config or ElderRayConfig()
+    
+    @property
+    def name(self) -> str:
+        return "elder_ray"
+    
+    def calculate_ema(self, closes: List[float]) -> float:
+        """Calculate EMA
+        
+        Args:
+            closes: Close prices
+            
+        Returns:
+            EMA value
+        """
+        period = self.config.ema_period
+        if len(closes) < period:
+            return sum(closes) / len(closes) if closes else 0.0
+        
+        multiplier = 2 / (period + 1)
+        ema = sum(closes[-period:]) / period
+        
+        for price in closes[-period:]:
+            ema = (price - ema) * multiplier + ema
+        
+        return ema
+    
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        """Generate Elder-Ray signal
+        
+        Args:
+            coin: Trading pair
+            klines: OHLCV data
+            
+        Returns:
+            TradingSignal with power analysis
+        """
+        # Validate klines
+        min_required = self.config.ema_period
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+        
+        # Extract data
+        closes = [c["close"] for c in klines[-20:]]
+        current_high = klines[-1]["high"]
+        current_low = klines[-1]["low"]
+        
+        # Calculate EMA
+        ema = self.calculate_ema(closes)
+        
+        # Calculate Bull/Bear power
+        bull_power = current_high - ema
+        bear_power = current_low - ema
+        
+        # Generate signal
+        if bull_power > abs(bear_power):
+            signal = Signal.BUY
+            trend = "bullish"
+        elif bear_power < -bull_power:
+            signal = Signal.SELL
+            trend = "bearish"
+        else:
+            signal = Signal.HOLD
+            trend = "neutral"
+        
+        return TradingSignal(
+            signal=signal,
+            confidence=0.6,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "ema": ema,
+                "bull_power": bull_power,
+                "bear_power": bear_power,
+                "trend": trend,
+            },
+        )

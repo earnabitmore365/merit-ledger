@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""
+Heikin Ashi Strategy
+
+Average price klinestick strategy.
+
+Features:
+- Heikin Ashi candle calculation
+- Trend detection from consecutive klines
+- Auto-migrated from echo-auto-trading project
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class HeikinAshiConfig:
+    """Heikin Ashi strategy configuration"""
+    min_klines: int = 5
+
+
+class HeikinAshiStrategy(Strategy):
+    """Heikin Ashi klinestick strategy"""
+    
+    def __init__(self, exchange=None, config: Optional[HeikinAshiConfig] = None):
+        """Initialize Heikin Ashi strategy
+        
+        Args:
+            exchange: Exchange adapter
+            config: Strategy configuration
+        """
+        self.exchange = exchange
+        self.config = config or HeikinAshiConfig()
+    
+    @property
+    def name(self) -> str:
+        return "heikin_ashi"
+    
+    def calculate_heikin_ashi(self, klines: List[Dict]) -> List[Dict]:
+        """Calculate Heikin Ashi klines
+        
+        Args:
+            klines: Original OHLCV klines
+            
+        Returns:
+            List of Heikin Ashi klines
+        """
+        if not klines or len(klines) < 2:
+            return []
+        
+        ha_klines = []
+        prev_ha_open = None
+        prev_ha_close = None
+        
+        for i, candle in enumerate(klines):
+            ha_close = (candle["open"] + candle["high"] + candle["low"] + candle["close"]) / 4
+            
+            if i == 0:
+                ha_open = (candle["open"] + candle["close"]) / 2
+            else:
+                ha_open = (prev_ha_open + prev_ha_close) / 2
+            
+            ha_high = max(candle["high"], ha_open, ha_close)
+            ha_low = min(candle["low"], ha_open, ha_close)
+            
+            ha_candle = {
+                "time": candle["time"],
+                "open": ha_open,
+                "high": ha_high,
+                "low": ha_low,
+                "close": ha_close,
+                "volume": candle["volume"],
+            }
+            
+            ha_klines.append(ha_candle)
+            prev_ha_open = ha_open
+            prev_ha_close = ha_close
+        
+        return ha_klines
+    
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        """Generate Heikin Ashi trading signal
+        
+        Args:
+            coin: Trading pair
+            klines: OHLCV data
+            
+        Returns:
+            TradingSignal with direction and confidence
+        """
+        # Validate klines
+        if not klines or len(klines) < self.config.min_klines:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+        
+        # Calculate Heikin Ashi
+        ha_klines = self.calculate_heikin_ashi(klines)
+        
+        if not ha_klines or len(ha_klines) < 2:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Heikin Ashi calculation failed"},
+            )
+        
+        # Generate signal — 4根连续确认
+        if len(ha_klines) < 4:
+            signal = Signal.HOLD
+            confidence = 0.0
+            trend = "insufficient"
+        else:
+            all_bull = all(ha_klines[-i]["close"] > ha_klines[-i]["open"] for i in range(1, 5))
+            all_bear = all(ha_klines[-i]["close"] < ha_klines[-i]["open"] for i in range(1, 5))
+            # 额外条件：最新一根无下影线（强势看涨）或无上影线（强势看跌）
+            last = ha_klines[-1]
+            no_lower = last["open"] <= last["low"] + (last["high"] - last["low"]) * 0.05
+            no_upper = last["close"] >= last["high"] - (last["high"] - last["low"]) * 0.05
+
+            if all_bull and no_lower:
+                signal = Signal.BUY
+                confidence = 0.75
+                trend = "strong_uptrend"
+            elif all_bear and no_upper:
+                signal = Signal.SELL
+                confidence = 0.75
+                trend = "strong_downtrend"
+            elif all_bull:
+                signal = Signal.BUY
+                confidence = 0.55
+                trend = "uptrend"
+            elif all_bear:
+                signal = Signal.SELL
+                confidence = 0.55
+                trend = "downtrend"
+            else:
+                signal = Signal.HOLD
+                confidence = 0.1
+                trend = "consolidation"
+        
+        return TradingSignal(
+            signal=signal,
+            confidence=confidence,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "trend": trend,
+            },
+        )

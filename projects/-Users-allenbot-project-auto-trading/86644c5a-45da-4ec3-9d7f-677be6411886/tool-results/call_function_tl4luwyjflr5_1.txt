@@ -1,0 +1,701 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→Abby 回测系统 - 交互式菜单
+     4→使用上下键选择，空格键多选，Enter确定，Esc返回/退出
+     5→"""
+     6→
+     7→import sys
+     8→import os
+     9→
+    10→# 添加项目路径
+    11→sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+    12→
+    13→try:
+    14→    import curses
+    15→except ImportError:
+    16→    try:
+    17→        import subprocess
+    18→        subprocess.run([sys.executable, '-m', 'pip', 'install', 'windows-curses'], check=True)
+    19→        import curses
+    20→    except:
+    21→        print("请安装 curses 库: pip install windows-curses")
+    22→        sys.exit(1)
+    23→
+    24→from core.strategy import list_strategies
+    25→
+    26→
+    27→class MenuSystem:
+    28→    def __init__(self, stdscr):
+    29→        self.stdscr = stdscr
+    30→        self.stdscr.nodelay(False)
+    31→        self.stdscr.keypad(True)
+    32→        self.selected_indices = []
+    33→        self._saved_selections = {}  # 保存各菜单的选择状态
+    34→        self._saved_configs = []  # 保存已添加的配置列表
+    35→        self._all_results = []  # 保存所有回测结果
+    36→
+    37→        curses.start_color()
+    38→        curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
+    39→        curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    40→        curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+    41→        curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)
+    42→        curses.init_pair(5, curses.COLOR_RED, curses.COLOR_BLACK)
+    43→        curses.init_pair(6, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
+    44→
+    45→        self.height, self.width = stdscr.getmaxyx()
+    46→
+    47→    def draw_header(self, selections):
+    48→        self.stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
+    49→        self.stdscr.addstr(0, 0, " " + "=" * (self.width - 2) + " ")
+    50→        title = " Abby 回测系统 "
+    51→        self.stdscr.addstr(1, (self.width - len(title)) // 2, title)
+    52→        self.stdscr.addstr(2, 0, " " + "=" * (self.width - 2) + " ")
+    53→        self.stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
+    54→
+    55→        y = 4
+    56→        # 显示已保存的配置
+    57→        configs = self._saved_configs
+    58→        if configs:
+    59→            self.stdscr.addstr(y, 0, "已选定配置:", curses.color_pair(3))
+    60→            y += 1
+    61→            for i, config in enumerate(configs):
+    62→                config_name = config['name'] if isinstance(config, dict) else config
+    63→                line = f"  {i+1}. {config_name}"
+    64→                if len(line) > self.width - 1:
+    65→                    line = line[:self.width - 4] + "..."
+    66→                self.stdscr.addstr(y, 0, line, curses.color_pair(6))
+    67→                y += 1
+    68→            y += 1
+    69→
+    70→        # 显示当前正在选择的内容
+    71→        if selections:
+    72→            self.stdscr.addstr(y, 0, "已选择:", curses.color_pair(3))
+    73→            y += 1
+    74→            for key, value in selections.items():
+    75→                if key.startswith('__'):
+    76→                    continue
+    77→                line = f"  {key}: {value}"
+    78→                if len(line) > self.width - 1:
+    79→                    line = line[:self.width - 4] + "..."
+    80→                self.stdscr.addstr(y, 0, line, curses.color_pair(6))
+    81→                y += 1
+    82→            y += 1
+    83→
+    84→        return y
+    85→
+    86→    def navigate_options(self, options, title, multi=False, selections=None, searchable=False):
+    87→        # 恢复之前保存的选择（如果有）
+    88→        # 根据标题获取保存的索引
+    89→        if title in self._saved_selections:
+    90→            saved = self._saved_selections[title]
+    91→            # 验证索引有效（非空且最大索引在范围内）
+    92→            if saved and len(saved) > 0 and max(saved) < len(options):
+    93→                self.selected_indices = saved.copy()
+    94→            else:
+    95→                self.selected_indices = []
+    96→        else:
+    97→            self.selected_indices = []
+    98→
+    99→        search_query = ""
+   100→        selected_idx = 0
+   101→        max_visible = self.height - 15
+   102→        offset = 0
+   103→
+   104→        while True:
+   105→            # 过滤选项
+   106→            if searchable and search_query:
+   107→                filtered_options = [opt for opt in options if search_query.lower() in opt.lower()]
+   108→            else:
+   109→                filtered_options = options
+   110→
+   111→            if not filtered_options:
+   112→                filtered_options = options
+   113→
+   114→            if selected_idx >= len(filtered_options):
+   115→                selected_idx = max(0, len(filtered_options) - 1)
+   116→
+   117→            if selected_idx >= offset + max_visible:
+   118→                offset = selected_idx - max_visible + 1
+   119→            elif selected_idx < offset:
+   120→                offset = selected_idx
+   121→
+   122→            visible_options = filtered_options[offset:offset + max_visible]
+   123→            adjusted_idx = selected_idx - offset
+   124→
+   125→            self.stdscr.clear()
+   126→            start_y = self.draw_header(selections)
+   127→            self.stdscr.addstr(start_y, 0, "-" * (self.width - 1))
+   128→            self.stdscr.addstr(start_y + 1, 0, title)
+   129→
+   130→            # 搜索框
+   131→            if searchable:
+   132→                self.stdscr.addstr(start_y + 2, 0, "搜索: ", curses.color_pair(3))
+   133→                search_display = search_query + "_" * (20 - len(search_query))
+   134→                self.stdscr.addstr(start_y + 2, 8, search_display[:20], curses.color_pair(4))
+   135→                hint_y = start_y + 3
+   136→            else:
+   137→                hint_y = start_y + 2
+   138→
+   139→            start_row = hint_y + 2
+   140→
+   141→            if multi:
+   142→                hint = "[上下] 移动  [空格] 选择  [Enter] 确认  [Esc] 上一步"
+   143→            else:
+   144→                hint = "[上下] 移动  [Enter] 确认  [Esc] 上一步"
+   145→            if searchable:
+   146→                hint += "  [字母] 搜索"
+   147→            self.stdscr.addstr(hint_y, 0, hint, curses.color_pair(5))
+   148→
+   149→            if multi and self.selected_indices:
+   150→                self.stdscr.addstr(start_row - 1, 0, f"已选择: {len(self.selected_indices)} 项", curses.color_pair(3))
+   151→
+   152→            for i, option in enumerate(visible_options):
+   153→                y = start_row + i
+   154→                if y >= self.height - 1:
+   155→                    break
+   156→
+   157→                real_idx = i + offset
+   158→                # 获取原始索引（处理搜索过滤情况）
+   159→                orig_idx = options.index(option) if option in options else real_idx
+   160→                if real_idx == selected_idx:
+   161→                    if multi:
+   162→                        mark = "◼" if orig_idx in self.selected_indices else "◻"
+   163→                    else:
+   164→                        mark = "►"
+   165→                    self.stdscr.attron(curses.color_pair(2) | curses.A_REVERSE)
+   166→                    self.stdscr.addstr(y, 2, f"{mark} {option}")
+   167→                    self.stdscr.attroff(curses.color_pair(2) | curses.A_REVERSE)
+   168→                else:
+   169→                    if multi:
+   170→                        mark = "◼" if orig_idx in self.selected_indices else "◻"
+   171→                    else:
+   172→                        mark = " "
+   173→                    self.stdscr.addstr(y, 2, f"{mark} {option}", curses.color_pair(4))
+   174→
+   175→            self.stdscr.refresh()
+   176→
+   177→            key = self.stdscr.getch()
+   178→
+   179→            if key == curses.KEY_UP:
+   180→                # 循环滚动：从第一个往上跳到最后一个
+   181→                if selected_idx > 0:
+   182→                    selected_idx -= 1
+   183→                else:
+   184→                    selected_idx = len(filtered_options) - 1
+   185→            elif key == curses.KEY_DOWN:
+   186→                # 循环滚动：从最后一个往下跳到第一个
+   187→                if selected_idx < len(filtered_options) - 1:
+   188→                    selected_idx += 1
+   189→                else:
+   190→                    selected_idx = 0
+   191→            elif key == ord(' '):
+   192→                if multi and filtered_options:
+   193→                    real_idx = filtered_options[selected_idx]
+   194→                    orig_idx = options.index(real_idx)
+   195→                    if orig_idx in self.selected_indices:
+   196→                        self.selected_indices.remove(orig_idx)
+   197→                    else:
+   198→                        self.selected_indices.append(orig_idx)
+   199→            elif key in [10, 13]:
+   200→                if filtered_options:
+   201→                    if multi:
+   202→                        # 保存选择以便返回时恢复
+   203→                        if self.selected_indices:
+   204→                            self._saved_selections[title] = self.selected_indices.copy()
+   205→                            return [options[i] for i in self.selected_indices]
+   206→                        return [options[0]]
+   207→                    else:
+   208→                        return filtered_options[selected_idx]
+   209→            elif key == 27:  # Esc - 返回上一步，保存当前选择
+   210→                if multi and self.selected_indices:
+   211→                    self._saved_selections[title] = self.selected_indices.copy()
+   212→                return "BACK"
+   213→            elif searchable:
+   214→                if key in [curses.KEY_BACKSPACE, 127, 8]:
+   215→                    search_query = search_query[:-1]
+   216→                    selected_idx = 0
+   217→                    offset = 0
+   218→                elif 32 <= key <= 126:
+   219→                    search_query += chr(key)
+   220→                    selected_idx = 0
+   221→                    offset = 0
+   222→
+   223→    def get_yes_no(self, title, default=True, selections=None):
+   224→        options = ["YES", "NO"]
+   225→        selected_idx = 0 if default else 1
+   226→
+   227→        while True:
+   228→            self.stdscr.clear()
+   229→            # 获取header后返回的y位置
+   230→            y = self.draw_header(selections)
+   231→
+   232→            self.stdscr.addstr(y, 0, "-" * (self.width - 1))
+   233→            y += 1
+   234→            self.stdscr.addstr(y, 0, title)
+   235→            y += 1
+   236→            self.stdscr.addstr(y, 0, "[左右] 选择  [Enter] 确认  [Esc] 上一步", curses.color_pair(5))
+   237→            y += 1
+   238→            self.stdscr.addstr(y, 0, "-" * (self.width - 1))
+   239→            y += 1
+   240→
+   241→            # 单行显示单选按钮
+   242→            x_pos = 2
+   243→            for i, opt in enumerate(options):
+   244→                mark = "●" if i == selected_idx else "○"
+   245→                label = f" {mark} {opt} "
+   246→                if i == selected_idx:
+   247→                    self.stdscr.attron(curses.color_pair(2) | curses.A_REVERSE)
+   248→                    self.stdscr.addstr(y, x_pos, label)
+   249→                    self.stdscr.attroff(curses.color_pair(2) | curses.A_REVERSE)
+   250→                else:
+   251→                    self.stdscr.addstr(y, x_pos, label, curses.color_pair(4))
+   252→                x_pos += len(label) + 4  # 选项间距
+   253→
+   254→            self.stdscr.refresh()
+   255→            key = self.stdscr.getch()
+   256→
+   257→            if key == curses.KEY_LEFT:
+   258→                selected_idx = max(0, selected_idx - 1)
+   259→            elif key == curses.KEY_RIGHT:
+   260→                selected_idx = min(len(options) - 1, selected_idx + 1)
+   261→            elif key in [10, 13]:
+   262→                return selected_idx == 0
+   263→            elif key == 27:
+   264→                return "BACK"
+   265→
+   266→    def get_number(self, title, default, selections=None):
+   267→        input_str = ""
+   268→        cursor_pos = 0
+   269→        selected_idx = 0  # 0=输入模式, 1=默认模式(预留)
+   270→
+   271→        while True:
+   272→            self.stdscr.clear()
+   273→            start_y = self.draw_header(selections)
+   274→
+   275→            self.stdscr.addstr(start_y, 0, "-" * (self.width - 1))
+   276→            self.stdscr.addstr(start_y + 1, 0, title)
+   277→            self.stdscr.addstr(start_y + 2, 0, "[左右] 切换  [数字] 输入  [Enter] 确认  [Esc] 上一步", curses.color_pair(5))
+   278→            self.stdscr.addstr(start_y + 3, 0, "-" * (self.width - 1))
+   279→
+   280→            # 显示当前输入
+   281→            display_str = input_str if input_str else str(default)
+   282→            self.stdscr.addstr(start_y + 5, 0, f"当前值: {display_str}")
+   283→            self.stdscr.addstr(start_y + 6, 0, f"默认值: {default} (留空使用默认值)")
+   284→
+   285→            # 显示输入框
+   286→            input_y = start_y + 8
+   287→            self.stdscr.addstr(input_y, 0, "输入: ")
+   288→            curses.echo()
+   289→            self.stdscr.addstr(input_y, 8, input_str + "_")
+   290→            curses.noecho()
+   291→
+   292→            self.stdscr.refresh()
+   293→
+   294→            key = self.stdscr.getch()
+   295→
+   296→            if key == 27:  # Esc
+   297→                return "BACK"
+   298→            elif key in [10, 13]:  # Enter
+   299→                if input_str.strip():
+   300→                    try:
+   301→                        return int(input_str)
+   302→                    except:
+   303→                        return default
+   304→                return default
+   305→            elif key in [curses.KEY_BACKSPACE, 127, 8]:  # Backspace
+   306→                if input_str:
+   307→                    input_str = input_str[:-1]
+   308→            elif 48 <= key <= 57:  # 数字 0-9
+   309→                input_str += chr(key)
+   310→            elif key == curses.KEY_LEFT:
+   311→                selected_idx = max(0, selected_idx - 1)
+   312→            elif key == curses.KEY_RIGHT:
+   313→                selected_idx = min(1, selected_idx + 1)
+   314→
+   315→    def show_results(self, results):
+   316→        self.stdscr.clear()
+   317→        self.stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
+   318→        self.stdscr.addstr(0, 0, " " + "=" * (self.width - 2) + " ")
+   319→        title = " 回测结果 "
+   320→        self.stdscr.addstr(1, (self.width - len(title)) // 2, title)
+   321→        self.stdscr.addstr(2, 0, " " + "=" * (self.width - 2) + " ")
+   322→        self.stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
+   323→
+   324→        y = 4
+   325→        max_display = self.height - 10  # 保留底部空间
+   326→        displayed = 0
+   327→
+   328→        for r in results:
+   329→            if y >= max_display:
+   330→                break  # 超过显示空间
+   331→            try:
+   332→                self.stdscr.addstr(y, 0, "-" * 40, curses.color_pair(3))
+   333→                y += 1
+   334→                if y >= max_display:
+   335→                    break
+   336→                self.stdscr.addstr(y, 0, f"{r['coin']} | {r['strategy']} | {r['interval']}")
+   337→                y += 1
+   338→                if y >= max_display:
+   339→                    break
+   340→                self.stdscr.addstr(y, 0, f"交易: {r['total_trades']} | 胜率: {r['win_rate']:.1%} | 收益: {r['total_return']:.2%}")
+   341→                y += 1
+   342→                if y >= max_display:
+   343→                    break
+   344→                self.stdscr.addstr(y, 0, f"余额: ${r['balance']:.2f} | 夏普: {r['sharpe']:.2f} | 回撤: {r['drawdown']:.1%}")
+   345→                y += 2
+   346→                displayed += 1
+   347→            except:
+   348→                break
+   349→
+   350→        # 如果有更多结果，显示提示
+   351→        if len(results) > displayed:
+   352→            y = min(y, max_display - 1)
+   353→            self.stdscr.addstr(y, 0, f"... 还有 {len(results) - displayed} 个结果未显示", curses.color_pair(5))
+   354→            y += 1
+   355→
+   356→        if results:
+   357→            try:
+   358→                best = max(results, key=lambda x: x['total_return'])
+   359→                y = min(y, max_display - 1)
+   360→                self.stdscr.addstr(y, 0, "=" * 40, curses.color_pair(2))
+   361→                y += 1
+   362→                self.stdscr.addstr(y, 0, f"最佳: {best['coin']} | {best['strategy']} | {best['interval']} | 收益: {best['total_return']:.2%}", curses.color_pair(2))
+   363→                y += 1
+   364→            except:
+   365→                pass
+   366→
+   367→        y = min(y + 1, self.height - 1)
+   368→        self.stdscr.addstr(y, 0, "[Enter] 重新开始  [Esc] 退出", curses.color_pair(5))
+   369→        self.stdscr.refresh()
+   370→
+   371→        while True:
+   372→            key = self.stdscr.getch()
+   373→            if key in [curses.KEY_ENTER, 10, 13]:
+   374→                return True
+   375→            elif key == 27:
+   376→                return False
+   377→
+   378→
+   379→def get_available_coins():
+   380→    """获取可用的币种，按市值排序"""
+   381→    # 获取项目根目录
+   382→    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+   383→
+   384→    # 首先检查 historical 目录
+   385→    hist_dir = os.path.join(project_root, 'src', 'backtest', 'data', 'historical')
+   386→    available_coins = []
+   387→    if os.path.exists(hist_dir):
+   388→        coins = [d for d in os.listdir(hist_dir) if os.path.isdir(os.path.join(hist_dir, d)) and not d.startswith('.')]
+   389→        if coins:
+   390→            available_coins = coins
+   391→
+   392→    # 市值排名顺序 (从高到低)
+   393→    market_cap_order = [
+   394→        'BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'XRP', 'SOL', 'ADA', 'DOGE',
+   395→        'TRX', 'DOT', 'MATIC', 'LTC', 'AVAX', 'LINK', 'UNI', 'ATOM',
+   396→        'XLM', 'XMR', 'ETC', 'XEM', 'ALGO', 'VET', 'FIL', 'NEAR',
+   397→        'ICP', 'HBAR', 'QNT', 'MKR', 'AAVE', 'GRT', 'THETA', 'EOS',
+   398→        'FTM', 'XTZ', 'CAKE', 'EGLD', 'FLOW', 'HBTC', 'CHZ', 'ZEC',
+   399→        'DASH', 'NEO', 'KSM', 'WAVES', 'ZIL', 'ENJ', 'BAT', 'MANA',
+   400→        'SAND', 'AXS', 'GALA', 'RAIDER', 'HRB', 'WRLD', 'RON', 'PEPE'
+   401→    ]
+   402→
+   403→    # 按市值顺序排序
+   404→    sorted_coins = []
+   405→    for coin in market_cap_order:
+   406→        if coin in available_coins:
+   407→            sorted_coins.append(coin)
+   408→
+   409→    # 添加不在排名中的币种
+   410→    for coin in available_coins:
+   411→        if coin not in sorted_coins:
+   412→            sorted_coins.append(coin)
+   413→
+   414→    return sorted_coins
+   415→
+   416→
+   417→def get_available_intervals():
+   418→    """自动检测可用的时间周期"""
+   419→    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+   420→    hist_dir = os.path.join(project_root, 'src', 'backtest', 'data', 'historical')
+   421→
+   422→    # 标准周期列表
+   423→    standard_intervals = {'1m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d'}
+   424→
+   425→    intervals = set()
+   426→    if os.path.exists(hist_dir):
+   427→        # 遍历所有币种目录
+   428→        for coin in os.listdir(hist_dir):
+   429→            coin_dir = os.path.join(hist_dir, coin)
+   430→            if os.path.isdir(coin_dir):
+   431→                # 查找 JSON 文件，提取间隔名称
+   432→                for f in os.listdir(coin_dir):
+   433→                    if f.endswith('.json'):
+   434→                        # 移除 .json 后缀
+   435→                        interval = f.replace('.json', '')
+   436→                        intervals.add(interval)
+   437→
+   438→    # 只保留标准周期
+   439→    intervals = intervals & standard_intervals
+   440→
+   441→    if intervals:
+   442→        return sorted(list(intervals))
+   443→
+   444→    return ['15m', '1h']  # 默认值
+   445→
+   446→
+   447→def main(stdscr):
+   448→    menu = MenuSystem(stdscr)
+   449→
+   450→    while True:
+   451→        # 重置保存的配置和结果
+   452→        menu._saved_configs = []
+   453→        menu._all_results = []
+   454→        selections = {}
+   455→        step = 0
+   456→
+   457→        while True:
+   458→            if step == 0:
+   459→                # 步骤1: 选择币种
+   460→                coins = get_available_coins()
+   461→                result = menu.navigate_options(coins, "选择交易币种 [空格多选, 输入搜索]", multi=True, selections=selections, searchable=True)
+   462→                if result == "BACK":
+   463→                    break  # 退出整个程序
+   464→                if not result:
+   465→                    continue
+   466→                selections['币种'] = ", ".join(result)
+   467→                step = 1
+   468→
+   469→            elif step == 1:
+   470→                # 步骤2: 选择策略
+   471→                strategies = list_strategies()
+   472→                result = menu.navigate_options(strategies, "选择策略 [空格多选, 输入搜索]", multi=True, selections=selections, searchable=True)
+   473→                if result == "BACK":
+   474→                    step = 0
+   475→                    continue
+   476→                if not result:
+   477→                    continue
+   478→                selections['策略'] = ", ".join(result)
+   479→                step = 2
+   480→
+   481→            elif step == 2:
+   482→                # 步骤3: 选择时间周期
+   483→                intervals = get_available_intervals()
+   484→                result = menu.navigate_options(intervals, "选择时间周期 [空格多选]", multi=True, selections=selections)
+   485→                if result == "BACK":
+   486→                    step = 1
+   487→                    continue
+   488→                if not result:
+   489→                    continue
+   490→                selections['周期'] = ", ".join(result)
+   491→                step = 3
+   492→
+   493→            elif step == 3:
+   494→                # 步骤4: 回测时长
+   495→                result = menu.get_number("回测时长 (天数)", 1095, selections)
+   496→                if result == "BACK":
+   497→                    step = 2
+   498→                    continue
+   499→                if result is None:
+   500→                    result = 1095
+   501→                selections['时长'] = f"{result}天"
+   502→                step = 4
+   503→
+   504→            elif step == 4:
+   505→                # 步骤5: TTP
+   506→                result = menu.get_yes_no("是否启用移动止盈 (TTP)", True, selections)
+   507→                if result == "BACK":
+   508→                    step = 3
+   509→                    continue
+   510→                if result is None:
+   511→                    result = True
+   512→                selections['TTP'] = "开启" if result else "关闭"
+   513→                step = 5
+   514→
+   515→            elif step == 5:
+   516→                # 步骤6: 自动提款
+   517→                result = menu.get_yes_no("是否启用自动提款", False, selections)
+   518→                if result == "BACK":
+   519→                    step = 4
+   520→                    continue
+   521→                if result is None:
+   522→                    result = False
+   523→                selections['提款'] = "开启" if result else "关闭"
+   524→
+   525→                # 为每个币种/策略/周期组合生成独立的配置
+   526→                ttp_str = "TTP" if selections.get('TTP') == '开启' else "无TTP"
+   527→                withdraw_str = "有提款" if selections.get('提款') == '开启' else "无提款"
+   528→                days_str = selections.get('时长', '').replace('天', '天')
+   529→
+   530→                coins = selections.get('币种', 'ETH').split(', ')
+   531→                strategies = selections.get('策略', 'vwap').split(', ')
+   532→                intervals = selections.get('周期', '1h').split(', ')
+   533→
+   534→                for coin in coins:
+   535→                    for strategy in strategies:
+   536→                        for interval in intervals:
+   537→                            config_name = f"{ttp_str}_{coin}_{strategy}_{interval}_{days_str}_{withdraw_str}"
+   538→                            # 保存当前配置到 MenuSystem
+   539→                            menu._saved_configs.append({
+   540→                                'name': config_name,
+   541→                                'selections': {
+   542→                                    'coin': coin,
+   543→                                    'strategy': strategy,
+   544→                                    'interval': interval,
+   545→                                    'days': days_str,
+   546→                                    'ttp': selections.get('TTP'),
+   547→                                    'withdraw': selections.get('提款'),
+   548→                                },
+   549→                            })
+   550→
+   551→                # 显示已保存的配置列表
+   552→                step = 6
+   553→
+   554→            elif step == 6:
+   555→                # 显示已保存的配置，询问是否还要添加
+   556→                if menu._saved_configs:
+   557→                    display_text = f"目前已选定 {len(menu._saved_configs)} 个配置，是否还要添加其他回测?"
+   558→                else:
+   559→                    display_text = "是否还要添加其他回测?"
+   560→
+   561→                result = menu.get_yes_no(display_text, False)
+   562→                if result == "BACK":
+   563→                    step = 5
+   564→                    continue
+   565→                if result is None:
+   566→                    result = False
+   567→
+   568→                if result:
+   569→                    # 用户选择"是"，回到步骤0重新选择
+   570→                    # 只清空预选项，不清空已保存的配置
+   571→                    menu._saved_selections = {}
+   572→                    selections = {}
+   573→                    step = 0
+   574→                    continue
+   575→                else:
+   576→                    # 用户选择"否"，执行所有已保存的配置
+   577→                    from backtest.backtest import run_backtest
+   578→                    import io
+   579→                    import sys
+   580→                    import os
+   581→                    import logging
+   582→
+   583→                    total = len(menu._saved_configs)
+   584→                    current = 0
+   585→                    bar_width = 40  # 进度条宽度
+   586→
+   587→                    # 临时重定向 stdout 和 stderr 以避免干扰 curses
+   588→                    old_stdout = sys.stdout
+   589→                    old_stderr = sys.stderr
+   590→                    sys.stdout = io.StringIO()
+   591→                    sys.stderr = io.StringIO()
+   592→
+   593→                    # 禁用 logging 输出
+   594→                    logging.getLogger().setLevel(logging.CRITICAL)
+   595→
+   596→                    # 收集错误信息
+   597→                    errors = []
+   598→
+   599→                    for config in menu._saved_configs:
+   600→                        sel = config['selections']
+   601→                        coin = sel.get('coin', 'ETH')
+   602→                        strategy = sel.get('strategy', 'vwap')
+   603→                        interval = sel.get('interval', '1h')
+   604→                        days_str = sel.get('days', '1095天')
+   605→                        days = int(days_str.replace('天', ''))
+   606→                        enable_ttp = sel.get('ttp', '开启') == '开启'
+   607→                        enable_withdraw = sel.get('withdraw', '关闭') == '开启'
+   608→
+   609→                        # 先显示进度条
+   610→                        current += 1
+   611→                        progress = current / total
+   612→                        filled = int(bar_width * progress)
+   613→                        bar = "█" * filled + "░" * (bar_width - filled)
+   614→                        percent = int(progress * 100)
+   615→
+   616→                        stdscr.clear()
+   617→                        stdscr.addstr(0, 0, " Abby 回测系统 ", curses.color_pair(1) | curses.A_BOLD)
+   618→                        stdscr.addstr(2, 0, f"正在回测: {config['name']}")
+   619→                        stdscr.addstr(3, 0, f"[{bar}] {percent}%")
+   620→                        stdscr.addstr(4, 0, f"进度: {current}/{total}")
+   621→                        stdscr.refresh()
+   622→                        curses.flushinp()  # 清除输入缓冲区
+   623→
+   624→                        # 执行回测
+   625→                        try:
+   626→                            backtest_result = run_backtest(
+   627→                                coin=coin,
+   628→                                strategy_name=strategy,
+   629→                                interval=interval,
+   630→                                days=days,
+   631→                                initial_capital=500,
+   632→                                enable_ttp=enable_ttp,
+   633→                                enable_withdraw=enable_withdraw,
+   634→                            )
+   635→
+   636→                            menu._all_results.append({
+   637→                                'coin': coin,
+   638→                                'strategy': strategy,
+   639→                                'interval': interval,
+   640→                                'total_trades': backtest_result.total_trades,
+   641→                                'win_rate': backtest_result.win_rate,
+   642→                                'total_return': backtest_result.total_return,
+   643→                                'balance': backtest_result.final_balance,
+   644→                                'sharpe': backtest_result.sharpe_ratio,
+   645→                                'drawdown': backtest_result.max_drawdown,
+   646→                            })
+   647→                        except Exception as e:
+   648→                            errors.append(f"{coin}: {str(e)[:50]}")
+   649→
+   650→                    # 显示错误信息
+   651→                    if errors:
+   652→                        stdscr.clear()
+   653→                        stdscr.addstr(0, 0, "回测错误:", curses.color_pair(5))
+   654→                        y = 2
+   655→                        for err in errors[:10]:  # 最多显示10个
+   656→                            stdscr.addstr(y, 0, f"  {err}")
+   657→                            y += 1
+   658→                        stdscr.addstr(y + 1, 0, "[Enter] 继续...")
+   659→                        stdscr.refresh()
+   660→                        while True:
+   661→                            key = stdscr.getch()
+   662→                            if key in [10, 13, 27]:
+   663→                                break
+   664→
+   665→                    # 恢复 stdout 和 stderr
+   666→                    sys.stdout = old_stdout
+   667→                    sys.stderr = old_stderr
+   668→
+   669→                    # 恢复 logging 级别
+   670→                    logging.getLogger().setLevel(logging.INFO)
+   671→
+   672→                    stdscr.refresh()
+   673→
+   674→                    # 显示结果
+   675→                    restart = menu.show_results(menu._all_results)
+   676→                    if not restart:
+   677→                        return
+   678→                    else:
+   679→                        # 重新开始
+   680→                        menu._saved_configs = []
+   681→                        menu._all_results = []
+   682→                        menu._saved_selections = {}  # 清空预选项
+   683→                        selections = {}
+   684→                        step = 0
+   685→                        continue
+   686→
+   687→
+   688→
+   689→if __name__ == "__main__":
+   690→    try:
+   691→        curses.wrapper(main)
+   692→    except Exception as e:
+   693→        print(f"错误: {e}")
+   694→        import traceback
+   695→        traceback.print_exc()
+   696→        input("按回车键退出...")
+   697→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

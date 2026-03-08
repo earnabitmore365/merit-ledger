@@ -1,0 +1,21 @@
+368:def main():
+369-    """主入口"""
+370-    import argparse
+371-    parser = argparse.ArgumentParser()
+372-    parser.add_argument('--strategy', '-s', default='ma')
+373-    parser.add_argument('--coin', '-c', default='BTC')
+374-    parser.add_argument('--interval', '-i', default='1h')
+375-    parser.add_argument('--mode', '-m', default='paper')
+376-    args = parser.parse_args()
+377-    
+378-    bot = AbbyBot({
+379-        'strategy': args.strategy,
+380-        'coin': args.coin,
+381-        'interval': args.interval,
+382-        'mode': args.mode
+383-    })
+384-    bot.run()
+385-
+386-
+387-if __name__ == "__main__":
+388-    main()

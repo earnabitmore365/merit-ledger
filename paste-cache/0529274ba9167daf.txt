@@ -1,0 +1,44 @@
+白纱给的 4 步基本就是最优路径：从 paired_trades 里统计“纯净 Regime 段”（开仓=平仓 Regime）的表现 → 建“Regime → Top Combo”表
+实时每根 K 线更新 Regime → 查表 → 切换到当前 Regime 的 Top 1（或 Top 3 平均）
+写一个新回测脚本，模拟历史轮动效果
+对比“轮动版 vs SOL 单币版”的资金曲线
+
+整个过程不需要重跑种子库，只是在现有 db 上做聚合统计 + 写一个“轮动模拟器”。最大的坑（白纱列得很准，我再补充实操角度）切换永远晚半拍（滞后）
+→ 你的 Regime v2 有 dwell + confirm，切换至少晚 6 根 K 线（1h 就是 6 小时）。
+→ 接受它，别试图优化成“0 滞后”，那是过拟合死路。
+切换成本吃利润
+→ 每次切换 ≈ 0.1–0.15% 摩擦（平仓 + 开仓费 + 滑点）。
+→ 你的 Regime 防抖已经很强（一年可能只切 20–50 次），成本可控。
+历史最优 ≠ 未来最优
+→ 2023–2025 数据里 SOL bull 最猛，不代表 2026 bull 还是它。
+→ 解法：用 walk-forward（前 80% 数据选 Top，后 20% 验证），每季度重新排名一次。
+资金太小（$500）
+→ 现在只能一次跑一个组合，没法同时持多个币分散。
+→ 先当成“智能选单一标的”，等资金到 5k–10k 再考虑并行多组合。
+
+如果你想试，第一步可以这么干（零代码起步）先用 SQL 粗看潜力（复制下面到你的 db 工具跑一下）：sql
+
+-- Bull Regime 下 d2d 最快的 Top 10 组合
+SELECT 
+    coin, strategy, interval,
+    AVG(r_value) as avg_r,
+    COUNT(*) as trades,
+    MIN(holding_bars) as min_holding
+FROM paired_trades pt
+JOIN combo_summary cs ON pt.combo_id = cs.id
+WHERE regime_at_open = 'bull'
+GROUP BY coin, strategy, interval
+HAVING trades >= 50
+ORDER BY AVG(r_value) DESC
+LIMIT 10;
+
+再跑 ranging 和 bear 版本，看看是不是每个 Regime 都有“明显最强组合”。
+如果 Top 组合的 avg_r 差距明显（e.g. bull 下 SOL 0.8，别人只有 0.2），那轮动潜力就大。
+再决定要不要让黑丝写“轮动模拟器”脚本。
+
+我的个人建议先跑上面 3 个 SQL（Bull / Ranging / Bear），花 5 分钟看结果。
+如果每个 Regime 都有“遥遥领先”的组合（d2d 差距 2 倍以上），那这个玩法值得深挖。
+如果差距不大（大家半斤八两），那多币轮动提升有限，可能不如优化单币 Regime 切换。
+
+你现在可以直接把这 3 个 SQL 丢给黑丝或白纱，让他们帮你跑 + 解释结果。想试吗？还是有其他更想先搞的方向？随时说～ 这个玩法确实有意思，一旦数据对齐，玩起来会上瘾的。
+

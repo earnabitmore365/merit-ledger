@@ -1,0 +1,54 @@
+   198→
+   199→
+   200→# ==================== 行情数据 ====================
+   201→
+   202→    def get_price(self, coin: str) -> float:
+   203→        """获取当前价格
+   204→
+   205→        Args:
+   206→            coin: 币种名称（如 "ETH"）
+   207→
+   208→        Returns:
+   209→            float: 当前价格
+   210→        """
+   211→        try:
+   212→            if not self._info:
+   213→                return 0.0
+   214→
+   215→            meta = self._info.meta_and_asset_ctxs()
+   216→            if isinstance(meta, list) and len(meta) >= 2:
+   217→                universe = meta[0].get('universe', []) if isinstance(meta[0], dict) else []
+   218→                asset_ctxs = meta[1] if isinstance(meta[1], list) else []
+   219→
+   220→                # 找到币种的索引
+   221→                coin_idx = None
+   222→                for i, item in enumerate(universe):
+   223→                    if isinstance(item, dict) and item.get('name') == coin:
+   224→                        coin_idx = i
+   225→                        break
+   226→
+   227→                # 获取价格（优先用 markPx，比 midPx 更适合下单）
+   228→                if coin_idx is not None and coin_idx < len(asset_ctxs):
+   229→                    ctx = asset_ctxs[coin_idx]
+   230→                    # markPx 是市场价格，更适合下单
+   231→                    if ctx.get('markPx'):
+   232→                        return float(ctx['markPx'])
+   233→                    elif ctx.get('midPx'):
+   234→                        return float(ctx['midPx'])
+   235→
+   236→            return 0.0
+   237→
+   238→        except Exception as e:
+   239→            self.logger.error(f"获取价格失败: {e}")
+   240→            return 0.0
+   241→
+   242→    def get_klines(
+   243→        self,
+   244→        coin: str,
+   245→        interval: str = "1h",
+   246→        limit: int = 100
+   247→    ) -> List[Dict]:
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

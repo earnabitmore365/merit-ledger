@@ -1,0 +1,270 @@
+=========================================================================================================
+关卡四 v2 — 243支队伍 Walk-Forward（排除币本位）
+=========================================================================================================
+
+段号: S1=2018~19H1  S2=19H2~20  S3=21~22H1  S4=22H2~23  S5=24~26
+
+  #  疯牛             慢牛             盘整             慢熊             疯熊                   S1      S2      S3      S4      S5        总R  过
+───  ────────────── ────────────── ────────────── ────────────── ──────────────  ─────── ─────── ─────── ─────── ───────  ──────── ──
+  1  accu/SOL/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     dema/BNB/L       +29.22  +26.60  +71.47  +33.79   +8.59   +169.67  5
+  2  accu/SOL/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     dema/BNB/L       +21.67  +26.23  +74.63  +40.05   +6.93   +169.51  5
+  3  accu/SOL/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     dema/BNB/L       +24.39  +26.23  +71.92  +37.60   +8.95   +169.10  5
+  4  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +28.31  +27.90  +68.75  +34.89   +8.92   +168.78  5
+  5  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     dema/BNB/L       +20.75  +27.53  +71.92  +41.16   +7.26   +168.62  5
+  6  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     dema/BNB/L       +23.48  +27.53  +69.20  +38.71   +9.29   +168.20  5
+  7  accu/SOL/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     dema/BNB/L       +30.27  +26.20  +65.83  +31.20  +10.48   +163.97  5
+  8  accu/SOL/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     dema/BNB/L       +22.71  +25.83  +68.99  +37.46   +8.82   +163.81  5
+  9  accu/SOL/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     dema/BNB/L       +25.43  +25.83  +66.28  +35.01  +10.84   +163.40  5
+ 10  accu/SOL/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +29.35  +27.50  +63.12  +32.31  +10.81   +163.08  5
+ 11  accu/SOL/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     dema/BNB/L       +21.80  +27.12  +66.28  +38.57   +9.15   +162.92  5
+ 12  accu/SOL/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     dema/BNB/L       +24.52  +27.12  +63.57  +36.12  +11.17   +162.50  5
+ 13  accu/SOL/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     dema/BNB/L       +28.01  +21.21  +64.37  +28.89  +16.10   +158.58  5
+ 14  accu/SOL/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     dema/BNB/L       +20.46  +20.83  +67.53  +35.15  +14.44   +158.42  5
+ 15  accu/SOL/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     trix/TRX/S       +23.96  +29.87  +63.72  +31.33   +9.18   +158.06  5
+ 16  accu/SOL/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     dema/BNB/L       +23.18  +20.83  +64.82  +32.70  +16.47   +158.00  5
+ 17  accu/SOL/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     trix/TRX/S       +16.41  +29.49  +66.88  +37.60   +7.52   +157.90  5
+ 18  accu/SOL/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +27.10  +22.50  +61.65  +30.00  +16.44   +157.68  5
+ 19  accu/SOL/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     dema/BNB/L       +19.54  +22.13  +64.82  +36.26  +14.78   +157.53  5
+ 20  accu/SOL/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     trix/TRX/S       +19.13  +29.49  +64.17  +35.15   +9.54   +157.48  5
+ 21  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +23.05  +31.16  +61.01  +32.44   +9.51   +157.17  5
+ 22  accu/SOL/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     dema/BNB/L       +22.27  +22.13  +62.10  +33.81  +16.80   +157.11  5
+ 23  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     trix/TRX/S       +15.50  +30.79  +64.17  +38.70   +7.85   +157.01  5
+ 24  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     trix/TRX/S       +18.22  +30.79  +61.46  +36.25   +9.88   +156.59  5
+ 25  accu/SOL/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     proc/XRP/L       +17.61  +22.62  +63.37  +30.99  +20.33   +154.93  5
+ 26  accu/SOL/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     proc/XRP/L       +10.06  +22.25  +66.54  +37.26  +18.66   +154.77  5
+ 27  accu/SOL/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     proc/XRP/L       +12.78  +22.25  +63.82  +34.81  +20.69   +154.35  5
+ 28  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +16.70  +23.92  +60.66  +32.10  +20.66   +154.03  5
+ 29  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     proc/XRP/L        +9.14  +23.54  +63.83  +38.36  +19.00   +153.87  5
+ 30  accu/SOL/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     proc/XRP/L       +11.87  +23.54  +61.11  +35.91  +21.02   +153.45  5
+ 31  accu/SOL/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     trix/TRX/S       +25.01  +29.46  +58.08  +28.74  +11.07   +152.36  5
+ 32  accu/SOL/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     trix/TRX/S       +17.45  +29.09  +61.25  +35.01   +9.41   +152.20  5
+ 33  accu/SOL/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     dema/BNB/L       +18.97  +12.66  +72.70  +36.79  +11.07   +152.17  5
+ 34  accu/SOL/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     dema/BNB/L       +11.41  +12.28  +75.86  +43.05   +9.41   +152.01  5
+ 35  accu/SOL/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     trix/TRX/S       +20.18  +29.09  +58.53  +32.56  +11.43   +151.79  5
+ 36  accu/SOL/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     dema/BNB/L       +14.14  +12.28  +73.15  +40.60  +11.43   +151.60  5
+ 37  accu/SOL/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +24.09  +30.76  +55.37  +29.85  +11.40   +151.47  5
+ 38  accu/SOL/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     trix/TRX/S       +16.54  +30.39  +58.53  +36.11   +9.74   +151.31  5
+ 39  accu/SOL/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     trix/TRX/S       +19.26  +30.39  +55.82  +33.66  +11.76   +150.89  5
+ 40  accu/SOL/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     proc/XRP/L       +18.65  +22.22  +57.74  +28.40  +22.21   +149.23  5
+ 41  accu/SOL/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     proc/XRP/L       +11.10  +21.85  +60.90  +34.67  +20.55   +149.07  5
+ 42  accu/SOL/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     proc/XRP/L       +13.82  +21.85  +58.19  +32.22  +22.58   +148.65  5
+ 43  accu/SOL/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +17.74  +23.51  +55.02  +29.51  +22.55   +148.33  5
+ 44  accu/SOL/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     proc/XRP/L       +10.19  +23.14  +58.19  +35.77  +20.89   +148.17  5
+ 45  accu/SOL/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     proc/XRP/L       +12.91  +23.14  +55.47  +33.32  +22.91   +147.75  5
+ 46  accu/SOL/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     trix/TRX/S       +22.75  +24.47  +56.62  +26.43  +16.69   +146.97  5
+ 47  accu/SOL/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     trix/TRX/S       +15.20  +24.10  +59.78  +32.70  +15.03   +146.81  5
+ 48  accu/SOL/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     dema/BNB/L       +20.01  +12.25  +67.06  +34.20  +12.95   +146.47  5
+ 49  accu/SOL/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     trix/TRX/S       +17.92  +24.10  +57.07  +30.25  +17.06   +146.39  5
+ 50  accu/SOL/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     dema/BNB/L       +12.46  +11.88  +70.23  +40.46  +11.29   +146.32  5
+ 51  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     dema/BNB/L       +29.22  +29.24  +55.45  +20.96  +11.25   +146.12  5
+ 52  accu/SOL/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +21.84  +25.76  +53.91  +27.54  +17.03   +146.07  5
+ 53  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     dema/BNB/L       +21.67  +28.87  +58.61  +27.22   +9.59   +145.96  5
+ 54  accu/SOL/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     trix/TRX/S       +14.29  +25.39  +57.07  +33.80  +15.37   +145.91  5
+ 55  accu/SOL/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     dema/BNB/L       +15.18  +11.88  +67.51  +38.01  +13.32   +145.90  5
+ 56  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     dema/BNB/L       +24.39  +28.87  +55.90  +24.77  +11.62   +145.54  5
+ 57  accu/SOL/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     trix/TRX/S       +17.01  +25.39  +54.36  +31.35  +17.39   +145.50  5
+ 58  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +28.31  +30.54  +52.73  +22.06  +11.59   +145.22  5
+ 59  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     dema/BNB/L       +20.75  +30.16  +55.90  +28.32   +9.93   +145.06  5
+ 60  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     dema/BNB/L       +23.48  +30.16  +53.18  +25.87  +11.95   +144.64  5
+ 61  accu/SOL/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     proc/XRP/L       +16.40  +17.22  +56.27  +26.09  +27.84   +143.83  5
+ 62  accu/SOL/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     proc/XRP/L        +8.85  +16.85  +59.44  +32.36  +26.18   +143.67  5
+ 63  accu/SOL/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     proc/XRP/L       +11.57  +16.85  +56.72  +29.91  +28.20   +143.26  5
+ 64  accu/SOL/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +15.49  +18.52  +53.56  +27.20  +28.17   +142.94  5
+ 65  accu/SOL/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     proc/XRP/L        +7.93  +18.15  +56.73  +33.46  +26.51   +142.78  5
+ 66  accu/SOL/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     proc/XRP/L       +10.65  +18.15  +54.01  +31.01  +28.54   +142.36  5
+ 67  accu/SOL/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     dema/BNB/L       +17.76   +7.26  +65.60  +31.89  +18.58   +141.08  5
+ 68  accu/SOL/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     dema/BNB/L       +10.20   +6.88  +68.76  +38.15  +16.92   +140.92  5
+ 69  accu/SOL/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     trix/TRX/S       +13.71  +15.92  +64.95  +34.33  +11.66   +140.56  5
+ 70  accu/SOL/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     dema/BNB/L       +12.92   +6.88  +66.05  +35.70  +18.95   +140.50  5
+ 71  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     dema/BNB/L       +30.27  +28.84  +49.81  +18.37  +13.14   +140.42  5
+ 72  accu/SOL/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     trix/TRX/S        +6.16  +15.54  +68.11  +40.59  +10.00   +140.40  5
+ 73  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     dema/BNB/L       +22.71  +28.46  +52.97  +24.63  +11.48   +140.26  5
+ 74  accu/SOL/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     trix/TRX/S        +8.88  +15.54  +65.40  +38.14  +12.02   +139.99  5
+ 75  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     dema/BNB/L       +25.43  +28.46  +50.26  +22.18  +13.51   +139.84  5
+ 76  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +29.35  +30.13  +47.09  +19.47  +13.47   +139.52  5
+ 77  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     dema/BNB/L       +21.80  +29.76  +50.26  +25.74  +11.81   +139.36  5
+ 78  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     dema/BNB/L       +24.52  +29.76  +47.54  +23.28  +13.84   +138.95  5
+ 79  accu/SOL/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     proc/XRP/L        +7.36   +8.67  +64.60  +33.99  +22.80   +137.43  5
+ 80  accu/SOL/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     proc/XRP/L        +2.52   +8.30  +65.05  +37.80  +23.17   +136.85  5
+ 81  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     dema/BNB/L       +28.01  +23.84  +48.35  +16.06  +18.77   +135.03  5
+ 82  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     dema/BNB/L       +20.46  +23.47  +51.51  +22.32  +17.11   +134.87  5
+ 83  accu/SOL/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     trix/TRX/S       +14.75  +15.52  +59.31  +31.74  +13.54   +134.86  5
+ 84  accu/SOL/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     trix/TRX/S        +7.20  +15.14  +62.48  +38.00  +11.88   +134.70  5
+ 85  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     trix/TRX/S       +23.96  +32.50  +47.70  +18.50  +11.84   +134.51  5
+ 86  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     dema/BNB/L       +23.18  +23.47  +48.80  +19.87  +19.13   +134.45  5
+ 87  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     trix/TRX/S       +16.41  +32.13  +50.86  +24.76  +10.18   +134.35  5
+ 88  accu/SOL/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     trix/TRX/S        +9.92  +15.14  +59.76  +35.55  +13.91   +134.29  5
+ 89  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +27.10  +25.14  +45.63  +17.16  +19.10   +134.13  5
+ 90  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     dema/BNB/L       +19.54  +24.76  +48.80  +23.43  +17.44   +133.97  5
+ 91  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     trix/TRX/S       +19.13  +32.13  +48.15  +22.31  +12.21   +133.93  5
+ 92  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +23.05  +33.80  +44.98  +19.60  +12.18   +133.61  5
+ 93  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     dema/BNB/L       +22.27  +24.76  +46.08  +20.97  +19.47   +133.55  5
+ 94  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     trix/TRX/S       +15.50  +33.42  +48.15  +25.87  +10.52   +133.45  5
+ 95  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     trix/TRX/S       +18.22  +33.42  +45.43  +23.42  +12.54   +133.03  5
+ 96  accu/SOL/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     proc/XRP/L        +8.40   +8.27  +58.97  +31.40  +24.69   +131.73  5
+ 97  accu/SOL/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     proc/XRP/L        +0.84   +7.90  +62.13  +37.67  +23.03   +131.57  5
+ 98  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     proc/XRP/L       +17.61  +25.26  +47.35  +18.16  +22.99   +131.37  5
+ 99  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     proc/XRP/L       +10.06  +24.88  +50.52  +24.42  +21.33   +131.21  5
+100  accu/SOL/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     proc/XRP/L        +3.57   +7.90  +59.42  +35.21  +25.06   +131.15  5
+101  cmo/AVAX/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     proc/XRP/L       +12.78  +24.88  +47.80  +21.97  +23.35   +130.79  5
+102  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +16.70  +26.55  +44.64  +19.27  +23.32   +130.48  5
+103  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     proc/XRP/L        +9.14  +26.18  +47.80  +25.53  +21.66   +130.32  5
+104  cmo/AVAX/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     proc/XRP/L       +11.87  +26.18  +45.09  +23.08  +23.69   +129.90  5
+105  trix/XRP/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     dema/BNB/L       +31.88  +30.85  +34.95  +12.98  +18.89   +129.55  5
+106  accu/SOL/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     trix/TRX/S       +12.50  +10.52  +57.85  +29.43  +19.17   +129.47  5
+107  trix/XRP/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     dema/BNB/L       +24.33  +30.47  +38.12  +19.25  +17.23   +129.39  5
+108  accu/SOL/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     trix/TRX/S        +4.94  +10.15  +61.01  +35.69  +17.51   +129.31  5
+109  trix/XRP/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     dema/BNB/L       +27.05  +30.47  +35.40  +16.80  +19.25   +128.98  5
+110  accu/SOL/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     trix/TRX/S        +7.67  +10.15  +58.30  +33.24  +19.54   +128.89  5
+111  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     trix/TRX/S       +25.01  +32.10  +42.06  +15.91  +13.73   +128.81  5
+112  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +30.97  +32.14  +32.24  +14.09  +19.22   +128.66  5
+113  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     trix/TRX/S       +17.45  +31.73  +45.22  +22.17  +12.07   +128.65  5
+114  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     dema/BNB/L       +18.97  +15.29  +56.68  +23.95  +13.73   +128.62  5
+115  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     dema/BNB/L       +23.41  +31.77  +35.40  +20.35  +17.56   +128.50  5
+116  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     dema/BNB/L       +11.41  +14.92  +59.84  +30.22  +12.07   +128.46  5
+117  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     trix/TRX/S       +20.18  +31.73  +42.51  +19.72  +14.10   +128.23  5
+118  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     dema/BNB/L       +26.13  +31.77  +32.69  +17.90  +19.59   +128.08  5
+119  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     dema/BNB/L       +14.14  +14.92  +57.13  +27.77  +14.10   +128.04  5
+120  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +24.09  +33.39  +39.35  +17.02  +14.06   +127.91  5
+121  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     trix/TRX/S       +16.54  +33.02  +42.51  +23.28  +12.40   +127.75  5
+122  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     trix/TRX/S       +19.26  +33.02  +39.80  +20.83  +14.43   +127.34  5
+123  accu/SOL/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     proc/XRP/L        +6.14   +3.27  +57.50  +29.09  +30.32   +126.33  5
+124  accu/SOL/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     proc/XRP/L        +1.31   +2.90  +57.95  +32.90  +30.68   +125.76  5
+125  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     proc/XRP/L       +18.65  +24.85  +41.71  +15.57  +24.88   +125.67  5
+126  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     proc/XRP/L       +11.10  +24.48  +44.88  +21.83  +23.22   +125.51  5
+127  cmo/AVAX/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     proc/XRP/L       +13.82  +24.48  +42.16  +19.38  +25.24   +125.09  5
+128  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +17.74  +26.15  +39.00  +16.68  +25.21   +124.78  5
+129  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     proc/XRP/L       +10.19  +25.78  +42.17  +22.94  +23.55   +124.62  5
+130  cmo/AVAX/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     proc/XRP/L       +12.91  +25.78  +39.45  +20.49  +25.58   +124.20  5
+131  trix/XRP/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     dema/BNB/L       +32.92  +30.45  +29.32  +10.40  +20.78   +123.86  5
+132  trix/XRP/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     dema/BNB/L       +25.37  +30.07  +32.48  +16.66  +19.12   +123.70  5
+133  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     trix/TRX/S       +22.75  +27.11  +40.60  +13.60  +19.36   +123.42  5
+134  trix/XRP/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     dema/BNB/L       +28.09  +30.07  +29.77  +14.21  +21.14   +123.28  5
+135  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     trix/TRX/S       +15.20  +26.73  +43.76  +19.86  +17.70   +123.26  5
+136  trix/XRP/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +32.01  +31.74  +26.60  +11.50  +21.11   +122.96  5
+137  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     dema/BNB/L       +20.01  +14.89  +51.04  +21.36  +15.62   +122.92  5
+138  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     trix/TRX/S       +17.92  +26.73  +41.05  +17.41  +19.72   +122.84  5
+139  trix/XRP/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     dema/BNB/L       +24.45  +31.37  +29.77  +17.76  +19.45   +122.80  5
+140  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     dema/BNB/L       +12.46  +14.52  +54.20  +27.63  +13.96   +122.76  5
+141  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +21.84  +28.40  +37.88  +14.71  +19.69   +122.52  5
+142  trix/XRP/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     dema/BNB/L       +27.18  +31.37  +27.05  +15.31  +21.47   +122.38  5
+143  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     trix/TRX/S       +14.29  +28.03  +41.05  +20.97  +18.03   +122.36  5
+144  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     dema/BNB/L       +15.18  +14.52  +51.49  +25.18  +15.98   +122.34  5
+145  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     trix/TRX/S       +17.01  +28.03  +38.33  +18.52  +20.06   +121.94  5
+146  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     proc/XRP/L       +16.40  +19.86  +40.25  +13.26  +30.51   +120.28  5
+147  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     proc/XRP/L        +8.85  +19.49  +43.42  +19.52  +28.84   +120.12  5
+148  cmo/AVAX/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     proc/XRP/L       +11.57  +19.49  +40.70  +17.07  +30.87   +119.70  5
+149  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +15.49  +21.15  +37.54  +14.37  +30.84   +119.38  5
+150  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     proc/XRP/L        +7.93  +20.78  +40.70  +20.63  +29.18   +119.22  5
+151  cmo/AVAX/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     proc/XRP/L       +10.65  +20.78  +37.99  +18.18  +31.20   +118.81  5
+152  trix/XRP/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     dema/BNB/L       +30.67  +25.45  +27.85   +8.08  +26.40   +118.46  5
+153  trix/XRP/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     dema/BNB/L       +23.12  +25.08  +31.02  +14.35  +24.74   +118.30  5
+154  trix/XRP/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     trix/TRX/S       +26.62  +34.11  +27.20  +10.53  +19.48   +117.94  5
+155  trix/XRP/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     dema/BNB/L       +25.84  +25.08  +28.30  +11.90  +26.77   +117.88  5
+156  trix/XRP/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     trix/TRX/S       +19.07  +33.74  +30.37  +16.79  +17.82   +117.78  5
+157  trix/XRP/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     dema/BNB/L       +29.75  +26.75  +25.14   +9.19  +26.74   +117.57  5
+158  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     dema/BNB/L       +17.76   +9.89  +49.58  +19.05  +21.25   +117.53  5
+159  trix/XRP/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     dema/BNB/L       +22.20  +26.37  +28.30  +15.45  +25.08   +117.41  5
+160  trix/XRP/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     trix/TRX/S       +21.79  +33.74  +27.65  +14.34  +19.84   +117.37  5
+161  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     dema/BNB/L       +10.20   +9.52  +52.74  +25.32  +19.59   +117.37  5
+162  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +25.71  +35.41  +24.49  +11.63  +19.81   +117.05  5
+163  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     trix/TRX/S       +13.71  +18.55  +48.93  +21.50  +14.32   +117.01  5
+164  trix/XRP/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     dema/BNB/L       +24.92  +26.37  +25.59  +13.00  +27.10   +116.99  5
+165  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     dema/BNB/L       +12.92   +9.52  +50.03  +22.87  +21.61   +116.95  5
+166  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     trix/TRX/S       +18.15  +35.03  +27.66  +17.90  +18.15   +116.89  5
+167  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     trix/TRX/S        +6.16  +18.18  +52.09  +27.76  +12.66   +116.85  5
+168  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     trix/TRX/S       +20.88  +35.03  +24.94  +15.45  +20.18   +116.47  5
+169  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     trix/TRX/S        +8.88  +18.18  +49.38  +25.31  +14.69   +116.43  5
+170  trix/XRP/L     cmo/LINK/L     accu/LINK/L    ccis/ETH/S     proc/XRP/L       +20.27  +26.87  +26.86  +10.19  +30.63   +114.81  5
+171  trix/XRP/L     cmo/LINK/L     accu/LINK/L    adva/SOL/S     proc/XRP/L       +12.72  +26.49  +30.02  +16.45  +28.96   +114.65  5
+172  trix/XRP/L     cmo/LINK/L     accu/LINK/L    proc/BNB/S     proc/XRP/L       +15.44  +26.49  +27.31  +14.00  +30.99   +114.23  5
+173  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +19.35  +28.16  +24.15  +11.29  +30.96   +113.91  5
+174  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     proc/XRP/L        +7.36  +11.31  +48.58  +21.16  +25.47   +113.87  5
+175  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    adva/SOL/S     proc/XRP/L       +11.80  +27.79  +27.31  +17.56  +29.30   +113.75  5
+176  trix/XRP/L     cmo/LINK/L     ccil/LINK/L    proc/BNB/S     proc/XRP/L       +14.52  +27.79  +24.60  +15.11  +31.32   +113.33  5
+177  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     proc/XRP/L        +2.52  +10.93  +49.03  +24.97  +25.83   +113.29  5
+178  trix/XRP/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     trix/TRX/S       +27.67  +33.71  +21.57   +7.94  +21.37   +112.24  5
+179  trix/XRP/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     trix/TRX/S       +20.11  +33.33  +24.73  +14.20  +19.71   +112.09  5
+180  trix/XRP/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     dema/BNB/L       +21.62  +16.90  +36.18  +15.98  +21.37   +112.05  5
+181  trix/XRP/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     dema/BNB/L       +14.07  +16.53  +39.35  +22.25  +19.71   +111.90  5
+182  trix/XRP/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     trix/TRX/S       +22.83  +33.33  +22.02  +11.75  +21.73   +111.67  5
+183  trix/XRP/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     dema/BNB/L       +16.79  +16.53  +36.63  +19.79  +21.73   +111.48  5
+184  trix/XRP/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +26.75  +35.00  +18.85   +9.04  +21.70   +111.35  5
+185  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     trix/TRX/S       +14.75  +18.15  +43.29  +18.91  +16.21   +111.31  5
+186  trix/XRP/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     trix/TRX/S       +19.20  +34.63  +22.02  +15.31  +20.04   +111.19  5
+187  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     trix/TRX/S        +7.20  +17.78  +46.45  +25.17  +14.55   +111.15  5
+188  trix/XRP/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     trix/TRX/S       +21.92  +34.63  +19.30  +12.86  +22.06   +110.77  5
+189  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     trix/TRX/S        +9.92  +17.78  +43.74  +22.72  +16.57   +110.73  5
+190  trix/XRP/L     trix/LINK/L    accu/LINK/L    ccis/ETH/S     proc/XRP/L       +21.31  +26.46  +21.22   +7.60  +32.51   +109.11  5
+191  trix/XRP/L     trix/LINK/L    accu/LINK/L    adva/SOL/S     proc/XRP/L       +13.76  +26.09  +24.39  +13.86  +30.85   +108.95  5
+192  trix/XRP/L     trix/LINK/L    accu/LINK/L    proc/BNB/S     proc/XRP/L       +16.48  +26.09  +21.67  +11.41  +32.88   +108.53  5
+193  trix/XRP/L     trix/LINK/L    ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +20.40  +27.76  +18.51   +8.70  +32.85   +108.21  5
+194  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     proc/XRP/L        +8.40  +10.91  +42.94  +18.57  +27.36   +108.17  5
+195  trix/XRP/L     trix/LINK/L    ccil/LINK/L    adva/SOL/S     proc/XRP/L       +12.84  +27.38  +21.67  +14.97  +31.19   +108.05  5
+196  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     proc/XRP/L        +0.84  +10.53  +46.11  +24.83  +25.70   +108.01  5
+197  trix/XRP/L     trix/LINK/L    ccil/LINK/L    proc/BNB/S     proc/XRP/L       +15.57  +27.38  +18.96  +12.52  +33.21   +107.63  5
+198  cmo/AVAX/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     proc/XRP/L        +3.57  +10.53  +43.39  +22.38  +27.72   +107.60  5
+199  trix/XRP/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     trix/TRX/S       +25.41  +28.71  +20.10   +5.63  +26.99   +106.85  5
+200  trix/XRP/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     trix/TRX/S       +17.86  +28.34  +23.27  +11.89  +25.33   +106.69  5
+201  trix/XRP/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     dema/BNB/L       +22.67  +16.50  +30.55  +13.39  +23.25   +106.36  5
+202  trix/XRP/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     trix/TRX/S       +20.58  +28.34  +20.55   +9.44  +27.36   +106.27  5
+203  trix/XRP/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     dema/BNB/L       +15.11  +16.12  +33.71  +19.66  +21.59   +106.20  5
+204  trix/XRP/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     trix/TRX/S       +24.50  +30.01  +17.39   +6.73  +27.33   +105.96  5
+205  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     trix/TRX/S       +12.50  +13.16  +41.83  +16.60  +21.84   +105.92  5
+206  trix/XRP/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     trix/TRX/S       +16.94  +29.63  +20.56  +13.00  +25.67   +105.80  5
+207  trix/XRP/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     dema/BNB/L       +17.84  +16.12  +31.00  +17.21  +23.62   +105.78  5
+208  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     trix/TRX/S        +4.94  +12.78  +44.99  +22.86  +20.18   +105.76  5
+209  trix/XRP/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     trix/TRX/S       +19.67  +29.63  +17.84  +10.55  +27.69   +105.38  5
+210  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     trix/TRX/S        +7.67  +12.78  +42.28  +20.41  +22.20   +105.34  5
+211  trix/XRP/L     roc/TRX/L      accu/LINK/L    ccis/ETH/S     proc/XRP/L       +19.06  +21.47  +19.76   +5.29  +38.14   +103.71  5
+212  trix/XRP/L     roc/TRX/L      accu/LINK/L    adva/SOL/S     proc/XRP/L       +11.50  +21.09  +22.92  +11.55  +36.48   +103.56  5
+213  trix/XRP/L     roc/TRX/L      accu/LINK/L    proc/BNB/S     proc/XRP/L       +14.23  +21.09  +20.21   +9.10  +38.50   +103.14  5
+214  trix/XRP/L     roc/TRX/L      ccil/LINK/L    ccis/ETH/S     proc/XRP/L       +18.14  +22.76  +17.05   +6.39  +38.47   +102.82  5
+215  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     proc/XRP/L        +6.14   +5.91  +41.48  +16.26  +32.98   +102.78  5
+216  trix/XRP/L     roc/TRX/L      ccil/LINK/L    adva/SOL/S     proc/XRP/L       +10.59  +22.39  +20.21  +12.66  +36.81   +102.66  5
+217  trix/XRP/L     roc/TRX/L      ccil/LINK/L    proc/BNB/S     proc/XRP/L       +13.31  +22.39  +17.50  +10.21  +38.84   +102.24  5
+218  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     proc/XRP/L        +1.31   +5.54  +41.93  +20.07  +33.35   +102.20  5
+219  trix/XRP/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     dema/BNB/L       +20.41  +11.50  +29.08  +11.08  +28.88   +100.96  5
+220  trix/XRP/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     dema/BNB/L       +12.86  +11.13  +32.25  +17.35  +27.22   +100.80  5
+221  trix/XRP/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     trix/TRX/S       +16.37  +20.16  +28.43  +13.53  +21.96   +100.44  5
+222  trix/XRP/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     dema/BNB/L       +15.58  +11.13  +29.53  +14.89  +29.25   +100.38  5
+223  trix/XRP/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     trix/TRX/S        +8.81  +19.79  +31.60  +19.79  +20.30   +100.28  5
+224  trix/XRP/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     trix/TRX/S       +11.54  +19.79  +28.88  +17.34  +22.32    +99.87  5
+225  trix/XRP/L     cmo/LINK/L     renk/SOL/S     ccis/ETH/S     proc/XRP/L       +10.01  +12.92  +28.09  +13.19  +33.10    +97.31  5
+226  trix/XRP/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     proc/XRP/L        +2.46  +12.54  +31.25  +19.45  +31.44    +97.15  5
+227  trix/XRP/L     cmo/LINK/L     renk/SOL/S     proc/BNB/S     proc/XRP/L        +5.18  +12.54  +28.54  +17.00  +33.47    +96.73  5
+228  trix/XRP/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     trix/TRX/S       +17.41  +19.76  +22.80  +10.94  +23.84    +94.75  5
+229  trix/XRP/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     trix/TRX/S        +9.86  +19.39  +25.96  +17.20  +22.18    +94.59  5
+230  trix/XRP/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     trix/TRX/S       +12.58  +19.39  +23.25  +14.75  +24.21    +94.17  5
+231  trix/XRP/L     trix/LINK/L    renk/SOL/S     ccis/ETH/S     proc/XRP/L       +11.06  +12.51  +22.45  +10.60  +34.99    +91.61  5
+232  trix/XRP/L     trix/LINK/L    renk/SOL/S     adva/SOL/S     proc/XRP/L        +3.50  +12.14  +25.62  +16.86  +33.33    +91.45  5
+233  trix/XRP/L     trix/LINK/L    renk/SOL/S     proc/BNB/S     proc/XRP/L        +6.22  +12.14  +22.90  +14.41  +35.36    +91.03  5
+234  trix/XRP/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     trix/TRX/S       +15.16  +14.76  +21.33   +8.63  +29.47    +89.35  5
+235  trix/XRP/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     trix/TRX/S        +7.60  +14.39  +24.50  +14.89  +27.81    +89.19  5
+236  trix/XRP/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     trix/TRX/S       +10.32  +14.39  +21.78  +12.44  +29.84    +88.77  5
+237  trix/XRP/L     roc/TRX/L      renk/SOL/S     ccis/ETH/S     proc/XRP/L        +8.80   +7.52  +20.99   +8.29  +40.62    +86.22  5
+238  trix/XRP/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     proc/XRP/L        +1.25   +7.15  +24.15  +14.55  +38.96    +86.06  5
+239  trix/XRP/L     roc/TRX/L      renk/SOL/S     proc/BNB/S     proc/XRP/L        +3.97   +7.15  +21.44  +12.10  +40.98    +85.64  5
+240  accu/SOL/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     proc/XRP/L        -0.20   +8.30  +67.77  +40.25  +21.14   +137.27  4
+241  accu/SOL/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     proc/XRP/L        -1.41   +2.90  +60.67  +35.35  +28.66   +126.17  4
+242  cmo/AVAX/L     cmo/LINK/L     renk/SOL/S     adva/SOL/S     proc/XRP/L        -0.20  +10.93  +51.75  +27.42  +23.81   +113.71  4
+243  cmo/AVAX/L     roc/TRX/L      renk/SOL/S     adva/SOL/S     proc/XRP/L        -1.41   +5.54  +44.65  +22.52  +31.32   +102.62  4
+
+--- 汇总 ---
+  5段全过: 239 支
+  4段过:   4 支
+  3段过:   0 支
+
+=========================================================================================================
+🏆 冠军队伍
+=========================================================================================================
+  crazy_bull   → accumulationdistribution/SOL/1h (long)
+  slow_bull    → cmo/LINK/1h (long)
+  ranging      → accumulationdistribution/LINK/1h (long)
+  slow_bear    → ccishort/ETH/1h (short)
+  crazy_bear   → demandindexlong/BNB/1h (long)
+
+  各段: S1=+29.22(45笔) S2=+26.60(80笔) S3=+71.47(188笔) S4=+33.79(103笔) S5=+8.59(141笔) 
+  总计: +169.67 R / 557笔 / 5/5段
+
+报告已存: lab/results/gate4_v2_report.json

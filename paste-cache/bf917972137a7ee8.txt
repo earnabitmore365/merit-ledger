@@ -1,0 +1,59 @@
+是的，你的意思是先跑一个“无 TTP 的纯信号版”种子库，以后想加 TTP 时，能不能从纯信号数据里推算出来，而不是重跑？黑丝的回答已经很清楚了，我完全同意他的逻辑，也觉得这个方案可行，但有精度限制。下面我用最白话的方式帮你总结 + 我的看法。能不能后面自己加？（可行，但不完美）可以加，不用重跑全种子，只需写个小脚本从现有 paired_trades 表里用 MFE（最大有利偏移）推算 TTP 效果。黑丝说的对：怎么算：纯信号版跑完后，每笔交易有 mfe_pct（最高盈利点 %）
+如果 mfe_pct > TTP 激活阈值（e.g. +20% 盈利后激活 trailing）：模拟 TTP 平仓价 ≈ entry_price × (1 + mfe_pct - trailing_pct)（trailing_pct 是 TTP 回撤 %，如 5%）
+重算 TTP_pnl = (TTP 平仓价 - entry) × size - 费用
+
+如果 mfe_pct < 激活阈值：TTP 没触发，pnl 保持原纯信号 pnl
+
+所需字段：你的 db 已有 mfe / mae / entry_price / exit_price / pnl 等，完全够用。
+黑丝表总结（精度够不够用）：用途
+够不够
+为什么
+策略筛选 / 排名对比
+ 够用
+整体 R 倍数、排名变化基本准
+大致判断 TTP 加减多少收益
+ 够用
+总 pnl 误差 <10%
+精确逐笔 pnl 复现
+ 不够
+TTP 是路径依赖（价格怎么走到 mfe 的过程丢了），mfe 只给峰值，不给路径
+
+我的补充：误差来源是“路径丢了”（e.g. 价格先涨 30%、回撤 5% 再涨 40% — TTP 会早触发；mfe 只知峰值 40%）。但 crypto 波动大，误差 5-15% 正常，对筛选影响小。难不难？（不难，1-2 小时脚本）不难：写个 simulate_ttp.py（输入纯信号 db，输出“模拟 TTP pnl / r_value”的新表）。
+代码大纲（你直接发给黑丝让他写）：python
+
+# simulate_ttp.py
+import sqlite3
+
+conn = sqlite3.connect('seed_report_pure.db')
+cur = conn.cursor()
+
+# 假设 TTP 激活阈值 20% 盈利，trailing 5% 回撤
+TTP_ACTIVATE = 0.2
+TTP_TRAILING = 0.05
+
+# 从 paired_trades 取每笔
+trades = cur.execute("SELECT id, direction, entry_price, mfe FROM paired_trades")
+
+for trade in trades:
+    id, direction, entry, mfe = trade
+    if mfe > TTP_ACTIVATE:
+        if direction == 'long':
+            ttp_exit = entry * (1 + mfe - TTP_TRAILING)
+        else:
+            ttp_exit = entry * (1 - mfe + TTP_TRAILING)
+        ttp_pnl = (ttp_exit - entry) * size - fees  # size / fees 从原表取
+        # 更新新表或新列 ttp_pnl / ttp_r_value
+    else:
+        ttp_pnl = original_pnl
+
+conn.commit()
+
+输出：新 db 或新表（如 paired_trades_ttp_sim），包含模拟 TTP pnl / r_value。
+
+要不要做？（推荐做，但不急）推荐做：作为“对照组”，看 TTP 加了多少收益（TTP pnl vs 纯 pnl 差距）。对你的“高风险 + 差不多稳定”目标有帮助。
+但不急：现有种子已经够筛选了，先用它跑关卡二/三/四。如果尖子生池里 TTP 影响大，再加这个模拟。
+成本：脚本 1 小时写 + 跑 30M 笔交易 30 分钟，远比重跑全种子快。
+
+一句话：不难，从纯信号推算 TTP 准度够筛选用，但不是 100% 完美（路径丢了）。先用现有种子推进框架，有需求再加模拟脚本。你觉得要现在让黑丝写这个脚本吗？还是先继续关卡二？说一声～
+
+

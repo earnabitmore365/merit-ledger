@@ -1,0 +1,11 @@
+{
+  "id": "2",
+  "subject": "Step 2: 过滤纯趋势段内的交易",
+  "description": "只保留开仓和平仓都在同一 regime 段内的交易，JOIN segments",
+  "activeForm": "过滤纯趋势段内交易",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": [
+    "1"
+  ]
+}

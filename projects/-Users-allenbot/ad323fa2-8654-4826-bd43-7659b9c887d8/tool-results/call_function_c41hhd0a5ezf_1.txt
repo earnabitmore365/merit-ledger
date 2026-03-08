@@ -1,0 +1,20 @@
+   185→        return _STRATEGY_REGISTRY[name_lower]()
+   186→    raise ValueError(f"Unknown strategy: {name}")
+   187→
+   188→
+   189→def list_strategies() -> List[str]:
+   190→    """列出所有可用策略
+   191→
+   192→    Returns:
+   193→        List[str]: 策略名称列表
+   194→    """
+   195→    return list(_STRATEGY_REGISTRY.keys())
+   196→
+   197→
+   198→# 导出 Signal 供其他模块使用
+   199→__all__ = ['Signal', 'TradingSignal', 'Strategy', 'register_strategy', 'get_strategy', 'list_strategies']
+   200→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

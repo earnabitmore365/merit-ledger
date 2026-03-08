@@ -1,0 +1,16 @@
+2026-02-24 18:29:02,481 - HyperLiquidAdapter - INFO - 连接 HyperLiquid: https://api.hyperliquid-testnet.xyz
+2026-02-24 18:29:02,845 - HyperLiquidWebSocket - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:29:02,985 - HyperLiquidWebSocket - INFO - WebSocket 已连接: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:29:02,985 - HyperLiquidAdapter - INFO - WebSocket 已连接: 测试网
+2026-02-24 18:29:03,803 - HyperLiquidWebSocket - WARNING - WebSocket 连接关闭: sent 1000 (OK); no close frame received
+2026-02-24 18:29:03,803 - HyperLiquidWebSocket - INFO - WebSocket 已断开
+2026-02-24 18:29:03,804 - HyperLiquidAdapter - INFO - WebSocket 已断开
+2026-02-24 18:29:03,806 - HyperLiquidAdapter - INFO - 已断开 HyperLiquid 连接
+获取 K 线: 100 根
+策略信号: TradingSignal(signal=<Signal.SELL: 'SELL'>, confidence=0.7, info='价格 1828.20 < VWAP 1854.38', coin='ETH', timestamp=1771918143, metadata={'vwap': 1854.3753518815781, 'price': 1828.2})
+信号值: SELL
+当前持仓: BUY
+
+>>> 无操作: 信号=SELL, 持仓=BUY >>>
+
+最终持仓: BUY

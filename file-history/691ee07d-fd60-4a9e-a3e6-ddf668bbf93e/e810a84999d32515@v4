@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""
+Momentum Strategy
+
+Momentum-based trading strategy.
+
+Features:
+- Momentum calculation
+- Momentum percentage
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class MomentumConfig:
+    """Momentum configuration"""
+    period: int = 10
+    threshold: float = 5.0
+
+
+class Momentum(Strategy):
+    """Momentum trading strategy — 穿零+MA方向过滤"""
+
+    def __init__(self, exchange=None, config: Optional[MomentumConfig] = None):
+        self.exchange = exchange
+        self.config = config or MomentumConfig()
+
+    @property
+    def name(self) -> str:
+        return "momentum_2yi"
+
+    def calculate_momentum(self, prices: List[float]) -> float:
+        period = self.config.period
+        if len(prices) < period + 1:
+            return 0.0
+        return prices[-1] - prices[-period]
+
+    def calculate_momentum_pct(self, prices: List[float]) -> float:
+        period = self.config.period
+        if len(prices) < period + 1:
+            return 0.0
+        return (prices[-1] - prices[-period]) / prices[-period] * 100
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        min_required = self.config.period + 1
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        prices = [c["close"] for c in klines]
+        momentum = self.calculate_momentum(prices)
+        momentum_pct = self.calculate_momentum_pct(prices)
+        prev_momentum = self.calculate_momentum(prices[:-1])
+
+        # Zero-cross only + MA direction filter
+        ma_period = 20
+        ma = sum(prices[-ma_period:]) / ma_period if len(prices) >= ma_period else sum(prices) / len(prices)
+        trend_up = prices[-1] > ma
+
+        if prev_momentum < 0 and momentum >= 0 and trend_up:
+            signal = Signal.BUY
+            trend = "momentum_cross_up"
+        elif prev_momentum >= 0 and momentum < 0 and not trend_up:
+            signal = Signal.SELL
+            trend = "momentum_cross_down"
+        else:
+            signal = Signal.HOLD
+            trend = "neutral"
+
+        return TradingSignal(
+            signal=signal,
+            confidence=min(abs(momentum_pct) / 20, 1.0),
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "momentum": momentum,
+                "momentum_pct": momentum_pct,
+                "trend": trend,
+            },
+        )

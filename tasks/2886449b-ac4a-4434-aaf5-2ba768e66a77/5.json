@@ -1,0 +1,9 @@
+{
+  "id": "5",
+  "subject": "Step 2: 筛选无爆仓 combo",
+  "description": "min_balance > 0, max_drawdown < 0.8, total_trades >= 30",
+  "activeForm": "筛选无爆仓 combo",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

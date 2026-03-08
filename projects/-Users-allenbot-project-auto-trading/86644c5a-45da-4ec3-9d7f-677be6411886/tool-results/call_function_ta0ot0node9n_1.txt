@@ -1,0 +1,7 @@
+WARNING:HyperLiquidWebSocket:WebSocket 连接关闭: sent 1000 (OK); no close frame received
+=== 平仓前 ===
+总余额: 883.476014
+平仓结果: True - 平仓成交
+
+=== 平仓后 ===
+总余额: 883.029914

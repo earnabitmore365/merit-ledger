@@ -1,0 +1,35 @@
+阶段 1：立即优化现有 db（推荐先做，10-90 分钟）这些不会改任何一行数据，只清理碎片、回收空间、加速查询。VACUUM（最关键，强烈推荐）：为什么：生成时大量 commit + insert 产生大量 free pages 和碎片，文件虚胖。VACUUM 重建 db，回收空间 + 紧凑页面。
+操作（终端或 sqlite3 工具）：
+
+sqlite3 reports/seed_report.db "VACUUM;"
+
+或生成新文件（原文件不动，安全）：
+
+sqlite3 reports/seed_report.db "VACUUM INTO 'seed_report_vacuumed.db';"
+
+预期效果：文件可能缩小 20-50%（从 8GB → 4-6GB 很常见）。
+后续查询（尤其是 GROUP BY、JOIN、AVG(r_value)）明显快。
+
+时间：8GB 规模，SSD 上大概 20-60 分钟（HDD 更长）。期间 db 锁定，别中断。
+注意：需要至少 8-16GB 空闲盘空间（VACUUM 过程中会临时复制一份）。
+
+ANALYZE（更新统计，让查询优化器聪明）：
+
+sqlite3 reports/seed_report.db "ANALYZE;"
+
+尤其对你的 GROUP BY regime_at_open、strategy 等查询有帮助，5-15 分钟。
+
+调 PRAGMA（读性能永久提升）：在你的分析脚本（Python + sqlite3）开头加：python
+
+conn.execute("PRAGMA journal_mode = WAL;")
+conn.execute("PRAGMA synchronous = NORMAL;")
+conn.execute("PRAGMA cache_size = -200000;")  # 200MB 缓存，调到内存允许（如 -1000000 = 1GB）
+conn.execute("PRAGMA mmap_size = 4000000000;")  # 4GB mmap，如果有 16GB+ 内存超快
+conn.execute("PRAGMA temp_store = MEMORY;")
+
+测试查询时间：如 SELECT strategy, AVG(r_value), COUNT(*) FROM paired_trades GROUP BY strategy ORDER BY AVG(r_value) DESC LIMIT 20;
+
+快速校验（确认优化前后一致）：跑你之前 Claude 用的几个检查 SQL，看结果是否 100% 一致（尤其是 PnL sum、MFE/MAE <0 等）。
+
+做完这些，如果查询秒级出结果、文件缩小到 5-6GB，就继续用原 db 分析（top 策略、regime 过滤等）。
+

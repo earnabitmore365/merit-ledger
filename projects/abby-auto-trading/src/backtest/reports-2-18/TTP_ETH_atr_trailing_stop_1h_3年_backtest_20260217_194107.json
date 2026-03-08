@@ -1,0 +1,512 @@
+{
+  "coin": "ETH",
+  "strategy": "atr_trailing_stop",
+  "interval": "1h",
+  "period": "1095天",
+  "timestamp": "20260217_194107",
+  "config": {
+    "initial_capital": 500,
+    "leverage": 10.0,
+    "min_margin": 100
+  },
+  "balance": {
+    "initial": 500,
+    "final": 0,
+    "max": 500,
+    "min": 7.272419153581339
+  },
+  "results": {
+    "total_return": -100.0,
+    "max_drawdown": 98.54551616928373,
+    "sharpe_ratio": -0.7299584076418416,
+    "sortino_ratio": -0.04914785785260574,
+    "calmar_ratio": -1.0147595130377898,
+    "total_trades": 59,
+    "winning_trades": 13,
+    "losing_trades": 10,
+    "win_rate": 56.52173913043478,
+    "avg_win": 5.365390897514991,
+    "avg_loss": -6.82955978369786,
+    "max_win": 62.50207439368436,
+    "max_loss": -14.727816131465621,
+    "profit_factor": 0.785612992263742,
+    "expectancy_ratio": 1.0212968899428647,
+    "consecutive_wins": 6,
+    "consecutive_losses": 3,
+    "liquidation_count": 1
+  },
+  "trades": [
+    {
+      "time": "2022-02-10",
+      "order_type": "BUY",
+      "price": 3198.74,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 500
+    },
+    {
+      "time": "2022-02-13",
+      "order_type": "STOP_LOSS_BUY",
+      "price": 2876.34,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 400.0
+    },
+    {
+      "time": "2022-03-06",
+      "order_type": "SELL",
+      "price": 2635.68,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 400.0
+    },
+    {
+      "time": "2022-03-06",
+      "order_type": "TTP_SELL",
+      "price": 2617.0,
+      "capital": 100,
+      "pnl": 10.403197656771505,
+      "balance": 410.4031976567715
+    },
+    {
+      "time": "2022-03-12",
+      "order_type": "SELL",
+      "price": 2581.81,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 410.4031976567715
+    },
+    {
+      "time": "2022-03-13",
+      "order_type": "TTP_SELL",
+      "price": 2580.91,
+      "capital": 100,
+      "pnl": 1.4019234567996053,
+      "balance": 411.8051211135711
+    },
+    {
+      "time": "2022-04-15",
+      "order_type": "SELL",
+      "price": 3025.0,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 411.8051211135711
+    },
+    {
+      "time": "2022-04-17",
+      "order_type": "TTP_SELL",
+      "price": 3024.39,
+      "capital": 100,
+      "pnl": 0.68082644628094,
+      "balance": 412.48594755985204
+    },
+    {
+      "time": "2022-04-30",
+      "order_type": "SELL",
+      "price": 2825.02,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 412.48594755985204
+    },
+    {
+      "time": "2022-05-02",
+      "order_type": "TTP_SELL",
+      "price": 2824.81,
+      "capital": 100,
+      "pnl": 3.164402375912366,
+      "balance": 415.6503499357644
+    },
+    {
+      "time": "2022-08-07",
+      "order_type": "BUY",
+      "price": 1715.53,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 415.6503499357644
+    },
+    {
+      "time": "2022-08-21",
+      "order_type": "STOP_LOSS_BUY",
+      "price": 1532.83,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 315.6503499357644
+    },
+    {
+      "time": "2022-09-23",
+      "order_type": "SELL",
+      "price": 1281.62,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 315.6503499357644
+    },
+    {
+      "time": "2022-10-16",
+      "order_type": "TTP_SELL",
+      "price": 1280.91,
+      "capital": 100,
+      "pnl": 0.5613988545744434,
+      "balance": 316.21174879033885
+    },
+    {
+      "time": "2022-10-17",
+      "order_type": "BUY",
+      "price": 1293.25,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 316.21174879033885
+    },
+    {
+      "time": "2022-10-19",
+      "order_type": "TTP_BUY",
+      "price": 1293.46,
+      "capital": 100,
+      "pnl": 2.868354919775708,
+      "balance": 319.08010371011454
+    },
+    {
+      "time": "2022-12-04",
+      "order_type": "SELL",
+      "price": 1257.08,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 319.08010371011454
+    },
+    {
+      "time": "2022-12-14",
+      "order_type": "CLOSE_SELL",
+      "price": 1320.88,
+      "capital": 100,
+      "pnl": -50.75253762688149,
+      "balance": 268.327566083233
+    },
+    {
+      "time": "2022-12-14",
+      "order_type": "BUY",
+      "price": 1320.88,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 268.327566083233
+    },
+    {
+      "time": "2022-12-17",
+      "order_type": "STOP_LOSS_BUY",
+      "price": 1188.63,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 168.32756608323302
+    },
+    {
+      "time": "2023-01-09",
+      "order_type": "BUY",
+      "price": 1265.43,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 168.32756608323302
+    },
+    {
+      "time": "2023-02-18",
+      "order_type": "CLOSE_BUY",
+      "price": 1660.89,
+      "capital": 100,
+      "pnl": 312.5103719684218,
+      "balance": 480.8379380516548
+    },
+    {
+      "time": "2023-02-18",
+      "order_type": "SELL",
+      "price": 1660.89,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 480.8379380516548
+    },
+    {
+      "time": "2023-02-19",
+      "order_type": "CLOSE_SELL",
+      "price": 1694.44,
+      "capital": 100,
+      "pnl": -20.200013245910295,
+      "balance": 460.63792480574455
+    },
+    {
+      "time": "2023-02-19",
+      "order_type": "BUY",
+      "price": 1694.44,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 460.63792480574455
+    },
+    {
+      "time": "2023-03-10",
+      "order_type": "STOP_LOSS_BUY",
+      "price": 1505.75,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 360.63792480574455
+    },
+    {
+      "time": "2023-03-24",
+      "order_type": "SELL",
+      "price": 1747.6,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 360.63792480574455
+    },
+    {
+      "time": "2023-04-11",
+      "order_type": "STOP_LOSS_SELL",
+      "price": 1927.15,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 260.63792480574455
+    },
+    {
+      "time": "2023-04-27",
+      "order_type": "SELL",
+      "price": 1884.57,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 260.63792480574455
+    },
+    {
+      "time": "2023-07-15",
+      "order_type": "CLOSE_SELL",
+      "price": 1998.77,
+      "capital": 100,
+      "pnl": -60.5973776511353,
+      "balance": 200.04054715460924
+    },
+    {
+      "time": "2023-07-15",
+      "order_type": "BUY",
+      "price": 1998.77,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 200.04054715460924
+    },
+    {
+      "time": "2023-07-15",
+      "order_type": "CLOSE_BUY",
+      "price": 1936.44,
+      "capital": 100,
+      "pnl": -31.18417826963579,
+      "balance": 168.85636888497345
+    },
+    {
+      "time": "2023-07-15",
+      "order_type": "SELL",
+      "price": 1936.44,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 168.85636888497345
+    },
+    {
+      "time": "2023-07-16",
+      "order_type": "TTP_SELL",
+      "price": 1935.11,
+      "capital": 100,
+      "pnl": 0.8414926359711673,
+      "balance": 169.69786152094463
+    },
+    {
+      "time": "2023-07-23",
+      "order_type": "SELL",
+      "price": 1873.25,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 169.69786152094463
+    },
+    {
+      "time": "2023-07-24",
+      "order_type": "CLOSE_SELL",
+      "price": 1889.13,
+      "capital": 100,
+      "pnl": -8.477245429067187,
+      "balance": 161.22061609187745
+    },
+    {
+      "time": "2023-07-24",
+      "order_type": "BUY",
+      "price": 1889.13,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 161.22061609187745
+    },
+    {
+      "time": "2023-08-05",
+      "order_type": "CLOSE_BUY",
+      "price": 1830.71,
+      "capital": 100,
+      "pnl": -30.924287899721072,
+      "balance": 130.29632819215638
+    },
+    {
+      "time": "2023-08-05",
+      "order_type": "SELL",
+      "price": 1830.71,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 130.29632819215638
+    },
+    {
+      "time": "2023-08-07",
+      "order_type": "TTP_SELL",
+      "price": 1830.2,
+      "capital": 100,
+      "pnl": 0.4640276177002554,
+      "balance": 130.76035580985663
+    },
+    {
+      "time": "2023-08-18",
+      "order_type": "SELL",
+      "price": 1695.31,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 130.76035580985663
+    },
+    {
+      "time": "2023-08-30",
+      "order_type": "CLOSE_SELL",
+      "price": 1719.78,
+      "capital": 100,
+      "pnl": -14.433938335761619,
+      "balance": 116.32641747409501
+    },
+    {
+      "time": "2023-08-30",
+      "order_type": "BUY",
+      "price": 1719.78,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 116.32641747409501
+    },
+    {
+      "time": "2023-09-09",
+      "order_type": "CLOSE_BUY",
+      "price": 1634.47,
+      "capital": 100,
+      "pnl": -49.6051820581702,
+      "balance": 66.72123541592481
+    },
+    {
+      "time": "2023-09-09",
+      "order_type": "SELL",
+      "price": 1634.47,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 66.72123541592481
+    },
+    {
+      "time": "2023-09-16",
+      "order_type": "CLOSE_SELL",
+      "price": 1637.19,
+      "capital": 100,
+      "pnl": -1.6641480112819613,
+      "balance": 65.05708740464284
+    },
+    {
+      "time": "2023-09-16",
+      "order_type": "BUY",
+      "price": 1637.19,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 65.05708740464284
+    },
+    {
+      "time": "2023-09-19",
+      "order_type": "TTP_BUY",
+      "price": 1655.36,
+      "capital": 100,
+      "pnl": 12.06304705012851,
+      "balance": 77.12013445477135
+    },
+    {
+      "time": "2023-09-29",
+      "order_type": "BUY",
+      "price": 1668.79,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 77.12013445477135
+    },
+    {
+      "time": "2023-10-03",
+      "order_type": "TTP_BUY",
+      "price": 1669.01,
+      "capital": 100,
+      "pnl": 0.7307690002935813,
+      "balance": 77.85090345506492
+    },
+    {
+      "time": "2023-10-18",
+      "order_type": "SELL",
+      "price": 1569.6,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 77.85090345506492
+    },
+    {
+      "time": "2023-10-20",
+      "order_type": "TTP_SELL",
+      "price": 1568.0,
+      "capital": 100,
+      "pnl": 2.057530581039702,
+      "balance": 79.90843403610462
+    },
+    {
+      "time": "2023-10-27",
+      "order_type": "SELL",
+      "price": 1794.0,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 79.90843403610462
+    },
+    {
+      "time": "2023-10-30",
+      "order_type": "TTP_SELL",
+      "price": 1792.86,
+      "capital": 100,
+      "pnl": 1.0030657748048233,
+      "balance": 80.91149981090945
+    },
+    {
+      "time": "2023-11-11",
+      "order_type": "BUY",
+      "price": 2094.54,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 80.91149981090945
+    },
+    {
+      "time": "2023-11-18",
+      "order_type": "CLOSE_BUY",
+      "price": 1940.3,
+      "capital": 100,
+      "pnl": -73.63908065732811,
+      "balance": 7.272419153581339
+    },
+    {
+      "time": "2023-11-18",
+      "order_type": "SELL",
+      "price": 1940.3,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 7.272419153581339
+    },
+    {
+      "time": "2023-12-03",
+      "order_type": "STOP_LOSS_SELL",
+      "price": 2147.75,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": -92.72758084641866
+    },
+    {
+      "time": "2023-12-03",
+      "order_type": "LIQUIDATION",
+      "price": 2147.75,
+      "capital": 0,
+      "pnl": 0,
+      "balance": -92.72758084641866
+    }
+  ]
+}

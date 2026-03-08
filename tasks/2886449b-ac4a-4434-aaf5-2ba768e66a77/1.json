@@ -1,0 +1,11 @@
+{
+  "id": "1",
+  "subject": "Step 1: 识别连续 regime 段",
+  "description": "用 regime_timeline (21M行) 识别连续 regime 段，≥48根K线。先 LIMIT 验证再全量跑。",
+  "activeForm": "识别连续 regime 段",
+  "status": "completed",
+  "blocks": [
+    "2"
+  ],
+  "blockedBy": []
+}

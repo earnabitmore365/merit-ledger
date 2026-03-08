@@ -1,0 +1,44 @@
+   475→                    swing_high = None
+   476→                    ttp_level = None
+   477→        
+   478→        # 结束时平仓
+   479→        final_price = self.klines[-1]['close']
+   480→        
+   481→        if position == 'BUY':
+   482→            pnl = (final_price - entry_price) / entry_price * position_size
+   483→            self.balance.append(self.balance[-1] + pnl)
+   484→            new_balance = self.balance[-1]
+   485→            
+   486→            # 检查提款
+   487→
+   488→            if withdraw > 0:
+   489→                self.balance[-1] = self.balance[-1] - withdraw
+   490→                new_balance = self.balance[-1]
+   491→            
+   492→            self.trades.append(Trade(
+   493→                datetime.fromtimestamp(self.klines[-1]['time']/1000).strftime('%Y-%m-%d'),
+   494→                'CLOSE_BUY', final_price, trade_capital, pnl, new_balance, withdraw
+   495→            ))
+   496→            self.current_balance = new_balance
+   497→        
+   498→        elif position == 'SELL':
+   499→            pnl = (entry_price - final_price) / entry_price * position_size
+   500→            self.balance.append(self.balance[-1] + pnl)
+   501→            new_balance = self.balance[-1]
+   502→            
+   503→            # 检查提款
+   504→
+   505→            if withdraw > 0:
+   506→                self.balance[-1] = self.balance[-1] - withdraw
+   507→                new_balance = self.balance[-1]
+   508→            
+   509→            self.trades.append(Trade(
+   510→                datetime.fromtimestamp(self.klines[-1]['time']/1000).strftime('%Y-%m-%d'),
+   511→                'CLOSE_SELL', final_price, trade_capital, pnl, new_balance, withdraw
+   512→            ))
+   513→            self.current_balance = new_balance
+   514→        
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

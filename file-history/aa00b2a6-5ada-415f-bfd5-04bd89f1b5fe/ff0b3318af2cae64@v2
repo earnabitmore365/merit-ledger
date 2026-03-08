@@ -1,0 +1,43 @@
+{
+  "env": {
+    "BASH_MAX_TIMEOUT_MS": "7200000",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(ls -t ~/.claude/projects/*/*.jsonl*)",
+      "Bash(ls -t ~/.claude/projects/**/*.jsonl*)",
+      "Bash(python3 ~/.claude/scripts/convert_conversation.py*)",
+      "Bash(python3 ~/.claude/scripts/db_write.py*)",
+      "Bash(wc -l /tmp/current_session.md)",
+      "Bash(grep -q*)",
+      "Bash(while true*)",
+      "Bash(for coin in*)"
+    ],
+    "defaultMode": "bypassPermissions"
+  },
+  "language": "中文",
+  "skipDangerousModePermissionPrompt": true
+}

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "plugins": {
+    "ui-ux-pro-max@ui-ux-pro-max-skill": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/2.0.1",
+        "version": "2.0.1",
+        "installedAt": "2026-02-24T10:01:37.569Z",
+        "lastUpdated": "2026-02-24T10:01:37.569Z",
+        "gitCommitSha": "6623f12b4058d09618c89cffb2de59a47c45f999"
+      }
+    ]
+  }
+}

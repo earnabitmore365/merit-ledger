@@ -1,0 +1,2 @@
+492:                continuous = selections.get('模式', '执行一次') == '持续运行'
+542:                if continuous:

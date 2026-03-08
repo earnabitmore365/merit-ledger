@@ -1,0 +1,9 @@
+{
+  "id": "3",
+  "subject": "阶段三：重构 backtest.py",
+  "description": "删除重复的 TTP/止损逻辑，完全调用 TTPManager 和 StopLossManager",
+  "activeForm": "重构 backtest 系统",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": []
+}

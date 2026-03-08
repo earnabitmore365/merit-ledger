@@ -1,0 +1,57 @@
+"""Williams Fast — 快速 Williams %R（短周期专用）"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class WilliamsFastConfig:
+    period: int = 5
+    overbought: float = -5.0
+    oversold: float = -95.0
+
+
+class WilliamsFast(Strategy):
+    def __init__(self, exchange=None, config: Optional[WilliamsFastConfig] = None):
+        self.exchange = exchange
+        self.config = config or WilliamsFastConfig()
+
+    @property
+    def name(self) -> str:
+        return "williamsfast"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        p = self.config.period
+        if not klines or len(klines) < p + 1:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0)
+
+        window = klines[-p:]
+        highest = max(c["high"] for c in window)
+        lowest = min(c["low"] for c in window)
+        close = klines[-1]["close"]
+
+        if highest == lowest:
+            wr = -50.0
+        else:
+            wr = (highest - close) / (highest - lowest) * -100
+
+        prev_window = klines[-(p + 1):-1]
+        prev_highest = max(c["high"] for c in prev_window)
+        prev_lowest = min(c["low"] for c in prev_window)
+        prev_close = klines[-2]["close"]
+        if prev_highest == prev_lowest:
+            prev_wr = -50.0
+        else:
+            prev_wr = (prev_highest - prev_close) / (prev_highest - prev_lowest) * -100
+
+        if wr < self.config.oversold and prev_wr >= self.config.oversold:
+            signal = Signal.BUY
+        elif wr > self.config.overbought and prev_wr <= self.config.overbought:
+            signal = Signal.SELL
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(signal=signal, confidence=abs(wr + 50) / 50,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"williams_r": wr, "prev_wr": prev_wr})

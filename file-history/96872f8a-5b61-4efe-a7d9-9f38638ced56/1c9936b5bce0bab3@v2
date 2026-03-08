@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""
+Notifier — 统一事件通知接口
+
+当前空实现只写日志，以后加 Telegram/微信只改这里。
+"""
+
+import logging
+
+# 事件类型常量
+OPEN = "OPEN"
+CLOSE = "CLOSE"
+REGIME_SWITCH = "REGIME_SWITCH"
+ERROR = "ERROR"
+DAILY_SUMMARY = "DAILY_SUMMARY"
+
+
+class Notifier:
+    """事件通知器"""
+
+    def __init__(self, coin: str):
+        self.coin = coin
+        self.logger = logging.getLogger(f"notifier.{coin}")
+
+    def notify(self, event_type: str, data: dict) -> None:
+        """发送通知（当前只写日志）"""
+        self.logger.info(f"[{event_type}] {data}")

@@ -1,0 +1,22 @@
+WARNING:HyperLiquidWebSocket:WebSocket 连接关闭: sent 1000 (OK); no close frame received
+=== 步骤1: 开多单 ===
+余额: $909.16, 价格: $1916.10, 数量: 0.4745
+结果: True, 价格: $2108
+持仓: [Position(coin='ETH', side='LONG', size=0.4745, entry_price=1918.4, unrealized_pnl=-0.99893)]
+=== 步骤2: 反手(多->空) ===
+结果: True, 价格: $1725
+持仓: [Position(coin='ETH', side='SHORT', size=0.4735, entry_price=1916.6, unrealized_pnl=0.14205)]
+=== 步骤3: 平仓 ===
+结果: True, 价格: $1918.73
+持仓: []
+=== 步骤4: 开空单 ===
+余额: $905.52, 价格: $1918.00, 数量: 0.4721
+结果: True, 价格: $1726
+持仓: [Position(coin='ETH', side='SHORT', size=0.4721, entry_price=1916.1, unrealized_pnl=-0.89699)]
+=== 步骤5: 反手(空->多) ===
+结果: True, 价格: $2109
+持仓: [Position(coin='ETH', side='LONG', size=0.4714, entry_price=1918.71, unrealized_pnl=-0.38387)]
+=== 步骤6: 平仓 ===
+结果: True, 价格: $1916.9
+持仓: []
+=== 测试完成 ===

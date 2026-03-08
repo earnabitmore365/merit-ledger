@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""
+Parabolic SAR Strategy
+
+Trend reversal indicator.
+
+Features:
+- SAR calculation
+- Trend direction
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class ParabolicSARConfig:
+    """Parabolic SAR configuration"""
+    period: int = 10
+
+
+class ParabolicSAR(Strategy):
+    """Parabolic SAR trading strategy"""
+    
+    def __init__(self, exchange=None, config: Optional[ParabolicSARConfig] = None):
+        """Initialize Parabolic SAR strategy
+        
+        Args:
+            exchange: Exchange adapter
+            config: Strategy configuration
+        """
+        self.exchange = exchange
+        self.config = config or ParabolicSARConfig()
+    
+    @property
+    def name(self) -> str:
+        return "parabolic_sar"
+    
+    def calculate_sar(self, klines: list) -> tuple:
+        """Calculate real Parabolic SAR with acceleration factor
+
+        Returns:
+            (sar_value, is_bull) where is_bull=True means price above SAR
+        """
+        step = 0.02
+        max_step = 0.2
+
+        if len(klines) < 3:
+            return klines[-1]["close"], True
+
+        bull = klines[1]["close"] >= klines[0]["close"]
+        if bull:
+            sar = klines[0]["low"]
+            ep = klines[0]["high"]
+        else:
+            sar = klines[0]["high"]
+            ep = klines[0]["low"]
+        af = step
+
+        for i in range(1, len(klines)):
+            high = klines[i]["high"]
+            low = klines[i]["low"]
+
+            if bull:
+                new_sar = sar + af * (ep - sar)
+                new_sar = min(new_sar, klines[i - 1]["low"])
+                if i >= 2:
+                    new_sar = min(new_sar, klines[i - 2]["low"])
+
+                if low < new_sar:
+                    bull = False
+                    sar = ep
+                    ep = low
+                    af = step
+                else:
+                    sar = new_sar
+                    if high > ep:
+                        ep = high
+                        af = min(af + step, max_step)
+            else:
+                new_sar = sar + af * (ep - sar)
+                new_sar = max(new_sar, klines[i - 1]["high"])
+                if i >= 2:
+                    new_sar = max(new_sar, klines[i - 2]["high"])
+
+                if high > new_sar:
+                    bull = True
+                    sar = ep
+                    ep = high
+                    af = step
+                else:
+                    sar = new_sar
+                    if low < ep:
+                        ep = low
+                        af = min(af + step, max_step)
+
+        return sar, bull
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        min_required = 10
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"})
+
+        sar, is_bull = self.calculate_sar(klines)
+        current = klines[-1]["close"]
+
+        if is_bull:
+            signal = Signal.BUY
+            trend = "uptrend"
+        else:
+            signal = Signal.SELL
+            trend = "downtrend"
+
+        return TradingSignal(
+            signal=signal, confidence=0.65, coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={"sar": sar, "current": current, "trend": trend})

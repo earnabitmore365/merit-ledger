@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""
+Ichimoku Strategy
+
+Multi-component trend system.
+
+Features:
+- Tenkan-sen (Conversion line): (highest_high + lowest_low) / 2 over 9 periods
+- Kijun-sen (Base line): (highest_high + lowest_low) / 2 over 26 periods
+- Senkou Span A/B (Cloud): price vs cloud for trend confirmation
+- Signal: Tenkan/Kijun cross + price vs cloud
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class IchimokuConfig:
+    """Ichimoku configuration"""
+    tenkan_period: int = 9
+    kijun_period: int = 26
+    senkou_period: int = 52
+
+
+class Ichimoku(Strategy):
+    """Ichimoku Cloud trading strategy"""
+
+    def __init__(self, exchange=None, config: Optional[IchimokuConfig] = None):
+        self.exchange = exchange
+        self.config = config or IchimokuConfig()
+
+    @property
+    def name(self) -> str:
+        return "ichimoku"
+
+    def _midpoint(self, highs: List[float], lows: List[float], period: int) -> float:
+        """(highest_high + lowest_low) / 2 over period — Ichimoku标准中间价"""
+        h = highs[-period:]
+        l = lows[-period:]
+        return (max(h) + min(l)) / 2
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        min_required = self.config.senkou_period
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        highs = [c["high"] for c in klines]
+        lows = [c["low"] for c in klines]
+        current = klines[-1]["close"]
+
+        # Tenkan-sen = (highest_high + lowest_low) / 2 over 9
+        tenkan = self._midpoint(highs, lows, self.config.tenkan_period)
+        # Kijun-sen = (highest_high + lowest_low) / 2 over 26
+        kijun = self._midpoint(highs, lows, self.config.kijun_period)
+
+        # Senkou Span A = (Tenkan + Kijun) / 2
+        senkou_a = (tenkan + kijun) / 2
+        # Senkou Span B = (highest_high + lowest_low) / 2 over 52
+        senkou_b = self._midpoint(highs, lows, self.config.senkou_period)
+
+        cloud_top = max(senkou_a, senkou_b)
+        cloud_bottom = min(senkou_a, senkou_b)
+
+        # Signal: Tenkan/Kijun cross + price vs cloud
+        above_cloud = current > cloud_top
+        below_cloud = current < cloud_bottom
+
+        if tenkan > kijun and above_cloud:
+            signal = Signal.BUY
+            trend = "strong_uptrend"
+        elif tenkan < kijun and below_cloud:
+            signal = Signal.SELL
+            trend = "strong_downtrend"
+        elif tenkan > kijun:
+            signal = Signal.BUY
+            trend = "uptrend"
+        elif tenkan < kijun:
+            signal = Signal.SELL
+            trend = "downtrend"
+        else:
+            signal = Signal.HOLD
+            trend = "neutral"
+
+        return TradingSignal(
+            signal=signal,
+            confidence=0.6,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "tenkan": tenkan,
+                "kijun": kijun,
+                "senkou_a": senkou_a,
+                "senkou_b": senkou_b,
+                "current": current,
+                "trend": trend,
+            },
+        )

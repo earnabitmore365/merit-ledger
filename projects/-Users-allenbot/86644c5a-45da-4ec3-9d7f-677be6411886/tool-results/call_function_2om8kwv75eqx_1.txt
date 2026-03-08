@@ -1,0 +1,164 @@
+   100→
+   101→    # ==================== 连接管理 ====================
+   102→
+   103→    def connect(self) -> bool:
+   104→        """连接 HyperLiquid
+   105→
+   106→        Returns:
+   107→            bool: 是否连接成功
+   108→        """
+   109→        try:
+   110→            from hyperliquid.info import Info
+   111→            from hyperliquid.exchange import Exchange
+   112→            from eth_account import Account
+   113→
+   114→            # 创建 Info 实例
+   115→            self._info = Info(self.endpoint, skip_ws=True)
+   116→
+   117→            if self.private_key:
+   118→                # 创建钱包账户
+   119→                wallet = Account.from_key(self.private_key)
+   120→                # 传入 account_address（API 地址）来授权交易
+   121→                self._exchange = Exchange(
+   122→                    wallet,
+   123→                    self.endpoint,
+   124→                    account_address=self.config.get('api_address') or None
+   125→                )
+   126→
+   127→            self._connected = True
+   128→
+   129→            self.logger.info(f"连接 HyperLiquid: {self.endpoint}")
+   130→
+   131→            # 启用 WebSocket
+   132→            self._init_websocket()
+   133→
+   134→            return True
+   135→
+   136→        except Exception as e:
+   137→            self.logger.error(f"连接失败: {e}")
+   138→            return False
+   139→
+   140→    def disconnect(self) -> None:
+   141→        """断开连接"""
+   142→        # 关闭 WebSocket
+   143→        self._close_websocket()
+   144→
+   145→        self._info = None
+   146→        self._exchange = None
+   147→        self._connected = False
+   148→        self.logger.info("已断开 HyperLiquid 连接")
+   149→
+   150→
+   151→# ==================== WebSocket ====================
+   152→
+   153→    def _init_websocket(self):
+   154→        """初始化 WebSocket（防止重复初始化）"""
+   155→        # 防止重复初始化
+   156→        if hasattr(self, '_ws') and self._ws is not None:
+   157→            return
+   158→
+   159→        from .websocket import create_websocket
+   160→
+   161→        def on_message(data):
+   162→            self.logger.debug(f"WebSocket 消息: {data}")
+   163→
+   164→        self._ws = create_websocket(
+   165→            testnet=self.testnet,
+   166→            on_message=on_message,
+   167→        )
+   168→
+   169→        if self._ws.connect():
+   170→            self.logger.info(f"WebSocket 已连接: {'测试网' if self.testnet else '主网'}")
+   171→        else:
+   172→            self.logger.warning("WebSocket 连接失败，将使用 REST API")
+   173→
+   174→    def _close_websocket(self):
+   175→        """关闭 WebSocket"""
+   176→        if self._ws:
+   177→            self._ws.disconnect()
+   178→            self._ws = None
+   179→            self.logger.info("WebSocket 已断开")
+   180→
+   181→    def health_check(self) -> bool:
+   182→        """健康检查
+   183→
+   184→        Returns:
+   185→            bool: 交易所是否健康
+   186→        """
+   187→        try:
+   188→            if not self._connected:
+   189→                return False
+   190→
+   191→            # 尝试获取余额
+   192→            balance = self.get_balance()
+   193→            return 'usdc' in balance
+   194→
+   195→        except Exception as e:
+   196→            self.logger.error(f"健康检查失败: {e}")
+   197→            return False
+   198→
+   199→
+   200→# ==================== 行情数据 ====================
+   201→
+   202→    def get_price(self, coin: str) -> float:
+   203→        """获取当前价格
+   204→
+   205→        Args:
+   206→            coin: 币种名称（如 "ETH"）
+   207→
+   208→        Returns:
+   209→            float: 当前价格
+   210→        """
+   211→        try:
+   212→            if not self._info:
+   213→                return 0.0
+   214→
+   215→            meta = self._info.meta_and_asset_ctxs()
+   216→            if isinstance(meta, list) and len(meta) >= 2:
+   217→                universe = meta[0].get('universe', []) if isinstance(meta[0], dict) else []
+   218→                asset_ctxs = meta[1] if isinstance(meta[1], list) else []
+   219→
+   220→                # 找到币种的索引
+   221→                coin_idx = None
+   222→                for i, item in enumerate(universe):
+   223→                    if isinstance(item, dict) and item.get('name') == coin:
+   224→                        coin_idx = i
+   225→                        break
+   226→
+   227→                # 获取价格（优先用 markPx，比 midPx 更适合下单）
+   228→                if coin_idx is not None and coin_idx < len(asset_ctxs):
+   229→                    ctx = asset_ctxs[coin_idx]
+   230→                    # markPx 是市场价格，更适合下单
+   231→                    if ctx.get('markPx'):
+   232→                        return float(ctx['markPx'])
+   233→                    elif ctx.get('midPx'):
+   234→                        return float(ctx['midPx'])
+   235→
+   236→            return 0.0
+   237→
+   238→        except Exception as e:
+   239→            self.logger.error(f"获取价格失败: {e}")
+   240→            return 0.0
+   241→
+   242→    def get_klines(
+   243→        self,
+   244→        coin: str,
+   245→        interval: str = "1h",
+   246→        limit: int = 100
+   247→    ) -> List[Dict]:
+   248→        """获取 K 线数据
+   249→
+   250→        Args:
+   251→            coin: 币种名称
+   252→            interval: K 线周期（1m, 5m, 15m, 1h, 4h）
+   253→            limit: 获取数量
+   254→
+   255→        Returns:
+   256→            List[Dict]: K 线数据列表
+   257→        """
+   258→        try:
+   259→            if not self._info:
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

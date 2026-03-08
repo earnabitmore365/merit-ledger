@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""
+Indicators Package
+
+指标库
+自动扫描并导入所有指标模块
+"""
+
+from .base import (
+    MarketSignal, IndicatorResult, BaseIndicator,
+    register_indicator, get_indicator, list_indicators, get_all_indicators,
+)
+
+__all__ = [
+    'MarketSignal', 'IndicatorResult', 'BaseIndicator',
+    'register_indicator', 'get_indicator', 'list_indicators', 'get_all_indicators',
+]
+
+import pkgutil
+from pathlib import Path
+
+_CURRENT_DIR = Path(__file__).parent
+_SKIP = {'base', 'composite', 'verify'}
+
+for module_info in pkgutil.iter_modules([str(_CURRENT_DIR)]):
+    name = module_info.name
+    if not name.startswith('_') and name not in _SKIP:
+        try:
+            exec(f"from .{name} import *")
+        except Exception:
+            pass
+
+# composite 最后导入（依赖其他指标）
+try:
+    from .composite import *
+except Exception:
+    pass

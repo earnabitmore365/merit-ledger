@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""
+运行推荐策略回测
+
+基于回测分析结果，针对推荐的策略组合做验证回测。
+结果保存到 reports/backtest/
+
+推荐组合：
+  主力：demandindex / 5m — BNB, BTC, ETH（稳定型，12/12币盈利，87%胜率）
+  进攻：proc / 15m — ETH（高回报，243%回报，Sharpe 4.34）
+  备选：cci / 5m — ETH, BNB, BTC
+"""
+
+import sys
+import os
+import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from backtest.backtest import BacktestEngine
+
+
+# ==================== 推荐回测配置 ====================
+
+RECOMMENDED = [
+    # 主力方案：demandindex / 5m
+    {"coin": "BNB", "strategy": "demandindex", "interval": "5m", "tag": "主力"},
+    {"coin": "BTC", "strategy": "demandindex", "interval": "5m", "tag": "主力"},
+    {"coin": "ETH", "strategy": "demandindex", "interval": "5m", "tag": "主力"},
+
+    # 进攻方案：proc / 15m
+    {"coin": "ETH", "strategy": "proc", "interval": "15m", "tag": "进攻"},
+
+    # 备选方案
+    {"coin": "ETH", "strategy": "cci", "interval": "5m", "tag": "备选"},
+    {"coin": "BNB", "strategy": "cci", "interval": "5m", "tag": "备选"},
+    {"coin": "SOL", "strategy": "demandindex", "interval": "5m", "tag": "备选"},
+]
+
+# 回测参数
+DAYS = 1095          # 3年
+INITIAL_CAPITAL = 500
+LEVERAGE = 10.0
+STOP_LOSS_PCT = 0.1  # 10%
+ENABLE_TTP = True
+
+
+def run_all():
+    """运行所有推荐回测"""
+    print("=" * 70)
+    print("  推荐策略回测")
+    print(f"  参数：{DAYS}天 · ${INITIAL_CAPITAL} · {LEVERAGE}x杠杆 · 止损{STOP_LOSS_PCT*100:.0f}% · TTP{'开' if ENABLE_TTP else '关'}")
+    print("=" * 70)
+    print()
+
+    results = []
+    total = len(RECOMMENDED)
+
+    for i, cfg in enumerate(RECOMMENDED, 1):
+        coin = cfg["coin"]
+        strategy = cfg["strategy"]
+        interval = cfg["interval"]
+        tag = cfg["tag"]
+
+        print(f"\n{'─' * 70}")
+        print(f"  [{i}/{total}] [{tag}] {coin} · {strategy} · {interval}")
+        print(f"{'─' * 70}")
+
+        start = time.time()
+
+        try:
+            engine = BacktestEngine(
+                coin=coin,
+                interval=interval,
+                days=DAYS,
+                initial_capital=INITIAL_CAPITAL,
+                enable_ttp=ENABLE_TTP,
+                stop_loss_pct=STOP_LOSS_PCT,
+                leverage=LEVERAGE,
+                enable_withdraw=False,
+            )
+            result = engine.run_backtest(strategy)
+
+            if result is None:
+                print(f"  ✗ 回测返回 None（数据不足或策略异常）")
+                results.append({**cfg, "status": "FAIL", "return": 0, "sharpe": 0, "win_rate": 0, "trades": 0})
+                continue
+
+            engine.save_report(strategy, prefix="推荐")
+
+            elapsed = time.time() - start
+
+            results.append({
+                **cfg,
+                "status": "OK",
+                "return": result.total_return,
+                "sharpe": result.sharpe_ratio,
+                "win_rate": result.win_rate,
+                "max_dd": result.max_drawdown,
+                "trades": result.total_trades,
+                "final": result.final_balance,
+                "time": elapsed,
+            })
+
+            print(f"\n  ⏱ 耗时 {elapsed:.1f}s")
+
+        except Exception as e:
+            print(f"  ✗ 错误: {e}")
+            results.append({**cfg, "status": "ERROR", "return": 0, "sharpe": 0, "win_rate": 0, "trades": 0, "error": str(e)})
+
+    # 汇总
+    print(f"\n\n{'=' * 70}")
+    print("  回测汇总")
+    print(f"{'=' * 70}")
+    print(f"  {'标签':<6} {'币种':<5} {'策略':<15} {'周期':<5} {'状态':<6} {'收益%':>8} {'Sharpe':>8} {'胜率%':>8} {'回撤%':>8} {'交易数':>6}")
+    print(f"  {'─'*6} {'─'*5} {'─'*15} {'─'*5} {'─'*6} {'─'*8} {'─'*8} {'─'*8} {'─'*8} {'─'*6}")
+
+    for r in results:
+        status = r.get("status", "?")
+        if status == "OK":
+            print(f"  {r['tag']:<6} {r['coin']:<5} {r['strategy']:<15} {r['interval']:<5} {'✓':>6} "
+                  f"{r['return']:>7.1f}% {r['sharpe']:>8.2f} {r['win_rate']:>7.1f}% {r.get('max_dd',0):>7.1f}% {r['trades']:>6}")
+        else:
+            print(f"  {r['tag']:<6} {r['coin']:<5} {r['strategy']:<15} {r['interval']:<5} {'✗':>6}")
+
+    print(f"\n  报告已保存到 reports/backtest/")
+    print()
+
+
+if __name__ == "__main__":
+    run_all()

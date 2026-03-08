@@ -1,0 +1,817 @@
+#!/usr/bin/env python3
+"""
+种子报告生成器 — 完整回测数据存入 SQLite
+
+一次跑完所有回测，将汇总指标 + 每笔交易明细 + regime 标签存入 SQLite，
+以后所有分析直接查库，永远不用重跑回测。
+
+数据库表：
+  combo_summary   — 汇总指标（~1720行）
+  paired_trades   — 配对交易明细（~850万行）
+  regime_timeline — 每根K线的 regime 标签（~67万行）
+  run_metadata    — 运行参数
+
+用法：
+  cd src && python3 backtest/generate_seed.py
+"""
+
+import sys
+import os
+import time
+import json
+import sqlite3
+import logging
+from typing import List, Dict, Tuple, Optional
+from datetime import datetime
+
+# 项目路径
+_current_file = os.path.abspath(__file__)
+_backtest_dir = os.path.dirname(_current_file)
+_src_dir = os.path.dirname(_backtest_dir)
+PROJECT_ROOT = os.path.dirname(_src_dir)
+
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
+from backtest.backtest import BacktestEngine, Trade
+from core.strategy import list_strategies
+from trading.regime.detector import MarketRegimeDetector
+from trading.regime.config import RegimeDetectorConfig, get_adx_period
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+
+# ==================== 配置 ====================
+
+COINS = ['BTC', 'ETH', 'XRP', 'BNB', 'SOL', 'ADA', 'TRX', 'AVAX', 'LINK', 'DOT',
+         'BTC_COIN', 'ETH_COIN', 'BNB_COIN']  # 后3个为币本位合约
+INTERVALS = ['1m', '5m', '15m', '1h']
+SKIP_STRATEGIES = {'_base', 'adaptive'}
+
+DAYS = 0  # 0 = 使用全部可用数据（种子不截取）
+INITIAL_CAPITAL = 500
+LEVERAGE = 10.0
+STOP_LOSS_PCT = 0.1
+ENABLE_TTP = True
+FIXED_BET = True
+FIXED_BET_AMOUNT = 1  # $1 固定注码（Van Tharp R-Multiple 标准化）
+FEE_RATE = 0.00035  # HyperLiquid taker 手续费率（每侧）
+SLIPPAGE_PCT = 0.0002  # 滑点 0.02%（每侧）
+FUNDING_RATE_8H = 0.0001  # 资金费率 0.01%（每8小时）
+
+DATA_DIR = os.path.join(PROJECT_ROOT, 'src', 'backtest', 'data')
+REPORT_DIR = os.path.join(PROJECT_ROOT, 'reports')
+DB_PATH = os.path.join(REPORT_DIR, 'seed_report.db')
+
+# ==================== 数据库 Schema ====================
+
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS combo_summary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy TEXT NOT NULL,
+    coin TEXT NOT NULL,
+    interval TEXT NOT NULL,
+    total_return REAL,
+    final_balance REAL,
+    max_drawdown REAL,
+    sharpe_ratio REAL,
+    sortino_ratio REAL,
+    calmar_ratio REAL,
+    total_trades INTEGER,
+    winning_trades INTEGER,
+    losing_trades INTEGER,
+    win_rate REAL,
+    avg_win_pct REAL,
+    avg_loss_pct REAL,
+    profit_factor REAL,
+    ttp_count INTEGER,
+    double_count INTEGER,
+    fastest_double_days REAL,
+    avg_double_days REAL,
+    daily_open_positions REAL,
+    cagr REAL,
+    max_daily_dd REAL,
+    reward_risk REAL,
+    max_consec_loss_amt REAL,
+    total_fees REAL
+);
+
+CREATE TABLE IF NOT EXISTS paired_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    combo_id INTEGER NOT NULL REFERENCES combo_summary(id),
+    open_candle_idx INTEGER,
+    close_candle_idx INTEGER,
+    open_time TEXT,
+    close_time TEXT,
+    holding_bars INTEGER,
+    direction TEXT,
+    entry_price REAL,
+    exit_price REAL,
+    capital REAL,
+    position_size REAL,
+    pnl REAL,
+    r_value REAL,
+    balance_after REAL,
+    close_type TEXT,
+    regime_at_open TEXT,
+    fee REAL,
+    funding_cost REAL,
+    slippage_cost REAL,
+    mfe REAL,
+    mae REAL,
+    open_atr_pct REAL,
+    open_volume REAL,
+    funding_count INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS regime_timeline (
+    coin TEXT NOT NULL,
+    interval TEXT NOT NULL,
+    candle_idx INTEGER NOT NULL,
+    candle_time_ms INTEGER,
+    regime TEXT,
+    adx REAL,
+    sma_direction TEXT
+);
+
+CREATE TABLE IF NOT EXISTS run_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pt_combo ON paired_trades(combo_id);
+CREATE INDEX IF NOT EXISTS idx_pt_regime ON paired_trades(regime_at_open);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rt ON regime_timeline(coin, interval, candle_idx);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cs ON combo_summary(strategy, coin, interval);
+"""
+
+
+# ==================== K 线加载 ====================
+
+def load_candles(coin: str, interval: str) -> List[Dict]:
+    """加载 K 线数据（完整文件，不截取）"""
+    data_file = os.path.join(DATA_DIR, 'historical', coin, f'{interval}.json')
+    if not os.path.exists(data_file):
+        return []
+    with open(data_file, 'r') as f:
+        return json.load(f)
+
+
+def calc_atr_pct(candles: List[Dict], idx: int, period: int = 14) -> float:
+    """计算 ATR%（ATR/Close*100）at given candle index"""
+    if idx < period:
+        return 0.0
+    trs = []
+    for j in range(idx - period + 1, idx + 1):
+        high = candles[j]['high']
+        low = candles[j]['low']
+        prev_close = candles[j - 1]['close'] if j > 0 else candles[j]['open']
+        tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+        trs.append(tr)
+    atr = sum(trs) / period
+    close = candles[idx]['close']
+    return round(atr / close * 100, 4) if close > 0 else 0.0
+
+
+# ==================== Regime 时间线计算 ====================
+
+def compute_regime_timeline(candles: List[Dict], interval: str,
+                            days: int) -> List[Dict]:
+    """计算每根 K 线的 regime 标签
+
+    复制 RegimeStrategy 的滞后逻辑（_apply_hysteresis + _maybe_switch），
+    但不实例化任何子策略。
+
+    Returns:
+        列表，每个元素 = {candle_idx, candle_time_ms, regime, adx, sma_direction}
+    """
+    bars_per_day_map = {
+        '1m': 1440, '5m': 288, '15m': 96, '30m': 48,
+        '1h': 24, '2h': 12, '4h': 6, '1d': 1,
+    }
+    bars_per_day = bars_per_day_map.get(interval, 24)
+
+    n = len(candles)
+    start_idx = 0 if not days else max(0, n - days * bars_per_day)
+
+    # 配置
+    adx_period = get_adx_period(interval)
+    cfg = RegimeDetectorConfig(adx_period=adx_period)
+    detector = MarketRegimeDetector(cfg)
+
+    MAX_WINDOW = 200
+
+    # 滞后状态
+    current_regime = "unknown"
+    regime_bars = 0
+    pending_regime = None
+    pending_count = 0
+
+    timeline = []
+
+    for i in range(start_idx, n):
+        window_start = max(0, i + 1 - MAX_WINDOW)
+        window = candles[window_start:i + 1]
+
+        # candle_idx 使用 0-based 相对索引，与 BacktestEngine 的索引对齐
+        # BacktestEngine 截取 candles[-days*bars_per_day:]，索引从 0 开始
+        rel_idx = i - start_idx
+
+        if len(window) < cfg.min_klines:
+            timeline.append({
+                'candle_idx': rel_idx,
+                'candle_time_ms': candles[i].get('timestamp', candles[i].get('time', 0)),
+                'regime': 'unknown',
+                'adx': 0.0,
+                'sma_direction': 'flat',
+            })
+            continue
+
+        details = detector.detect_with_details(window)
+        adx = details['adx']
+        sma_dir = details['sma_direction']
+
+        # 滞后阈值（等价于 RegimeStrategy._apply_hysteresis）
+        if current_regime in ("bull", "bear"):
+            if adx < cfg.trend_exit_adx:
+                new_regime = "ranging"
+            else:
+                new_regime = "bull" if sma_dir == "up" else "bear"
+        else:
+            if adx > cfg.trend_enter_adx:
+                new_regime = "bull" if sma_dir == "up" else "bear"
+            else:
+                new_regime = "ranging"
+
+        # 禁止 bull↔bear 直接翻转
+        if (current_regime in ("bull", "bear")
+                and new_regime in ("bull", "bear")
+                and new_regime != current_regime):
+            new_regime = "ranging"
+
+        # min_dwell + confirm（等价于 RegimeStrategy._maybe_switch）
+        if new_regime == current_regime:
+            regime_bars += 1
+            pending_regime = None
+            pending_count = 0
+        elif regime_bars < cfg.min_dwell_bars:
+            regime_bars += 1
+        else:
+            if new_regime == pending_regime:
+                pending_count += 1
+            else:
+                pending_regime = new_regime
+                pending_count = 1
+
+            if pending_count >= cfg.confirm_bars:
+                current_regime = new_regime
+                regime_bars = 1
+                pending_regime = None
+                pending_count = 0
+            else:
+                regime_bars += 1
+
+        timeline.append({
+            'candle_idx': rel_idx,
+            'candle_time_ms': candles[i].get('timestamp', candles[i].get('time', 0)),
+            'regime': current_regime,
+            'adx': adx,
+            'sma_direction': sma_dir,
+        })
+
+    return timeline
+
+
+# ==================== 交易配对 ====================
+
+def classify_close_type(trade: Trade, capital: float) -> str:
+    """判断平仓类型"""
+    ot = trade.order_type
+    if 'TTP' in ot:
+        return 'ttp'
+    if ot == 'LIQUIDATION':
+        return 'liquidation'
+    # 还原 raw_pnl（加回成本），再判断是否 ≈ -capital
+    raw_pnl = trade.pnl + trade.fee + trade.slippage_cost + trade.funding_cost
+    if capital > 0 and abs(raw_pnl + capital) / capital < 0.05:
+        return 'stop_loss'
+    return 'signal'
+
+
+def pair_trades(trades: List[Trade], candle_indices: List[int],
+                regime_timeline: List[Dict],
+                leverage: float,
+                candles: List[Dict] = None,
+                bars_per_funding: int = 999999) -> List[Dict]:
+    """将原始 Trade 列表配对为开仓→平仓交易
+
+    Args:
+        trades: 回测引擎输出的交易列表
+        candle_indices: 每笔交易对应的 K 线索引（0-based）
+        regime_timeline: regime 时间线（candle_idx 也是 0-based）
+        leverage: 杠杆倍数
+        candles: 截取后的 K 线数据（用于计算 MFE/MAE/ATR/volume）
+        bars_per_funding: 每次资金费结算的 K 线间隔
+
+    Returns:
+        配对交易列表
+    """
+    # 构建 candle_idx → regime 查找表
+    regime_map = {}
+    for entry in regime_timeline:
+        regime_map[entry['candle_idx']] = entry['regime']
+
+    open_orders = {'BUY', 'SELL'}
+    close_orders = {'CLOSE_BUY', 'CLOSE_SELL', 'TTP_CLOSE_BUY', 'TTP_CLOSE_SELL', 'LIQUIDATION'}
+
+    open_trade = None
+    open_idx = None
+    paired = []
+    n_candles = len(candles) if candles else 0
+
+    for k in range(len(trades)):
+        t = trades[k]
+        idx = candle_indices[k] if k < len(candle_indices) else 0
+
+        if t.order_type in open_orders:
+            open_trade = t
+            open_idx = idx
+
+        elif t.order_type in close_orders and open_trade is not None:
+            direction = 'long' if open_trade.order_type == 'BUY' else 'short'
+            holding = idx - open_idx if open_idx is not None else 0
+
+            # 判断平仓类型
+            if t.order_type in close_orders and k == len(trades) - 1:
+                if t.order_type in ('CLOSE_BUY', 'CLOSE_SELL'):
+                    close_type = 'end_of_data'
+                else:
+                    close_type = classify_close_type(t, open_trade.capital)
+            else:
+                close_type = classify_close_type(t, open_trade.capital)
+
+            # R 值 = pnl / capital（含成本的净 R 值）
+            r_value = t.pnl / open_trade.capital if open_trade.capital > 0 else 0.0
+
+            # 查找开仓时的 regime
+            regime = regime_map.get(open_idx, 'unknown')
+
+            # ── MFE/MAE 计算（从 K 线 high/low 推算） ──
+            mfe = 0.0
+            mae = 0.0
+            if candles and open_idx is not None and open_idx < n_candles:
+                entry = open_trade.price
+                end = min(idx + 1, n_candles)
+                for j in range(open_idx, end):
+                    c = candles[j]
+                    if direction == 'long':
+                        favorable = (c['high'] - entry) / entry * leverage
+                        adverse = (entry - c['low']) / entry * leverage
+                    else:
+                        favorable = (entry - c['low']) / entry * leverage
+                        adverse = (c['high'] - entry) / entry * leverage
+                    if favorable > mfe:
+                        mfe = favorable
+                    if adverse > mae:
+                        mae = adverse
+
+            # ── ATR% 和 volume（开仓时刻） ──
+            atr_pct = 0.0
+            volume = 0.0
+            if candles and open_idx is not None and open_idx < n_candles:
+                atr_pct = calc_atr_pct(candles, open_idx)
+                volume = candles[open_idx].get('volume', 0.0)
+
+            # ── 资金费次数 ──
+            funding_count = int(holding / bars_per_funding) if bars_per_funding > 0 else 0
+
+            paired.append({
+                'open_candle_idx': open_idx,
+                'close_candle_idx': idx,
+                'open_time': open_trade.time,
+                'close_time': t.time,
+                'holding_bars': holding,
+                'direction': direction,
+                'entry_price': open_trade.price,
+                'exit_price': t.price,
+                'capital': open_trade.capital,
+                'position_size': open_trade.capital * leverage,
+                'pnl': t.pnl,
+                'r_value': round(r_value, 6),
+                'balance_after': t.balance,
+                'close_type': close_type,
+                'regime_at_open': regime,
+                'fee': t.fee,
+                'funding_cost': t.funding_cost,
+                'slippage_cost': t.slippage_cost,
+                'mfe': round(mfe, 6),
+                'mae': round(mae, 6),
+                'open_atr_pct': atr_pct,
+                'open_volume': volume,
+                'funding_count': funding_count,
+            })
+
+            open_trade = None
+            open_idx = None
+
+    return paired
+
+
+# ==================== 汇总指标计算 ====================
+
+def calc_profit_factor(trades: List[Trade]) -> float:
+    """计算盈利因子"""
+    closing = [t for t in trades if 'CLOSE' in t.order_type or 'TTP' in t.order_type]
+    gross_profit = sum(t.pnl for t in closing if t.pnl > 0)
+    gross_loss = sum(t.pnl for t in closing if t.pnl < 0)
+    return gross_profit / abs(gross_loss) if gross_loss < 0 else 0.0
+
+
+# ==================== 数据库操作 ====================
+
+def init_db(db_path: str) -> sqlite3.Connection:
+    """初始化数据库"""
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-64000")  # 64MB 缓存
+    conn.executescript(SCHEMA_SQL)
+    conn.commit()
+    return conn
+
+
+def check_combo_exists(conn: sqlite3.Connection, strategy: str,
+                       coin: str, interval: str) -> bool:
+    """检查 combo 是否已存在（用于断点恢复）"""
+    cur = conn.execute(
+        "SELECT 1 FROM combo_summary WHERE strategy=? AND coin=? AND interval=?",
+        (strategy, coin, interval)
+    )
+    return cur.fetchone() is not None
+
+
+def check_regime_exists(conn: sqlite3.Connection, coin: str,
+                        interval: str) -> bool:
+    """检查 regime timeline 是否已存在"""
+    cur = conn.execute(
+        "SELECT 1 FROM regime_timeline WHERE coin=? AND interval=? LIMIT 1",
+        (coin, interval)
+    )
+    return cur.fetchone() is not None
+
+
+def save_regime_timeline(conn: sqlite3.Connection, coin: str,
+                         interval: str, timeline: List[Dict]) -> None:
+    """批量写入 regime 时间线"""
+    conn.executemany(
+        "INSERT OR IGNORE INTO regime_timeline "
+        "(coin, interval, candle_idx, candle_time_ms, regime, adx, sma_direction) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(coin, interval, e['candle_idx'], e['candle_time_ms'],
+          e['regime'], e['adx'], e['sma_direction'])
+         for e in timeline]
+    )
+
+
+def save_combo(conn: sqlite3.Connection, strategy: str, coin: str,
+               interval: str, result, paired: List[Dict],
+               initial_capital: float = 500, days: int = 365,
+               actual_candle_count: int = 0, bars_per_day: int = 24) -> None:
+    """写入一个 combo 的汇总 + 配对交易"""
+    profit_factor = calc_profit_factor(result.trades)
+    ttp_count = len([t for t in result.trades if 'TTP' in t.order_type])
+
+    # ── v2 新增汇总字段 ──
+    # CAGR（days=0 时从实际 K 线数推算天数）
+    actual_days = days if days > 0 else max(1, actual_candle_count // bars_per_day)
+    cagr = 0.0
+    if result.final_balance > 0 and initial_capital > 0 and actual_days > 0:
+        cagr = (result.final_balance / initial_capital) ** (365.0 / actual_days) - 1
+
+    # 总手续费（从配对交易汇总）
+    total_fees = sum(p.get('fee', 0) + p.get('funding_cost', 0) + p.get('slippage_cost', 0) for p in paired)
+
+    # 盈亏比 = avg_win / avg_loss
+    reward_risk = result.avg_win / result.avg_loss if result.avg_loss > 0 else 0.0
+
+    # 最大连续亏损金额 + 最大单日回撤
+    max_consec_loss_amt = 0.0
+    max_daily_dd = 0.0
+    if paired:
+        # 连续亏损金额
+        current_loss_amt = 0.0
+        for p in paired:
+            if p['pnl'] < 0:
+                current_loss_amt += p['pnl']
+                if abs(current_loss_amt) > abs(max_consec_loss_amt):
+                    max_consec_loss_amt = current_loss_amt
+            else:
+                current_loss_amt = 0.0
+
+        # 最大单日回撤（按天分组 PnL）
+        daily_pnl = {}
+        for p in paired:
+            day = p['close_time'][:10] if p['close_time'] else ''
+            if day:
+                daily_pnl[day] = daily_pnl.get(day, 0.0) + p['pnl']
+        if daily_pnl:
+            max_daily_dd = min(daily_pnl.values())  # 最差单日 PnL
+
+    cur = conn.execute(
+        "INSERT INTO combo_summary "
+        "(strategy, coin, interval, total_return, final_balance, "
+        "max_drawdown, sharpe_ratio, sortino_ratio, calmar_ratio, "
+        "total_trades, winning_trades, losing_trades, win_rate, "
+        "avg_win_pct, avg_loss_pct, profit_factor, ttp_count, "
+        "double_count, fastest_double_days, avg_double_days, daily_open_positions, "
+        "cagr, max_daily_dd, reward_risk, max_consec_loss_amt, total_fees) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (strategy, coin, interval,
+         result.total_return, result.final_balance,
+         result.max_drawdown, result.sharpe_ratio, result.sortino_ratio, result.calmar_ratio,
+         result.total_trades, result.winning_trades, result.losing_trades, result.win_rate,
+         result.avg_win, result.avg_loss, profit_factor, ttp_count,
+         result.double_count, result.fastest_double_days, result.avg_double_days,
+         result.daily_open_positions,
+         cagr, max_daily_dd, reward_risk, max_consec_loss_amt, total_fees)
+    )
+    combo_id = cur.lastrowid
+
+    if paired:
+        conn.executemany(
+            "INSERT INTO paired_trades "
+            "(combo_id, open_candle_idx, close_candle_idx, open_time, close_time, "
+            "holding_bars, direction, entry_price, exit_price, capital, position_size, "
+            "pnl, r_value, balance_after, close_type, regime_at_open, "
+            "fee, funding_cost, slippage_cost, mfe, mae, open_atr_pct, open_volume, funding_count) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [(combo_id, p['open_candle_idx'], p['close_candle_idx'],
+              p['open_time'], p['close_time'], p['holding_bars'],
+              p['direction'], p['entry_price'], p['exit_price'],
+              p['capital'], p['position_size'], p['pnl'], p['r_value'],
+              p['balance_after'], p['close_type'], p['regime_at_open'],
+              p['fee'], p['funding_cost'], p['slippage_cost'],
+              p['mfe'], p['mae'], p['open_atr_pct'], p['open_volume'], p['funding_count'])
+             for p in paired]
+        )
+
+
+def save_metadata(conn: sqlite3.Connection, config: Dict) -> None:
+    """写入运行元数据"""
+    for key, value in config.items():
+        conn.execute(
+            "INSERT OR REPLACE INTO run_metadata (key, value) VALUES (?, ?)",
+            (key, json.dumps(value) if not isinstance(value, str) else value)
+        )
+    conn.commit()
+
+
+# ==================== 主流程 ====================
+
+def get_strategies() -> List[str]:
+    """获取所有可用策略"""
+    all_names = sorted(list_strategies())
+    return [name for name in all_names if name not in SKIP_STRATEGIES]
+
+
+def main():
+    strategies = get_strategies()
+    total = len(strategies) * len(COINS) * len(INTERVALS)
+    n_regime = len(COINS) * len(INTERVALS)
+
+    print("=" * 90)
+    print("  种子报告生成器")
+    print("  %d 策略 × %d 币种 × %d 周期 = %d 组回测" % (
+        len(strategies), len(COINS), len(INTERVALS), total))
+    print("  + %d 组 regime 时间线" % n_regime)
+    days_str = "全量数据" if DAYS == 0 else "%d天" % DAYS
+    print("  参数：%s · $%d · %.0fx · 止损%.0f%% · TTP%s · 固定注码$%d" % (
+        days_str, INITIAL_CAPITAL, LEVERAGE, STOP_LOSS_PCT * 100,
+        '开' if ENABLE_TTP else '关', FIXED_BET_AMOUNT))
+    print("  成本：手续费%.3f%%/侧 · 滑点%.2f%%/侧 · 资金费%.2f%%/8h" % (
+        FEE_RATE * 100, SLIPPAGE_PCT * 100, FUNDING_RATE_8H * 100))
+    print("  输出：%s" % DB_PATH)
+    print("=" * 90)
+    print()
+
+    conn = init_db(DB_PATH)
+
+    # 保存运行元数据
+    save_metadata(conn, {
+        'days': DAYS,
+        'initial_capital': INITIAL_CAPITAL,
+        'leverage': LEVERAGE,
+        'stop_loss_pct': STOP_LOSS_PCT,
+        'enable_ttp': ENABLE_TTP,
+        'fixed_bet': FIXED_BET,
+        'fixed_bet_amount': FIXED_BET_AMOUNT,
+        'fee_rate': FEE_RATE,
+        'slippage_pct': SLIPPAGE_PCT,
+        'funding_rate_8h': FUNDING_RATE_8H,
+        'coins': COINS,
+        'intervals': INTERVALS,
+        'strategies': strategies,
+        'total_combos': total,
+        'start_time': datetime.now().isoformat(),
+        'schema_version': 'v2',
+    })
+
+    start_all = time.time()
+    idx = 0
+    skipped = 0
+    failed = 0
+
+    bars_per_day_map = {
+        '1m': 1440, '5m': 288, '15m': 96, '30m': 48,
+        '1h': 24, '2h': 12, '4h': 6, '1d': 1,
+    }
+
+    for coin in COINS:
+        for interval in INTERVALS:
+            # ── 1. 加载 K 线（只加载一次） ──
+            t0 = time.time()
+            all_candles = load_candles(coin, interval)
+            if not all_candles:
+                print("  [!] %s/%s: 数据不存在，跳过" % (coin, interval))
+                idx += len(strategies)
+                failed += len(strategies)
+                continue
+
+            bars_per_day = bars_per_day_map.get(interval, 24)
+            n_candles = len(all_candles)
+            start_idx = 0 if not DAYS else max(0, n_candles - DAYS * bars_per_day)
+            load_time = time.time() - t0
+
+            # ── 2. 计算 regime 时间线（只计算一次） ──
+            t1 = time.time()
+            if check_regime_exists(conn, coin, interval):
+                # 从数据库读取已有的 regime timeline
+                cur = conn.execute(
+                    "SELECT candle_idx, candle_time_ms, regime, adx, sma_direction "
+                    "FROM regime_timeline WHERE coin=? AND interval=? ORDER BY candle_idx",
+                    (coin, interval)
+                )
+                regime_timeline = [
+                    {'candle_idx': r[0], 'candle_time_ms': r[1],
+                     'regime': r[2], 'adx': r[3], 'sma_direction': r[4]}
+                    for r in cur.fetchall()
+                ]
+                regime_time = time.time() - t1
+                print("  [%s/%s] K线: %d条(%.1fs) | Regime: %d条(已有, %.1fs)" % (
+                    coin, interval, n_candles, load_time,
+                    len(regime_timeline), regime_time))
+            else:
+                regime_timeline = compute_regime_timeline(all_candles, interval, DAYS)
+                regime_time = time.time() - t1
+                save_regime_timeline(conn, coin, interval, regime_timeline)
+                conn.commit()
+                print("  [%s/%s] K线: %d条(%.1fs) | Regime: %d条(%.1fs)" % (
+                    coin, interval, n_candles, load_time,
+                    len(regime_timeline), regime_time))
+
+            # 统计 regime 分布
+            r_counts = {}
+            for e in regime_timeline:
+                r = e['regime']
+                r_counts[r] = r_counts.get(r, 0) + 1
+            r_str = " ".join("%s=%d" % (k, v) for k, v in sorted(r_counts.items()))
+            print("    regime分布: %s" % r_str)
+
+            # ── 3. 对每个策略运行回测 ──
+            for strategy_name in strategies:
+                idx += 1
+
+                elapsed_total = time.time() - start_all
+                if idx > 1:
+                    effective = idx - skipped - failed
+                    avg_per = elapsed_total / max(effective, 1)
+                    remaining = total - idx
+                    eta = avg_per * remaining
+                    eta_str = " | ETA %.0fmin" % (eta / 60)
+                else:
+                    eta_str = ""
+
+                # 断点恢复：已存在则跳过
+                if check_combo_exists(conn, strategy_name, coin, interval):
+                    skipped += 1
+                    continue
+
+                print("    [%4d/%d] %-22s%s" % (idx, total, strategy_name, eta_str),
+                      end="", flush=True)
+
+                t2 = time.time()
+                try:
+                    engine = BacktestEngine(
+                        coin=coin,
+                        interval=interval,
+                        days=DAYS,
+                        initial_capital=INITIAL_CAPITAL,
+                        enable_ttp=ENABLE_TTP,
+                        stop_loss_pct=STOP_LOSS_PCT,
+                        leverage=LEVERAGE,
+                        enable_withdraw=False,
+                        fixed_bet=FIXED_BET,
+                        candles=all_candles,
+                        fixed_bet_amount=FIXED_BET_AMOUNT,
+                        fee_rate=FEE_RATE,
+                        slippage_pct=SLIPPAGE_PCT,
+                        funding_rate_8h=FUNDING_RATE_8H,
+                    )
+                    result = engine.run_backtest(strategy_name)
+
+                    if result is None:
+                        print(" -> FAIL")
+                        failed += 1
+                        continue
+
+                    # 配对交易（传入截取后的 K 线用于 MFE/MAE/ATR 计算）
+                    paired = pair_trades(
+                        engine.trades,
+                        engine.trade_candle_indices,
+                        regime_timeline,
+                        LEVERAGE,
+                        candles=engine.candles,
+                        bars_per_funding=engine._bars_per_funding,
+                    )
+
+                    # 写入数据库
+                    save_combo(conn, strategy_name, coin, interval, result, paired,
+                               initial_capital=INITIAL_CAPITAL, days=DAYS,
+                               actual_candle_count=len(engine.candles),
+                               bars_per_day=bars_per_day)
+
+                    elapsed = time.time() - t2
+                    ret = result.total_return
+                    n_paired = len(paired)
+                    symbol = "+" if ret > 0 else ""
+                    print(" -> %s%.1f%% | %d笔 | %.1fs" % (
+                        symbol, ret, n_paired, elapsed))
+
+                except Exception as e:
+                    print(" -> ERROR: %s" % e)
+                    failed += 1
+
+            # 每个 (coin, interval) 提交一次
+            conn.commit()
+
+    elapsed_all = time.time() - start_all
+
+    # 更新元数据
+    save_metadata(conn, {
+        'end_time': datetime.now().isoformat(),
+        'elapsed_minutes': round(elapsed_all / 60, 1),
+        'total_combos': total,
+        'skipped': skipped,
+        'failed': failed,
+    })
+
+    # ── 汇总统计 ──
+    print("\n" + "=" * 90)
+    print("  种子报告生成完成 (耗时 %.1f 分钟)" % (elapsed_all / 60))
+    print("=" * 90)
+
+    # 数据库统计
+    n_combos = conn.execute("SELECT COUNT(*) FROM combo_summary").fetchone()[0]
+    n_paired = conn.execute("SELECT COUNT(*) FROM paired_trades").fetchone()[0]
+    n_regime = conn.execute("SELECT COUNT(*) FROM regime_timeline").fetchone()[0]
+
+    print("  combo_summary:  %d 行" % n_combos)
+    print("  paired_trades:  %d 行" % n_paired)
+    print("  regime_timeline: %d 行" % n_regime)
+    print("  跳过(已有): %d | 失败: %d" % (skipped, failed))
+
+    # 文件大小
+    conn.close()
+    db_size = os.path.getsize(DB_PATH)
+    print("  数据库大小: %.1f MB" % (db_size / 1024 / 1024))
+
+    # Regime 分布总览
+    conn = sqlite3.connect(DB_PATH)
+    print("\n  Regime 分布总览:")
+    for row in conn.execute(
+            "SELECT regime, COUNT(*) FROM regime_timeline GROUP BY regime ORDER BY regime"):
+        print("    %-10s %d 条" % (row[0], row[1]))
+
+    # 平仓类型分布
+    print("\n  平仓类型分布:")
+    for row in conn.execute(
+            "SELECT close_type, COUNT(*) FROM paired_trades GROUP BY close_type ORDER BY close_type"):
+        print("    %-15s %d 笔" % (row[0], row[1]))
+
+    # 按 regime 分组的平均 R 值
+    print("\n  按 Regime 分组的平均 R 值:")
+    for row in conn.execute(
+            "SELECT regime_at_open, ROUND(AVG(r_value), 4), COUNT(*) "
+            "FROM paired_trades GROUP BY regime_at_open ORDER BY regime_at_open"):
+        print("    %-10s avg_r=%.4f  (%d 笔)" % (row[0], row[1], row[2]))
+
+    conn.close()
+    print("\n  数据库: %s" % DB_PATH)
+    print()
+
+
+if __name__ == "__main__":
+    main()

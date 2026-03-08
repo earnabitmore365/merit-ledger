@@ -1,0 +1,12 @@
+total 112
+drwxr-xr-x  11 allenbot  staff    352 Feb 20 15:39 .
+drwx------   6 allenbot  staff    192 Feb 22 15:22 ..
+-rw-r--r--@  1 allenbot  staff  12292 Feb 21 01:19 .DS_Store
+-rw-r--r--   1 allenbot  staff     16 Feb 18 19:53 .gitignore
+-rw-r--r--@  1 allenbot  staff  28934 Feb 20 18:51 README.md
+drwxr-xr-x   4 allenbot  staff    128 Feb 15 19:03 __pycache__
+drwxr-xr-x   7 allenbot  staff    224 Feb 20 01:26 logs
+drwxr-xr-x   5 allenbot  staff    160 Feb 20 01:26 reports
+-rw-r--r--@  1 allenbot  staff    184 Feb 15 08:24 requirements.txt
+drwxr-xr-x  11 allenbot  staff    352 Feb 20 15:58 src
+drwxr-xr-x   3 allenbot  staff     96 Feb 20 15:27 user_interface

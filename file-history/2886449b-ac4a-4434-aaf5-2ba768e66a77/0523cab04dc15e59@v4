@@ -1,0 +1,252 @@
+# CHECKPOINT — Auto-Trading 项目状态
+
+> 最后更新：2026-02-28（白纱更新）
+> 本文件供白纱（Sonnet）与黑丝（Opus）交接使用，读完即可开始工作，不需要翻历史记录。
+
+---
+
+## 任务历程
+
+1. ✅ 初始系统搭建 — v1.4，44策略、HyperLiquid适配器、回测引擎、curses UI
+2. ✅ UI 重构 — v1.5，BaseMenu组件库、trade_menu 7步流程、紧凑卡片面板
+3. ✅ 全矩阵回测 v1 — 1521份报告（复利注码），确定 proc+LINK+15m 为首选
+4. ✅ Regime Detection v1（MA+RSI）— 完成但效果不好，1680次切换/年
+5. ✅ Regime Detection v2 — ADX(28)+SMA(50)+ATR(14) 三层复合，273次/年，当过滤器非切换器
+6. ✅ 指标库 src/indicators/ — 12个指标（链上/市场/衍生品/情绪），MarketScore加权综合
+7. ✅ 全矩阵回测 v2 — 1720组（43策略×10币×4周期），固定注码
+8. ✅ 种子报告 v1 — 1720组/12.4M笔/2.17GB（被误删，教训：破坏性操作必须先问用户）
+9. ✅ v2 种子系统重建 — 35字段schema + $1固定注码(Van Tharp) + 断点续传(策略级) + 自动检测
+10. ✅ 数据下载全量完成 — 13币种 × 4周期 = 52组，零错误（含3个币本位）
+11. ✅ v2 种子生成全量完成 — 2236组 / 30,033,724笔 / 7.54GB，零失败
+12. ✅ verify_seed.py 验证通过 — 4维度全部通过，数据完整、真实、有效
+
+---
+
+## 当前状态（截至本次更新）
+
+### 种子数据库：reports/seed_report.db
+- **规模**：2236 组 combo | 30,033,724 笔 paired_trades | 21,723,330 条 regime_timeline | 7.54 GB
+- **覆盖**：13 币种（10 USDT + 3 币本位）× 4 周期（1m/5m/15m/1h）× 43 策略
+- **验证结果**（verify_seed.py，02-28 黑丝已跑）：
+
+| 维度 | 结果 |
+|------|------|
+| 维度1 重跑对比（5组随机） | ✅ 5/5，15项全部一致（cci/LINK/15m, ichimoku/SOL/1m, adx/BNB/15m, roc/DOT/1h, vpt/AVAX/15m） |
+| 维度2 内部一致性（2236组） | ✅ 胜率2236/2236，平仓类型全通过；PnL 19/20（1组差$0.01浮点精度，vroc/BTC_COIN/5m） |
+| 维度3 逻辑合理性（30M行） | ✅ MFE/MAE/fee/direction/price/NULL全部通过；holding_bars≤0仅68笔（0.00023%） |
+| 维度4 Regime一致性 | ✅ 100/100通过 |
+
+- **平仓类型分布**：signal 28.6M / ttp 1.28M / stop_loss 92K / end_of_data 1.6K
+
+### K线数据：src/backtest/data/historical/
+全部 52 组到位，零错误：
+
+| 币种 | 1m | 5m | 15m | 1h |
+|------|-----|-----|------|-----|
+| BTC | ✅1,052K | ✅420K | ✅140K | ✅70K |
+| ETH | ✅1,052K | ✅420K | ✅140K | ✅70K |
+| XRP | ✅1,052K | ✅420K | ✅140K | ✅68.5K |
+| BNB | ✅1,052K | ✅420K | ✅140K | ✅70K |
+| SOL | ✅1,052K | ✅420K | ✅140K | ✅48.6K |
+| ADA | ✅1,052K | ✅420K | ✅140K | ✅68.9K |
+| TRX | ✅1,052K | ✅420K | ✅140K | ✅67.5K |
+| AVAX | ✅1,052K | ✅420K | ✅140K | ✅47.6K |
+| LINK | ✅1,052K | ✅420K | ✅140K | ✅62.3K |
+| DOT | ✅1,052K | ✅420K | ✅140K | ✅48.4K |
+| BTC_COIN | ✅1,052K | ✅420K | ✅140K | ✅48.6K |
+| ETH_COIN | ✅1,052K | ✅420K | ✅140K | ✅48.5K |
+| BNB_COIN | ✅1,052K | ✅420K | ✅140K | ✅48.4K |
+
+---
+
+## ⬜ 当前任务：种子库深度审查 + 优化
+
+### 背景
+用户拿种子库代码给多个 AI 做了多轮深度审查（7篇分析）。综合所有 AI 的意见，白纱已完成交叉评估，结论如下：
+
+**核心结论：数据库高质量，可以分析使用。但有 2 个字段需要先核实，1 个技术优化待做。**
+
+---
+
+### 行动 1（黑丝先做）：核实 backtest.py 中 BacktestResult 的字段名
+
+**为什么**：`generate_seed.py` 第 607 行用了：
+```python
+result.max_balance, result.min_balance, result.max_profit, result.max_loss
+```
+入库时映射到 combo_summary 的 `max_balance / min_balance / max_win / max_loss`。
+其中 `result.max_profit` 对应的是 `max_win` 字段——但 BacktestResult 里是否真的有 `max_profit` 这个属性名？如果不存在（比如实际叫 `max_pnl` 或 `largest_win`），则 2236 行的 `max_win` 全是 None，静默入库，验证脚本没有单独检查这列。
+
+**怎么做**：读 `src/backtest/backtest.py`，找 `BacktestResult` dataclass，列出所有字段名，对照第 607 行的 4 个属性，确认是否存在、名字是否一致。
+
+**同时核实**：`_bars_per_funding` 的实际值。`pair_trades()` 传入的是 `engine._bars_per_funding`，如果这个值是一个极大数（如 999999），则 30M 行的 `funding_count` 字段全是 0，该字段实际上没有任何分析价值。
+
+**核实后汇报**：
+- 字段名正确 → 什么都不用改，继续行动 2
+- 字段名错误 → 告知白纱，出修复方案后等用户确认再动
+
+---
+
+### 行动 2（核实完再做）：VACUUM 数据库
+
+**为什么**：种子生成时大量 commit + insert 产生碎片，文件虚胖。VACUUM 重建 db，回收空间、加速查询。不改任何数据。
+
+**做法**（安全版，原文件不动）：
+```bash
+cd /Users/allenbot/project/auto-trading/reports
+sqlite3 seed_report.db "VACUUM INTO 'seed_report_vacuumed.db';"
+```
+
+**预期效果**：7.54GB → 预计缩小到 5-6GB（20-50%），GROUP BY / JOIN 查询明显提速。
+
+**时间**：SSD 上约 20-60 分钟，期间 db 锁定，不要中断。
+
+**完成后**：
+1. 验证行数一致：`SELECT COUNT(*) FROM combo_summary` 和 `SELECT COUNT(*) FROM paired_trades` 应和原文件完全相同
+2. 在新文件上跑 `ANALYZE`：`sqlite3 seed_report_vacuumed.db "ANALYZE;"`
+3. 汇报给用户，等用户确认后再决定是否替换原文件
+
+---
+
+### 行动 3（分析阶段）：开始挖掘种子库价值
+
+VACUUM 完成后，用以下方向开始分析（等用户确认分析方向后再执行）：
+
+**推荐分析查询（供参考，不要自行执行）**：
+```sql
+-- Top 策略（按期望比率排序）
+SELECT strategy, AVG(expectancy_ratio), AVG(win_rate), COUNT(*)
+FROM combo_summary
+GROUP BY strategy
+ORDER BY AVG(expectancy_ratio) DESC LIMIT 10;
+
+-- 按 Regime 分组的策略 avg_r
+SELECT cs.strategy, pt.regime_at_open, AVG(pt.r_value), COUNT(*)
+FROM paired_trades pt JOIN combo_summary cs ON pt.combo_id = cs.id
+GROUP BY cs.strategy, pt.regime_at_open
+ORDER BY AVG(pt.r_value) DESC;
+
+-- Bull regime 下胜率 > 60% 的 combo
+SELECT strategy, coin, interval, win_rate, sharpe_ratio
+FROM combo_summary
+WHERE win_rate > 60
+ORDER BY sharpe_ratio DESC LIMIT 20;
+```
+
+---
+
+## 已知限制（非 bug，记录在案）
+
+| 限制 | 说明 | 影响 |
+|------|------|------|
+| Regime 轻微 lookahead | window 包含当前 K 线 close，严格应只用前根 | ADX/SMA 本身滞后，实际影响极小 |
+| MFE/MAE 单位 | 存的是"(high-entry)/entry × leverage"比率，不是美元 | 分析时注意单位，不是 bug |
+| signal_close_count 含 end_of_data | end_of_data 仅 1.6K / 30M = 0.005% | 可忽略 |
+| max_daily_dd 定义 | 最差单日 PnL，非标准峰谷回撤 % | 有参考价值，但定义与标准不同 |
+| CAGR 计算 | 用 K 线数推算天数，有 gap 时略偏高 | 5m gap 16根、1h gap ≤25根，影响极小 |
+
+---
+
+## v2 种子数据库 Schema（完整版）
+
+```sql
+-- 汇总表（35字段）
+CREATE TABLE combo_summary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy TEXT, coin TEXT, interval TEXT,
+    total_return REAL, final_balance REAL, max_drawdown REAL,
+    sharpe_ratio REAL, sortino_ratio REAL, calmar_ratio REAL,
+    total_trades INTEGER, winning_trades INTEGER, losing_trades INTEGER, win_rate REAL,
+    avg_win_pct REAL, avg_loss_pct REAL, profit_factor REAL,
+    ttp_count INTEGER, double_count INTEGER, fastest_double_days REAL, avg_double_days REAL,
+    daily_open_positions REAL,
+    cagr REAL, max_daily_dd REAL, reward_risk REAL, max_consec_loss_amt REAL, total_fees REAL,
+    max_balance REAL, min_balance REAL, max_win REAL, max_loss REAL,
+    expectancy_ratio REAL, longest_win_streak INTEGER, longest_loss_streak INTEGER,
+    signal_close_count INTEGER
+);
+
+-- 配对交易表（24字段）
+CREATE TABLE paired_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    combo_id INTEGER REFERENCES combo_summary(id),
+    open_candle_idx INTEGER, close_candle_idx INTEGER,
+    open_time TEXT, close_time TEXT, holding_bars INTEGER,
+    direction TEXT, entry_price REAL, exit_price REAL,
+    capital REAL, position_size REAL,
+    pnl REAL, r_value REAL, balance_after REAL,
+    close_type TEXT,           -- signal / ttp / stop_loss / liquidation / end_of_data
+    regime_at_open TEXT,       -- bull / bear / ranging / unknown
+    fee REAL, funding_cost REAL, slippage_cost REAL,
+    mfe REAL, mae REAL,        -- 杠杆后比率，非美元
+    open_atr_pct REAL, open_volume REAL, funding_count INTEGER
+);
+
+-- Regime 时间线（每根K线）
+CREATE TABLE regime_timeline (
+    coin TEXT, interval TEXT, candle_idx INTEGER,
+    candle_time_ms INTEGER, regime TEXT, adx REAL, sma_direction TEXT
+);
+
+-- 运行元数据
+CREATE TABLE run_metadata (key TEXT PRIMARY KEY, value TEXT);
+
+-- 索引
+CREATE INDEX idx_pt_combo ON paired_trades(combo_id);
+CREATE INDEX idx_pt_regime ON paired_trades(regime_at_open);
+CREATE UNIQUE INDEX idx_rt ON regime_timeline(coin, interval, candle_idx);
+CREATE UNIQUE INDEX idx_cs ON combo_summary(strategy, coin, interval);
+```
+
+---
+
+## 关键文件
+
+| 文件 | 说明 | 状态 |
+|------|------|------|
+| `src/backtest/backtest.py` | 回测引擎，含 BacktestResult dataclass | ✅ v2 完成 |
+| `src/backtest/generate_seed.py` | 种子生成脚本 | ✅ v2 完成，35字段+自动检测+argparse+断点续传 |
+| `src/backtest/verify_seed.py` | 4维度验证脚本 | ✅ 已运行，验证通过 |
+| `download_latest_coins_2.0.py` | 数据下载脚本 | ✅ 断点续传+双交易所(spot+delivery) |
+| `reports/seed_report.db` | 种子数据库 | ✅ 7.54GB，待 VACUUM |
+| `src/backtest/data/historical/` | K 线数据 | ✅ 52组全部完成 |
+| `run_full_matrix.py` | 旧全矩阵回测 | ❌ 已删除，被 generate_seed.py 替代 |
+| `src/indicators/` | 12个市场指标 | ✅ 完成 |
+| `src/trading/regime/` | Regime v2（ADX三层） | ✅ 完成 |
+
+---
+
+## 回测参数（种子生成时的固定值）
+
+| 参数 | 值 | 说明 |
+|------|----|------|
+| DAYS | 0 | 全量数据，不截取 |
+| INITIAL_CAPITAL | $500 | 初始本金（Van Tharp 标准化基准） |
+| LEVERAGE | 10x | |
+| STOP_LOSS_PCT | 10% | 逐仓止损，回测与实盘等价 |
+| ENABLE_TTP | True | 追踪止盈开启 |
+| FIXED_BET | True | $1 固定注码，PnL = R值 |
+| FEE_RATE | 0.035%/侧 | HyperLiquid taker 费 |
+| SLIPPAGE_PCT | 0.02%/侧 | |
+| FUNDING_RATE_8H | 0.01%/8h | |
+
+---
+
+## 设计原则（用户反复强调，违反会被骂）
+
+- **完整性、真实性、有效性** — 唯一标准，没有"差不多就行"
+- **不写死任何配置** — 币种、周期、策略全部自动识别（扫目录，不写死列表）
+- **改代码必须先说，等用户确认再动** — 这条违反过多次，用户非常在意
+- **不隐瞒遗漏** — 跳过了什么、省略了什么，必须主动报告
+- **用户持有 BNB 现货** — 币本位合约交易是实际需求，数据必须完整
+
+---
+
+## 项目基本信息
+
+- 路径：`/Users/allenbot/project/auto-trading`
+- 版本：v1.8
+- 语言：Python 3.11+，中文注释和 UI，macOS 上用 `python3`
+- GitHub：`earnabitmore365/auto-trading` (private)
+- 数据路径：`src/backtest/data/historical/{COIN}/{interval}.json`
+- 协作模式：白纱(Sonnet)出方案 → 黑丝(Opus)执行，用户确认后再动

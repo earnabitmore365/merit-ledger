@@ -1,0 +1,56 @@
+{
+  "coin": "BNB",
+  "strategy": "cmo",
+  "interval": "15m",
+  "period": "1095天",
+  "timestamp": "20260217_182940",
+  "config": {
+    "initial_capital": 500,
+    "leverage": 10.0,
+    "min_margin": 100
+  },
+  "balance": {
+    "initial": 500,
+    "final": 400.0,
+    "max": 500,
+    "min": 400.0
+  },
+  "results": {
+    "total_return": -20.0,
+    "max_drawdown": 20.0,
+    "sharpe_ratio": -0.5776800894217194,
+    "sortino_ratio": 0,
+    "calmar_ratio": -1.0,
+    "total_trades": 2,
+    "winning_trades": 0,
+    "losing_trades": 0,
+    "win_rate": 0,
+    "avg_win": 0,
+    "avg_loss": 0,
+    "max_win": 0,
+    "max_loss": 0,
+    "profit_factor": 0,
+    "expectancy_ratio": 0,
+    "consecutive_wins": 0,
+    "consecutive_losses": 0,
+    "liquidation_count": 0
+  },
+  "trades": [
+    {
+      "time": "2024-04-10",
+      "order_type": "BUY",
+      "price": 581.2,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 500
+    },
+    {
+      "time": "2024-04-14",
+      "order_type": "STOP_LOSS_BUY",
+      "price": 519.1,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 400.0
+    }
+  ]
+}

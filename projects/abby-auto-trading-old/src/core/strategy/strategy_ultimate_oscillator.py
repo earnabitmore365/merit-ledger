@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""
+Ultimate Oscillator Strategy
+
+Multi-timeframe momentum indicator.
+
+Features:
+- 3 timeframe analysis (7, 14, 28)
+- Weighted average calculation
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from src.core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class UltimateOscillatorConfig:
+    """Ultimate Oscillator configuration"""
+    periods: List[int] = None
+    weights: List[int] = None
+    oversold: float = 30.0
+    overbought: float = 70.0
+
+
+class UltimateOscillator(Strategy):
+    """Ultimate Oscillator trading strategy"""
+    
+    def __init__(self, exchange=None, config: Optional[UltimateOscillatorConfig] = None):
+        """Initialize Ultimate Oscillator strategy
+        
+        Args:
+            exchange: Exchange adapter
+            config: Strategy configuration
+        """
+        self.exchange = exchange
+        self.config = config or UltimateOscillatorConfig()
+        
+        if self.config.periods is None:
+            self.config.periods = [7, 14, 28]
+        if self.config.weights is None:
+            self.config.weights = [4, 2, 1]
+    
+    @property
+    def name(self) -> str:
+        return "ultimate_oscillator"
+    
+    def calculate_bp(
+        self, current: Dict, prev_close: float
+    ) -> float:
+        """Calculate Buying Pressure
+        
+        Args:
+            current: Current candle
+            prev_close: Previous close price
+            
+        Returns:
+            Buying Pressure value
+        """
+        low = current["low"]
+        return current["close"] - min(low, prev_close)
+    
+    def calculate_tr(
+        self, current: Dict, prev_close: float
+    ) -> float:
+        """Calculate True Range
+        
+        Args:
+            current: Current candle
+            prev_close: Previous close price
+            
+        Returns:
+            True Range value
+        """
+        high = current["high"]
+        low = current["low"]
+        return max(high, prev_close) - min(low, prev_close)
+    
+    def calculate_ultimate(self, klines: List[Dict]) -> float:
+        """Calculate Ultimate Oscillator
+        
+        Args:
+            klines: OHLCV data
+            
+        Returns:
+            UO value (0-100)
+        """
+        if len(klines) < 28:
+            return 50.0
+        
+        # Calculate BP and TR
+        bps = []
+        trs = []
+        
+        for i in range(len(klines)):
+            prev_close = klines[i - 1]["close"] if i > 0 else klines[i]["close"]
+            bp = self.calculate_bp(klines[i], prev_close)
+            tr = self.calculate_tr(klines[i], prev_close)
+            bps.append(bp)
+            trs.append(tr)
+        
+        # Calculate averages for each period
+        avgs = []
+        for period in self.config.periods:
+            if len(bps) < period:
+                avgs.append(0.5)
+            else:
+                bp_sum = sum(bps[-period:])
+                tr_sum = sum(trs[-period:])
+                if tr_sum == 0:
+                    avgs.append(0.5)
+                else:
+                    avgs.append(bp_sum / tr_sum)
+        
+        # Calculate weighted average
+        weighted_sum = sum(a * w for a, w in zip(avgs, self.config.weights))
+        weight_total = sum(self.config.weights)
+        
+        return weighted_sum / weight_total * 100
+    
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        """Generate Ultimate Oscillator signal
+        
+        Args:
+            coin: Trading pair
+            klines: OHLCV data
+            
+        Returns:
+            TradingSignal with UO analysis
+        """
+        # Validate klines
+        min_required = 30
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+        
+        # Calculate UO
+        current_uo = self.calculate_ultimate(klines)
+        prev_uo = self.calculate_ultimate(klines[:-1])
+        
+        # Generate signal
+        if prev_uo < self.config.oversold and current_uo > self.config.oversold:
+            signal = Signal.BUY
+            trend = "oversold_recovery"
+        if prev_uo > self.config.overbought and current_uo < self.config.overbought:
+            signal = Signal.SELL
+            trend = "overbought_reversal"
+        if prev_uo < 50 and current_uo >= 50:
+            signal = Signal.BUY
+            trend = "cross_up_50"
+        if prev_uo >= 50 and current_uo < 50:
+            signal = Signal.SELL
+            trend = "cross_down_50"
+        else:
+            signal = Signal.HOLD
+            trend = "neutral"
+        
+        return TradingSignal(
+            signal=signal,
+            confidence=0.6,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "uo": current_uo,
+                "prev_uo": prev_uo,
+                "oversold": self.config.oversold,
+                "overbought": self.config.overbought,
+                "trend": trend,
+            },
+        )

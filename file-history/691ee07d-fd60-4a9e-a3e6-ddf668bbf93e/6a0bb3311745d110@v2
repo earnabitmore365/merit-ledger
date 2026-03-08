@@ -1,0 +1,118 @@
+"""Fair Value Gap (FVG) — 公允价值缺口策略
+
+3根K线模式：
+- 看涨FVG：第3根最低价 > 第1根最高价（向上跳空），价格回踩缺口做多
+- 看跌FVG：第3根最高价 < 第1根最低价（向下跳空），价格反弹缺口做空
+
+交易逻辑：
+- 检测到FVG后，等价格回到缺口区域（50%回填位）时入场
+- 天生多空双向，signal close正常触发
+"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class FVGConfig:
+    lookback: int = 20          # 回看多少根K线寻找FVG
+    min_gap_pct: float = 0.001  # 最小缺口百分比（过滤噪音，0.1%）
+
+
+class FVG(Strategy):
+    def __init__(self, exchange=None, config: Optional[FVGConfig] = None):
+        self.exchange = exchange
+        self.config = config or FVGConfig()
+
+    @property
+    def name(self) -> str:
+        return "fvg"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = self.config.lookback + 3
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        current_price = klines[-1]["close"]
+
+        # 在回看窗口内寻找最近的未填补FVG
+        best_bull_fvg = None  # (gap_low, gap_high, gap_mid, age)
+        best_bear_fvg = None
+
+        search_start = max(0, len(klines) - self.config.lookback - 2)
+        for i in range(search_start, len(klines) - 2):
+            c1 = klines[i]
+            c3 = klines[i + 2]
+
+            # 看涨FVG：第3根最低 > 第1根最高（向上跳空）
+            if c3["low"] > c1["high"]:
+                gap_low = c1["high"]
+                gap_high = c3["low"]
+                gap_size = (gap_high - gap_low) / gap_low if gap_low > 0 else 0
+                if gap_size >= self.config.min_gap_pct:
+                    # 检查缺口是否已被后续K线填补
+                    filled = False
+                    for j in range(i + 3, len(klines)):
+                        if klines[j]["low"] <= gap_low:
+                            filled = True
+                            break
+                    if not filled:
+                        age = len(klines) - 1 - i
+                        gap_mid = (gap_low + gap_high) / 2
+                        if best_bull_fvg is None or age < best_bull_fvg[3]:
+                            best_bull_fvg = (gap_low, gap_high, gap_mid, age)
+
+            # 看跌FVG：第3根最高 < 第1根最低（向下跳空）
+            if c3["high"] < c1["low"]:
+                gap_high = c1["low"]
+                gap_low = c3["high"]
+                gap_size = (gap_high - gap_low) / gap_low if gap_low > 0 else 0
+                if gap_size >= self.config.min_gap_pct:
+                    filled = False
+                    for j in range(i + 3, len(klines)):
+                        if klines[j]["high"] >= gap_high:
+                            filled = True
+                            break
+                    if not filled:
+                        age = len(klines) - 1 - i
+                        gap_mid = (gap_low + gap_high) / 2
+                        if best_bear_fvg is None or age < best_bear_fvg[3]:
+                            best_bear_fvg = (gap_low, gap_high, gap_mid, age)
+
+        # 判断信号：价格进入未填补的FVG区域
+        signal = Signal.HOLD
+        confidence = 0.0
+        metadata = {}
+
+        if best_bull_fvg:
+            gap_low, gap_high, gap_mid, age = best_bull_fvg
+            # 价格回踩到缺口区域 → 做多
+            if gap_low <= current_price <= gap_high:
+                signal = Signal.BUY
+                confidence = 1.0 - (current_price - gap_low) / (gap_high - gap_low) if gap_high > gap_low else 0.5
+                metadata = {"fvg_type": "bullish", "gap_low": gap_low,
+                           "gap_high": gap_high, "age": age}
+
+        if best_bear_fvg:
+            gap_low, gap_high, gap_mid, age = best_bear_fvg
+            # 价格反弹到缺口区域 → 做空
+            if gap_low <= current_price <= gap_high:
+                # 如果同时有牛熊FVG，取更近的那个
+                if signal == Signal.BUY:
+                    if age < best_bull_fvg[3]:
+                        signal = Signal.SELL
+                        confidence = (current_price - gap_low) / (gap_high - gap_low) if gap_high > gap_low else 0.5
+                        metadata = {"fvg_type": "bearish", "gap_low": gap_low,
+                                   "gap_high": gap_high, "age": age}
+                else:
+                    signal = Signal.SELL
+                    confidence = (current_price - gap_low) / (gap_high - gap_low) if gap_high > gap_low else 0.5
+                    metadata = {"fvg_type": "bearish", "gap_low": gap_low,
+                               "gap_high": gap_high, "age": age}
+
+        return TradingSignal(signal=signal, confidence=confidence,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata=metadata)

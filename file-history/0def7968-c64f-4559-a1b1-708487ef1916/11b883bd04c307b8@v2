@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""
+ADX 2yi Strategy - MA20/MA50 三段排列
+
+实际实现是 MA20/MA50 双均线三段排列，不是真正的 ADX。
+保留此策略，使用 2yi 后缀标注。
+
+原策略逻辑：
+- current > MA20 > MA50 → BUY（多头排列）
+- current < MA20 < MA50 → SELL（空头排列）
+- 其他 → HOLD
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class ADX2yiConfig:
+    """ADX 2yi strategy configuration"""
+    short_period: int = 20
+    long_period: int = 50
+
+
+class ADX2yi(Strategy):
+    """ADX 2yi trading strategy（MA三段排列版）"""
+
+    def __init__(self, exchange=None, config: Optional[ADX2yiConfig] = None):
+        self.exchange = exchange
+        self.config = config or ADX2yiConfig()
+
+    @property
+    def name(self) -> str:
+        return "adx2yi"
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        min_required = self.config.long_period
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        closes = [c["close"] for c in klines]
+        current = closes[-1]
+
+        ma_short = sum(closes[-self.config.short_period:]) / self.config.short_period
+        ma_long = sum(closes[-self.config.long_period:]) / self.config.long_period
+
+        if current > ma_short > ma_long:
+            signal = Signal.BUY
+            trend = "strong_uptrend"
+        elif current < ma_short < ma_long:
+            signal = Signal.SELL
+            trend = "strong_downtrend"
+        else:
+            signal = Signal.HOLD
+            trend = "consolidation"
+
+        return TradingSignal(
+            signal=signal,
+            confidence=0.6,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "ma_short": ma_short,
+                "ma_long": ma_long,
+                "current": current,
+                "trend": trend,
+            },
+        )

@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""
+CMF Strategy - Chaikin Money Flow（真正的CMF指标）
+
+用 Money Flow Multiplier (MFM) 计算资金流量比率：
+  MFM = ((close - low) - (high - close)) / (high - low)
+  CMF = sum(MFM × volume) / sum(volume)
+
+CMF 范围 -1 到 +1：
+  > 0 → 买方力量大于卖方（资金流入）→ BUY
+  < 0 → 卖方力量大于买方（资金流出）→ SELL
+
+与 AD 的区别：AD 是累积值（越来越大），CMF 是比率（始终在 -1~+1 之间），
+CMF 对近期资金流向更敏感。
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class CMFConfig:
+    """CMF configuration"""
+    period: int = 20
+
+
+class CMF(Strategy):
+    """Chaikin Money Flow trading strategy"""
+
+    def __init__(self, exchange=None, config: Optional[CMFConfig] = None):
+        self.exchange = exchange
+        self.config = config or CMFConfig()
+
+    @property
+    def name(self) -> str:
+        return "cmf"
+
+    def calculate_cmf(self, klines: List[Dict]) -> float:
+        """计算 CMF 值"""
+        mfv_sum = 0.0
+        vol_sum = 0.0
+
+        for k in klines:
+            high = k["high"]
+            low = k["low"]
+            close = k["close"]
+            volume = k.get("volume", 1000)
+
+            hl_range = high - low
+            if hl_range > 0:
+                mfm = ((close - low) - (high - close)) / hl_range
+            else:
+                mfm = 0.0
+
+            mfv_sum += mfm * volume
+            vol_sum += volume
+
+        return mfv_sum / vol_sum if vol_sum > 0 else 0.0
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        min_required = self.config.period
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        cmf = self.calculate_cmf(klines[-self.config.period:])
+
+        if cmf > 0:
+            signal = Signal.BUY
+            trend = "money_inflow"
+        elif cmf < 0:
+            signal = Signal.SELL
+            trend = "money_outflow"
+        else:
+            signal = Signal.HOLD
+            trend = "neutral"
+
+        return TradingSignal(
+            signal=signal,
+            confidence=0.6,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={"cmf": cmf, "trend": trend},
+        )

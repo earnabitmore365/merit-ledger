@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""
+ATR Pullback Strategy (Route A)
+
+Trend pullback entry: detect uptrend/downtrend via VWAP slope,
+then enter on RSI oversold/overbought pullback.
+
+Logic:
+- VWAP slope up + RSI < 35 = BUY (dip in uptrend)
+- VWAP slope down + RSI > 65 = SELL (bounce in downtrend)
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class ATRPullbackConfig:
+    atr_period: int = 14
+    vwap_period: int = 20
+    rsi_period: int = 14
+    vwap_slope_lookback: int = 5
+    rsi_oversold: float = 35.0
+    rsi_overbought: float = 65.0
+
+
+class ATRPullback(Strategy):
+
+    def __init__(self, exchange=None, config: Optional[ATRPullbackConfig] = None):
+        self.exchange = exchange
+        self.config = config or ATRPullbackConfig()
+
+    @property
+    def name(self) -> str:
+        return "atr_pullback"
+
+    def calculate_atr(self, klines: List[Dict], period: int = None) -> float:
+        if period is None:
+            period = self.config.atr_period
+        if len(klines) < period + 1:
+            return 0.0
+        tr_list = []
+        for i in range(1, len(klines)):
+            high = klines[i]["high"]
+            low = klines[i]["low"]
+            prev_close = klines[i - 1]["close"]
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            tr_list.append(tr)
+        if len(tr_list) < period:
+            return sum(tr_list) / len(tr_list) if tr_list else 0.0
+        return sum(tr_list[-period:]) / period
+
+    def calculate_vwap(self, klines: List[Dict], period: int = None) -> float:
+        if period is None:
+            period = self.config.vwap_period
+        if len(klines) < period:
+            return sum(c["close"] for c in klines) / len(klines)
+        tp_sum = 0.0
+        vol_sum = 0.0
+        for c in klines[-period:]:
+            tp = (c["high"] + c["low"] + c["close"]) / 3
+            v = c.get("volume", 1000)
+            tp_sum += tp * v
+            vol_sum += v
+        return tp_sum / vol_sum if vol_sum else 0.0
+
+    def calculate_vwap_at(self, klines: List[Dict], end_idx: int, period: int = None) -> float:
+        """Calculate VWAP ending at a specific index."""
+        if period is None:
+            period = self.config.vwap_period
+        start = max(0, end_idx - period + 1)
+        subset = klines[start:end_idx + 1]
+        if not subset:
+            return 0.0
+        tp_sum = 0.0
+        vol_sum = 0.0
+        for c in subset:
+            tp = (c["high"] + c["low"] + c["close"]) / 3
+            v = c.get("volume", 1000)
+            tp_sum += tp * v
+            vol_sum += v
+        return tp_sum / vol_sum if vol_sum else 0.0
+
+    def calculate_rsi(self, klines: List[Dict], period: int = None) -> float:
+        """Wilder RSI."""
+        if period is None:
+            period = self.config.rsi_period
+        if len(klines) < period + 1:
+            return 50.0
+        gains = []
+        losses = []
+        for i in range(1, len(klines)):
+            change = klines[i]["close"] - klines[i - 1]["close"]
+            gains.append(max(change, 0))
+            losses.append(max(-change, 0))
+        if len(gains) < period:
+            return 50.0
+        avg_gain = sum(gains[:period]) / period
+        avg_loss = sum(losses[:period]) / period
+        for i in range(period, len(gains)):
+            avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+            avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        if avg_loss == 0:
+            return 100.0
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = max(self.config.atr_period, self.config.vwap_period,
+                          self.config.rsi_period) + self.config.vwap_slope_lookback + 5
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        # VWAP slope: compare current vs N bars ago
+        vwap_now = self.calculate_vwap(klines)
+        vwap_prev = self.calculate_vwap_at(klines, len(klines) - 1 - self.config.vwap_slope_lookback)
+
+        if vwap_prev == 0:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"],
+                metadata={"reason": "VWAP calculation failed"},
+            )
+
+        vwap_slope = (vwap_now - vwap_prev) / vwap_prev
+
+        # RSI
+        rsi = self.calculate_rsi(klines)
+
+        # ATR for metadata
+        atr = self.calculate_atr(klines)
+        current = klines[-1]["close"]
+
+        # Signal logic: trend + pullback
+        signal = Signal.HOLD
+        trend = "neutral"
+
+        if vwap_slope > 0 and rsi < self.config.rsi_oversold:
+            # Uptrend + oversold pullback = buy the dip
+            signal = Signal.BUY
+            confidence = (self.config.rsi_oversold - rsi) / self.config.rsi_oversold
+            trend = "uptrend_pullback"
+        elif vwap_slope < 0 and rsi > self.config.rsi_overbought:
+            # Downtrend + overbought bounce = sell the rally
+            signal = Signal.SELL
+            confidence = (rsi - self.config.rsi_overbought) / (100 - self.config.rsi_overbought)
+            trend = "downtrend_bounce"
+        else:
+            confidence = 0.0
+
+        return TradingSignal(
+            signal=signal,
+            confidence=min(confidence, 1.0),
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "atr": atr, "vwap": vwap_now, "vwap_slope": vwap_slope,
+                "rsi": rsi, "price": current, "trend": trend,
+            },
+        )

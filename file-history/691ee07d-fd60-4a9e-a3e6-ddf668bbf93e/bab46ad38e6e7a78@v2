@@ -1,0 +1,70 @@
+"""TVI — Trade Volume Index（真正的量价累积指标）"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class TVIConfig:
+    min_tick: float = 0.001  # 最小变动幅度(百分比)
+    sma_period: int = 10
+
+
+class TVI(Strategy):
+    """Trade Volume Index：根据价格变动方向累积成交量"""
+
+    def __init__(self, exchange=None, config: Optional[TVIConfig] = None):
+        self.exchange = exchange
+        self.config = config or TVIConfig()
+
+    @property
+    def name(self) -> str:
+        return "tvi"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        sma_p = self.config.sma_period
+        min_required = sma_p + 20
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        # 算TVI序列：价格涨→加volume，价格跌→减volume，不动→不变
+        tvi_series = [0.0]
+        for i in range(1, len(klines)):
+            prev_close = klines[i - 1]["close"]
+            curr_close = klines[i]["close"]
+            vol = klines[i].get("volume", 1000)
+
+            if prev_close == 0:
+                pct_change = 0
+            else:
+                pct_change = (curr_close - prev_close) / prev_close * 100
+
+            if pct_change > self.config.min_tick:
+                tvi_series.append(tvi_series[-1] + vol)
+            elif pct_change < -self.config.min_tick:
+                tvi_series.append(tvi_series[-1] - vol)
+            else:
+                tvi_series.append(tvi_series[-1])
+
+        # TVI crossing SMA
+        if len(tvi_series) < sma_p + 1:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"])
+
+        tvi_now = tvi_series[-1]
+        tvi_sma = sum(tvi_series[-sma_p:]) / sma_p
+        prev_tvi = tvi_series[-2]
+        prev_sma = sum(tvi_series[-sma_p - 1:-1]) / sma_p
+
+        if prev_tvi <= prev_sma and tvi_now > tvi_sma:
+            signal = Signal.BUY
+        elif prev_tvi >= prev_sma and tvi_now < tvi_sma:
+            signal = Signal.SELL
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(signal=signal, confidence=0.6,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"tvi": tvi_now, "tvi_sma": tvi_sma})

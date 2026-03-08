@@ -1,0 +1,4 @@
+#!/bin/bash
+# 启动 agentchattr 聊天服务器（必须先跑，再启动黑丝/白纱）
+cd "$(dirname "$0")"
+python3 run.py

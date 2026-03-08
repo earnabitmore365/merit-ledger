@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""
+On-Chain Indicators
+
+链上数据指标（BGeometrics / bitcoin-data.com 免费 API，8次/小时）
+- MVRV Z-Score
+- NUPL（Net Unrealized Profit/Loss）
+- Puell Multiple
+- Exchange Netflow
+"""
+
+import json
+import time
+import urllib.request
+from typing import Any, Dict
+
+from .base import BaseIndicator, register_indicator
+
+BGEOMETRICS_BASE = "https://bitcoin-data.com/api"
+CACHE_TTL = 21600  # 6小时（8次/小时限制，4个指标=2轮/小时足够）
+REQUEST_INTERVAL = 0.5  # 请求间隔秒数
+
+# 模块级时间戳，控制请求节奏
+_last_request_time = 0
+
+
+def _bg_fetch(endpoint: str) -> Any:
+    """BGeometrics API 请求（含节奏控制）"""
+    global _last_request_time
+
+    elapsed = time.time() - _last_request_time
+    if elapsed < REQUEST_INTERVAL:
+        time.sleep(REQUEST_INTERVAL - elapsed)
+
+    url = f"{BGEOMETRICS_BASE}{endpoint}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        _last_request_time = time.time()
+        return json.loads(resp.read())
+
+
+def _extract_value(data: Any, fallback_key: str, label: str) -> float:
+    """从 API 返回提取数值（兼容 dict/list/直接数字）"""
+    if isinstance(data, (int, float)):
+        return float(data)
+    if isinstance(data, dict):
+        # 尝试常见字段名
+        for key in ["value", fallback_key, "data"]:
+            if key in data:
+                return float(data[key])
+        # 只有一个数值字段，直接取
+        nums = {k: v for k, v in data.items() if isinstance(v, (int, float))}
+        if len(nums) == 1:
+            return float(list(nums.values())[0])
+        raise ValueError(f"{label} API 返回 dict 但无法提取值: {list(data.keys())}")
+    if isinstance(data, list) and data:
+        return _extract_value(data[-1], fallback_key, label)
+    raise ValueError(f"{label} API 返回格式异常: {type(data)}")
+
+
+# ==================== MVRV Z-Score ====================
+
+class MVRVIndicator(BaseIndicator):
+    """MVRV Z-Score
+
+    Market Value to Realized Value 的标准化偏差
+    评分:
+      <0   → 0.9 (历史底部)
+      0-2  → 0.7
+      2-4  → 0.5
+      4-7  → 0.2
+      >7   → 0.05 (顶部)
+    """
+
+    name = "mvrv"
+    source = "onchain"
+
+    def fetch(self, **kwargs) -> float:
+        cached = self._read_cache("mvrv", CACHE_TTL)
+        if cached is not None:
+            return cached
+
+        try:
+            data = _bg_fetch("/v1/mvrv-zscore/last")
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                stale = self._read_cache_stale("mvrv")
+                if stale is not None:
+                    return stale
+            raise
+
+        value = _extract_value(data, "mvrv", "MVRV")
+        self._write_cache("mvrv", value, CACHE_TTL)
+        return round(value, 4)
+
+    def score(self, raw_value: float) -> float:
+        v = raw_value
+        if v < 0:
+            return 0.9
+        elif v < 2:
+            return 0.7
+        elif v < 4:
+            return 0.5
+        elif v < 7:
+            return 0.2
+        else:
+            return 0.05
+
+
+register_indicator("mvrv", MVRVIndicator)
+
+
+# ==================== NUPL ====================
+
+class NUPLIndicator(BaseIndicator):
+    """NUPL (Net Unrealized Profit/Loss)
+
+    全网未实现盈亏比例
+    评分:
+      <0      → 0.9 (投降)
+      0-0.25  → 0.7 (希望)
+      0.25-0.5 → 0.5 (乐观)
+      0.5-0.75 → 0.3 (信念)
+      >0.75   → 0.1 (狂热)
+    """
+
+    name = "nupl"
+    source = "onchain"
+
+    def fetch(self, **kwargs) -> float:
+        cached = self._read_cache("nupl", CACHE_TTL)
+        if cached is not None:
+            return cached
+
+        try:
+            data = _bg_fetch("/v1/nupl/last")
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                stale = self._read_cache_stale("nupl")
+                if stale is not None:
+                    return stale
+            raise
+
+        value = _extract_value(data, "nupl", "NUPL")
+        self._write_cache("nupl", value, CACHE_TTL)
+        return round(value, 4)
+
+    def score(self, raw_value: float) -> float:
+        v = raw_value
+        if v < 0:
+            return 0.9
+        elif v < 0.25:
+            return 0.7
+        elif v < 0.5:
+            return 0.5
+        elif v < 0.75:
+            return 0.3
+        else:
+            return 0.1
+
+
+register_indicator("nupl", NUPLIndicator)
+
+
+# ==================== Puell Multiple ====================
+
+class PuellMultipleIndicator(BaseIndicator):
+    """Puell Multiple
+
+    矿工日收入 / 365日均收入
+    评分:
+      <0.5 → 0.9 (矿工投降)
+      0.5-1 → 0.7
+      1-2  → 0.5
+      2-4  → 0.3
+      >4   → 0.1 (矿工暴利)
+    """
+
+    name = "puell_multiple"
+    source = "onchain"
+
+    def fetch(self, **kwargs) -> float:
+        cached = self._read_cache("puell", CACHE_TTL)
+        if cached is not None:
+            return cached
+
+        try:
+            data = _bg_fetch("/v1/puell-multiple/last")
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                stale = self._read_cache_stale("puell")
+                if stale is not None:
+                    return stale
+            raise
+
+        value = _extract_value(data, "puell", "Puell")
+        self._write_cache("puell", value, CACHE_TTL)
+        return round(value, 4)
+
+    def score(self, raw_value: float) -> float:
+        v = raw_value
+        if v < 0.5:
+            return 0.9
+        elif v < 1:
+            return 0.7
+        elif v < 2:
+            return 0.5
+        elif v < 4:
+            return 0.3
+        else:
+            return 0.1
+
+
+register_indicator("puell_multiple", PuellMultipleIndicator)
+
+
+# ==================== Exchange Netflow ====================
+
+class ExchangeNetflowIndicator(BaseIndicator):
+    """交易所净流入
+
+    BTC 流入交易所 - 流出交易所
+    评分:
+      大量流出(负) → 0.8 (看涨，提币囤币)
+      少量流出    → 0.65
+      少量流入    → 0.35
+      大量流入(正) → 0.2 (看跌，准备抛售)
+    """
+
+    name = "exchange_netflow"
+    source = "onchain"
+
+    def fetch(self, **kwargs) -> float:
+        cached = self._read_cache("netflow", CACHE_TTL)
+        if cached is not None:
+            return cached
+
+        try:
+            data = _bg_fetch("/v1/exchange-netflow-btc/last")
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                stale = self._read_cache_stale("netflow")
+                if stale is not None:
+                    return stale
+            raise
+
+        value = _extract_value(data, "netflow", "Netflow")
+        self._write_cache("netflow", value, CACHE_TTL)
+        return round(value, 2)
+
+    def score(self, raw_value: float) -> float:
+        v = raw_value
+        if v < -5000:
+            return 0.85
+        elif v < -1000:
+            return 0.7
+        elif v < -100:
+            return 0.6
+        elif v < 100:
+            return 0.5
+        elif v < 1000:
+            return 0.4
+        elif v < 5000:
+            return 0.3
+        else:
+            return 0.2
+
+
+register_indicator("exchange_netflow", ExchangeNetflowIndicator)
+
+
+__all__ = [
+    'MVRVIndicator', 'NUPLIndicator',
+    'PuellMultipleIndicator', 'ExchangeNetflowIndicator',
+]

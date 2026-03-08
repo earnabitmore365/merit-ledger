@@ -1,0 +1,29 @@
+   408→
+   409→## 9. 术语参考
+   410→
+   411→### 9.1 交易操作 (Action)
+   412→
+   413→| 操作 | 说明 | 持仓变化 |
+   414→|------|------|---------|
+   415→| `BUY` | 开多仓 | 无 → 多 |
+   416→| `SELL` | 开空仓 | 无 → 空 |
+   417→| `CLOSE_BUY` | 平多仓 | 多 → 无 |
+   418→| `CLOSE_SELL` | 平空仓 | 空 → 无 |
+   419→| `REVERSE_BUY` | 反手平多 + 开空 | 多 → 空 |
+   420→| `REVERSE_SELL` | 反手平空 + 开多 | 空 → 多 |
+   421→| `TTP_CLOSE_BUY` | TTP 平多仓 | 多 → 无 |
+   422→| `TTP_CLOSE_SELL` | TTP 平空仓 | 空 → 无 |
+   423→| `NONE` | 无操作 | 不变 |
+   424→
+   425→### 9.2 持仓状态
+   426→
+   427→| 状态 | 说明 |
+   428→|------|------|
+   429→| `NO_POSITION` | 无持仓 |
+   430→| `BUY` | 多仓 (Long) |
+   431→| `SELL` | 空仓 (Short) |
+   432→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

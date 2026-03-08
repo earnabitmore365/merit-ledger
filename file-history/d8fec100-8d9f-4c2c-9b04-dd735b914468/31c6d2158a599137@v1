@@ -1,0 +1,84 @@
+# 更新 README.md — v1.5
+
+## Context
+
+README.md 停留在 v1.4（2026-02-25），需要更新为当前系统状态 v1.5。
+
+主要变更：
+1. 策略数量从 41 → 44（新增 atr_trailing_stop, vroc, cci_long, cci_short, demandindex_long, demandindex_short 等）
+2. 新增 `src/ui/` 公共 UI 组件库（BaseMenu、Color、Box）
+3. trade_menu.py 完全重写 — 7步流程、风险参数表单页、确认页、紧凑交易面板
+4. 新增 StatsCalculator 统计计算器（去重）
+5. CJK 显示宽度修复（`unicodedata.east_asian_width`）
+6. 新增最低金额（min_trade）配置项
+7. 新增 presets.py 预设策略方案 + quick_trade.py 一键启动
+8. 新增 run_recommended.command 快速交易入口
+9. 数据：10 币种（ADA, AVAX, BNB, BTC, DOT, ETH, LINK, SOL, TRX, XRP）
+10. CLAUDE.md 同步更新版本号和策略数
+
+## 修改文件
+
+| 文件 | 操作 |
+|------|------|
+| `README.md` | **重写** — 更新目录树、策略列表、版本号、新功能描述 |
+| `CLAUDE.md` | **微调** — 版本号 1.4→1.5，策略数 43→44 |
+
+## README.md 更新要点
+
+### 1. 版本和标题
+- v1.4 → v1.5
+- 日期 → 2026-02-26
+
+### 2. 目录结构
+新增：
+```
+├── src/
+│   ├── ui/                  # 公共 UI 组件库（新增）
+│   │   ├── __init__.py
+│   │   └── base.py          # BaseMenu / Color / Box
+│   ├── trading/
+│   │   ├── presets.py       # 策略预设方案（新增）
+│   │   └── quick_trade.py   # 一键启动（新增）
+├── user_interface/
+│   └── run_recommended.command  # 快速交易入口（新增）
+```
+
+### 3. 策略列表
+更新为 44 个，增加分类：
+- 新增：atr_trailing_stop, vroc, cci_long, cci_short, demandindex_long, demandindex_short, momentum_echo
+
+### 4. UI 库说明
+新增 section 介绍 `src/ui/base.py`：
+- BaseMenu：box 绘制基元、navigate_options、show_form、show_confirm、show_loading
+- Color：11 个语义色对
+- Box：Unicode 圆角边框字符
+- CJK 宽度处理：`_dw()`, `_trunc()`, `_pad()`
+
+### 5. 交易菜单流程
+更新为 7 步：
+0. 连接设置（交易所/网络/账号，单选自动跳过）
+1. 连接交易所（loading spinner）
+2. 选币种
+3. 选策略
+4. 选周期
+5. 风险参数（表单页：杠杆/仓位/止损/TTP/最低金额）
+6. 确认 + 启动 → 交易面板
+
+### 6. 交易面板
+描述新的紧凑卡片布局：账户/持仓左右分栏，统计行，日志区
+
+### 7. 预设交易
+新增 section 介绍 presets.py + quick_trade.py
+
+### 8. 更新日志
+新增 v1.5 条目
+
+## CLAUDE.md 更新
+- 版本号 v1.4 → v1.5
+- 策略数 43 → 44
+- 新增 ui/ 模块说明
+
+## 验证
+- 确认目录结构与实际一致
+- 确认策略数量准确
+- 确认所有新文件都有提及

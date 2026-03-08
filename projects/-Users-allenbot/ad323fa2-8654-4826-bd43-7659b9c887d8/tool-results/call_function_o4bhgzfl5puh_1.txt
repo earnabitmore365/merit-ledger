@@ -1,0 +1,21 @@
+101:    def __init__(
+102-        self,
+103-        coin: str,
+104-        interval: str = '1h',
+105-        days: int = 1095,
+106-        initial_capital: float = 500,
+107-        enable_ttp: bool = True,
+108-        stop_loss_pct: float = 0.1,
+109-        leverage: float = 10.0,
+110-        enable_withdraw: bool = True  # 启用自动提款功能
+111-    ):
+112-        self.coin = coin.upper()
+113-        self.interval = interval
+114-        self.days = days
+115-        self.initial_capital = initial_capital
+116-        self.enable_ttp = enable_ttp
+117-        self.stop_loss_pct = stop_loss_pct
+118-        self.leverage = leverage
+119-        self.enable_withdraw = enable_withdraw  # 提款开关
+120-        
+121-        self.klines = self._load_data()

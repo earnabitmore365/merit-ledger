@@ -1,0 +1,12 @@
+╭─── Claude Code v2.1.50 ────────────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting started      │
+│                 Welcome back Allen!                │ ✔ Run /init to create a CLAU… │
+│                                                    │ ───────────────────────────── │
+│                                                    │ Recent activity               │
+│                      ▗ ▗   ▖ ▖                     │ No recent activity            │
+│                                                    │                               │
+│                        ▘▘ ▝▝                       │                               │
+│      Opus 4.6 · Claude Max ·                       │                               │
+│      earnabitmore365@gmail.com's Organization      │                               │
+│                  /Users/allenbot                   │                               │
+╰────────────────────────────────────────────────────────────────────────────────────╯

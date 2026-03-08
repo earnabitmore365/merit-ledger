@@ -1,0 +1,566 @@
+#!/usr/bin/env python3
+"""
+Abby 快速交易 — 预设策略一键启动
+
+基于回测分析结果的推荐策略，跳过 12 步配置向导直接进入交易。
+"""
+
+import sys
+import os
+import json
+import logging
+import time
+import io
+import curses
+import threading
+from datetime import datetime
+
+# 添加项目路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+# 配置根日志
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+if not root_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+    root_logger.addHandler(handler)
+    root_logger.propagate = False
+
+from trading.presets import get_presets, TradingPreset
+from exchange.hyperliquid.accounts import get_adapter_config, list_accounts
+
+
+def _suppress_terminal_output():
+    """进入 curses 后，全局禁止根日志和 stdout/stderr 写终端"""
+    devnull = io.StringIO()
+    root = logging.getLogger()
+    saved = []
+    for h in root.handlers:
+        if isinstance(h, logging.StreamHandler):
+            saved.append((h, h.stream))
+            h.stream = devnull
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    sys.stdout = devnull
+    sys.stderr = devnull
+    return saved, old_stdout, old_stderr, devnull
+
+
+class QuickTradeMenu:
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.stdscr.nodelay(False)
+        self.stdscr.keypad(True)
+
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, 81, 236)    # 标题（青蓝）
+        curses.init_pair(2, 46, 236)    # 高亮选中（亮绿）
+        curses.init_pair(3, 226, 236)   # 提示（黄色）
+        curses.init_pair(4, 251, 236)   # 正文（白灰）
+        curses.init_pair(5, 196, 236)   # 错误/退出（红）
+        curses.init_pair(6, 171, 236)   # 强调（紫）
+        curses.init_pair(7, 244, 236)   # 灰色
+        curses.init_pair(8, 40, 236)    # 日志/成功（绿）
+        curses.init_pair(9, 46, 236)    # 盈利（绿）
+        curses.init_pair(10, 196, 236)  # 亏损（红）
+        curses.curs_set(0)
+
+        self.height, self.width = stdscr.getmaxyx()
+        self.stdscr.bkgd(' ', curses.color_pair(4))
+
+    def draw_header(self, subtitle=""):
+        self.stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
+        self.stdscr.addstr(0, 0, "╔" + "═" * (self.width - 2) + "╗")
+        title = " Abby 快速交易 "
+        self.stdscr.addstr(1, (self.width - len(title)) // 2, title)
+        self.stdscr.addstr(2, 0, "╚" + "═" * (self.width - 2) + "╝")
+        self.stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
+        if subtitle:
+            self.stdscr.addstr(3, 2, subtitle, curses.color_pair(3))
+
+    def select_preset(self):
+        """选择预设方案，返回 TradingPreset 或 None（退出）"""
+        presets = get_presets()
+        selected = 0
+
+        while True:
+            self.stdscr.erase()
+            self.height, self.width = self.stdscr.getmaxyx()
+            self.draw_header("选择预设策略方案  [↑↓] 选择  [Enter] 确认  [Esc] 退出")
+
+            y = 5
+            for i, p in enumerate(presets):
+                if y >= self.height - 2:
+                    break
+                if i == selected:
+                    attr = curses.color_pair(2) | curses.A_BOLD
+                    prefix = " ► "
+                else:
+                    attr = curses.color_pair(4)
+                    prefix = "   "
+
+                line = f"{prefix}{p.name}"
+                self.stdscr.addstr(y, 0, line[:self.width - 1], attr)
+                y += 1
+
+                # 描述行
+                desc = f"     {p.description}"
+                desc_attr = curses.color_pair(7) if i != selected else curses.color_pair(3)
+                self.stdscr.addstr(y, 0, desc[:self.width - 1], desc_attr)
+                y += 1
+
+            # 底部提示
+            bottom = self.height - 1
+            self.stdscr.addstr(bottom, 0, " " * (self.width - 1), curses.color_pair(7))
+            info = f"测试网 · 杠杆 {presets[selected].leverage}x · 仓位 {int(presets[selected].position_pct*100)}% · 止损 {int(presets[selected].stop_loss_pct*100)}% · TTP {'开启' if presets[selected].enable_ttp else '关闭'}"
+            self.stdscr.addstr(bottom, 1, info[:self.width - 2], curses.color_pair(7))
+            self.stdscr.refresh()
+
+            key = self.stdscr.getch()
+            if key == curses.KEY_UP:
+                selected = max(0, selected - 1)
+            elif key == curses.KEY_DOWN:
+                selected = min(len(presets) - 1, selected + 1)
+            elif key in [curses.KEY_ENTER, 10, 13]:
+                return presets[selected]
+            elif key == 27:  # Esc
+                return None
+
+    def show_loading(self, title, task_fn):
+        """加载动画"""
+        spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        result = [None]
+        error = [None]
+        done = threading.Event()
+
+        def worker():
+            try:
+                result[0] = task_fn()
+            except Exception as e:
+                error[0] = e
+            finally:
+                done.set()
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        frame = 0
+        self.stdscr.nodelay(True)
+        try:
+            while not done.is_set():
+                self.stdscr.erase()
+                self.draw_header()
+                spinner = spinner_chars[frame % len(spinner_chars)]
+                self.stdscr.addstr(4, 2, f"{spinner} {title}...", curses.color_pair(3))
+                self.stdscr.refresh()
+                frame += 1
+                time.sleep(0.1)
+                self.stdscr.getch()
+        finally:
+            self.stdscr.nodelay(False)
+
+        if error[0]:
+            self.stdscr.erase()
+            self.draw_header()
+            self.stdscr.addstr(4, 2, f"✗ {title}失败: {error[0]}", curses.color_pair(5))
+            self.stdscr.addstr(6, 2, "按任意键返回...", curses.color_pair(7))
+            self.stdscr.refresh()
+            self.stdscr.getch()
+            return None
+
+        return result[0]
+
+    def show_dashboard(self, preset, adapter, system, initial_balance, log_buffer):
+        """交易仪表盘"""
+        self.height, self.width = self.stdscr.getmaxyx()
+        coin = preset.coin
+        max_log_lines = 10
+        input_mode = False
+        input_text = ""
+        stop_event = threading.Event()
+
+        while not stop_event.is_set():
+            self.stdscr.erase()
+            self.height, self.width = self.stdscr.getmaxyx()
+            self.stdscr.bkgd(' ', curses.color_pair(4))
+
+            # 标题
+            self.stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
+            self.stdscr.addstr(0, 0, "╔" + "═" * (self.width - 2) + "╗")
+            title = " 交易运行中 "
+            self.stdscr.addstr(1, (self.width - len(title)) // 2, title)
+            self.stdscr.addstr(2, 0, "╚" + "═" * (self.width - 2) + "╝")
+            self.stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
+
+            y = 3
+            # 基本信息
+            self.stdscr.addstr(y, 0, f"网络：{preset.network}     账号：{preset.account}")
+            y += 1
+            self.stdscr.addstr(y, 0, f"币种：{coin}   周期：{preset.interval}   策略：{preset.strategy}")
+            y += 1
+
+            # 余额
+            balance = adapter.get_balance().get('usdc', 0)
+            self.stdscr.addstr(y, 0, f"余额：{balance:.2f}")
+            y += 1
+
+            # 持仓
+            positions = adapter.get_positions()
+            matching_pos = [p for p in positions if p.coin == coin] if positions else []
+            if matching_pos:
+                pos = matching_pos[0]
+                side_text = "多" if pos.side == "LONG" else "空"
+                pnl = pos.unrealized_pnl
+                pnl_text = f"+{pnl:.2f}" if pnl >= 0 else f"{pnl:.2f}"
+                self.stdscr.addstr(y, 0, f"持仓：{pos.coin} {preset.leverage}x {side_text}仓 {pos.size} 入场价：{pos.entry_price} PnL：{pnl_text}")
+            else:
+                self.stdscr.addstr(y, 0, "持仓：无")
+
+            # 统计
+            trade_records = system.get_trade_records()
+            if system.start_time:
+                duration_days = (datetime.now() - system.start_time).total_seconds() / 86400
+            else:
+                duration_days = 1
+
+            open_count = len([t for t in trade_records if t['type'] == 'OPEN'])
+            close_count = len([t for t in trade_records if t['type'] == 'CLOSE'])
+            reverse_count = len([t for t in trade_records if t['type'] == 'REVERSE'])
+            total_trades = len(trade_records)
+            daily_avg = total_trades / duration_days if duration_days > 0 else 0
+
+            log_content = log_buffer.getvalue()
+            ttp_count = len([l for l in log_content.split('\n') if 'TTP' in l])
+
+            pnl_records = [t['pnl'] for t in trade_records if t['type'] in ['CLOSE', 'REVERSE'] and t['pnl'] != 0]
+            total_pnl = sum(pnl_records)
+            pnl_pct = (total_pnl / initial_balance * 100) if initial_balance > 0 else 0
+
+            profits = [p for p in pnl_records if p > 0]
+            losses = [p for p in pnl_records if p < 0]
+            total_profit = sum(profits)
+            total_loss = sum(losses)
+
+            # 连盈/连亏
+            max_win_streak, max_win_amount = 0, 0
+            max_loss_streak, max_loss_amount = 0, 0
+            cw, cwa, cl, cla = 0, 0, 0, 0
+            for pnl in pnl_records:
+                if pnl > 0:
+                    cw += 1; cwa += pnl; cl = 0; cla = 0
+                    if cw > max_win_streak:
+                        max_win_streak = cw; max_win_amount = cwa
+                elif pnl < 0:
+                    cl += 1; cla += pnl; cw = 0; cwa = 0
+                    if cl > max_loss_streak:
+                        max_loss_streak = cl; max_loss_amount = cla
+
+            max_profit = max(profits) if profits else 0
+            max_loss_val = min(losses) if losses else 0
+            sorted_profits = sorted(profits, reverse=True)
+            sorted_losses = sorted(losses)
+            top10_profit_avg = sum(sorted_profits[:10]) / len(sorted_profits[:10]) if sorted_profits else 0
+            top10_loss_avg = sum(sorted_losses[:10]) / len(sorted_losses[:10]) if sorted_losses else 0
+
+            y += 1
+            self.stdscr.addstr(y, 0, f"交易总数：{total_trades}  日均：{daily_avg:.1f}  开仓：{open_count}  平仓：{close_count}  反手：{reverse_count}  TTP：{ttp_count}")
+            y += 1
+            pnl_sign = "+" if total_pnl >= 0 else ""
+            self.stdscr.addstr(y, 0, f"总盈亏：{pnl_sign}${total_pnl:.2f} {pnl_sign}{pnl_pct:.2f}%  盈利：${total_profit:.2f}  亏损：${total_loss:.2f}")
+            y += 1
+            self.stdscr.addstr(y, 0, f"连盈：{max_win_streak} ${max_win_amount:.2f}  连亏：{max_loss_streak} ${max_loss_amount:.2f}")
+            y += 1
+            self.stdscr.addstr(y, 0, f"最大盈利：${max_profit:.2f} 前十平均：${top10_profit_avg:.2f}  最大亏损：${max_loss_val:.2f} 前十平均：${top10_loss_avg:.2f}")
+
+            # 日志区
+            log_lines = [l for l in log_content.split('\n') if l.strip()]
+            display_logs = log_lines[-max_log_lines:]
+
+            bottom_y = self.height - 1
+            y += 1
+            self.stdscr.addstr(y, 0, "─" * (self.width - 1), curses.color_pair(7))
+            y += 1
+
+            for log_line in display_logs:
+                if y >= bottom_y - 1:
+                    break
+                if "-" in log_line:
+                    color = curses.color_pair(8)
+                elif "ERROR" in log_line or "错误" in log_line:
+                    color = curses.color_pair(5)
+                elif "WARNING" in log_line or "警告" in log_line:
+                    color = curses.color_pair(3)
+                else:
+                    color = curses.color_pair(4)
+                display_line = log_line[:self.width - 2]
+                self.stdscr.addstr(y, 0, display_line, color)
+                y += 1
+
+            self.stdscr.addstr(bottom_y - 1, 0, "─" * (self.width - 1), curses.color_pair(7))
+
+            # 底部
+            self.stdscr.attron(curses.color_pair(5))
+            self.stdscr.addstr(bottom_y, 0, " " * (self.width - 1))
+            if input_mode:
+                prompt = "输入命令 > " + input_text + "_"
+            else:
+                prompt = "[输入 close 平仓]    按 Esc 退出"
+            self.stdscr.addstr(bottom_y, 0, prompt)
+            self.stdscr.attroff(curses.color_pair(5))
+            self.stdscr.refresh()
+
+            # 按键处理
+            self.stdscr.nodelay(True)
+            key = self.stdscr.getch()
+
+            if key != -1:
+                if input_mode:
+                    if key in [curses.KEY_ENTER, 10, 13]:
+                        if input_text.strip().lower() == "close":
+                            adapter.close_position(coin)
+                        input_text = ""
+                        input_mode = False
+                    elif key == 27:
+                        input_text = ""
+                        input_mode = False
+                    elif key == 127 or key == curses.KEY_BACKSPACE:
+                        input_text = input_text[:-1]
+                    elif 32 <= key <= 126:
+                        input_text += chr(key)
+                else:
+                    if key == 27:
+                        self.stdscr.nodelay(False)
+                        stop_event.set()
+                        break
+                    elif key in [curses.KEY_ENTER, 10, 13]:
+                        input_mode = True
+
+            time.sleep(0.3)
+
+        return True
+
+
+def main(stdscr):
+    """快速交易主流程"""
+    _saved, _old_stdout, _old_stderr, _devnull = _suppress_terminal_output()
+
+    menu = QuickTradeMenu(stdscr)
+
+    # Step 1: 选预设
+    preset = menu.select_preset()
+    if preset is None:
+        return
+
+    # Step 2: 检查账号
+    accounts = list_accounts(preset.network)
+    if not accounts:
+        stdscr.erase()
+        menu.draw_header()
+        stdscr.addstr(4, 2, f"✗ {preset.network} 暂无账号配置", curses.color_pair(5))
+        stdscr.addstr(6, 2, "请先在 accounts.py 中配置账号", curses.color_pair(7))
+        stdscr.addstr(8, 2, "按任意键退出...", curses.color_pair(7))
+        stdscr.refresh()
+        stdscr.getch()
+        return
+
+    # Step 3: 连接并启动
+    from trading.system import TradingSystem
+    from exchange.hyperliquid.adapter import HyperLiquidAdapter
+    from core.strategy import get_strategy
+
+    def setup_trading():
+        cfg = get_adapter_config(preset.account, preset.network)
+        cfg['testnet'] = (preset.network == 'testnet')
+
+        adpt = HyperLiquidAdapter(cfg)
+        adpt.connect()
+
+        init_balance = adpt.get_balance().get('usdc', 0)
+        strat = get_strategy(preset.strategy)
+
+        if preset.enable_ttp:
+            from core.risk import CombinedRiskManager, CombinedRiskConfig
+            rmgr = CombinedRiskManager(CombinedRiskConfig(
+                stop_loss_pct=preset.stop_loss_pct if preset.stop_loss_pct > 0 else 0.1,
+                ttp_enabled=True,
+            ))
+        elif preset.stop_loss_pct > 0:
+            from core.risk import StopLossManager, StopLossConfig
+            rmgr = StopLossManager(StopLossConfig(stop_loss_pct=preset.stop_loss_pct))
+        else:
+            rmgr = None
+
+        sys_obj = TradingSystem(
+            exchange=adpt,
+            strategy=strat,
+            risk_manager=rmgr,
+            config={
+                'coin': preset.coin,
+                'interval': preset.interval,
+                'leverage': preset.leverage,
+                'position_pct': preset.position_pct,
+                'stop_loss_pct': preset.stop_loss_pct,
+            }
+        )
+        return adpt, sys_obj, init_balance
+
+    loading_result = menu.show_loading("连接交易所并启动系统", setup_trading)
+    if loading_result is None:
+        return
+
+    adapter, system, initial_balance = loading_result
+    start_time = datetime.now()
+
+    # 设置日志缓冲
+    log_buffer = io.StringIO()
+    log_handler = logging.StreamHandler(log_buffer)
+    log_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s', datefmt='%b-%d %H:%M:%S'))
+
+    for logger_name in ['TradingSystem', 'trading', 'exchange', 'strategy']:
+        logger = logging.getLogger(logger_name)
+        logger.addHandler(log_handler)
+        logger.setLevel(logging.INFO)
+
+    # 交易阶段日志 → log_buffer
+    sys.stdout = log_buffer
+    sys.stderr = log_buffer
+    _root_log = logging.getLogger()
+    for h in _root_log.handlers:
+        if isinstance(h, logging.StreamHandler):
+            h.stream = log_buffer
+
+    try:
+        # 启动交易线程
+        trade_thread = threading.Thread(target=lambda: system.run(interval_seconds=1), daemon=True)
+        trade_thread.start()
+
+        # 显示仪表盘
+        menu.show_dashboard(preset, adapter, system, initial_balance, log_buffer)
+
+        system.running = False
+        trade_thread.join(timeout=2)
+    finally:
+        sys.stdout = _devnull
+        sys.stderr = _devnull
+        for h in _root_log.handlers:
+            if isinstance(h, logging.StreamHandler):
+                h.stream = _devnull
+
+    # 保存报告
+    final_balance = adapter.get_balance().get('usdc', 0)
+    project_root = os.path.join(os.path.dirname(__file__), '..', '..')
+
+    trade_records = system.get_trade_records()
+    log_content = log_buffer.getvalue()
+
+    open_count = len([t for t in trade_records if t['type'] == 'OPEN'])
+    close_count = len([t for t in trade_records if t['type'] == 'CLOSE'])
+    reverse_count = len([t for t in trade_records if t['type'] == 'REVERSE'])
+    ttp_count = len([l for l in log_content.split('\n') if 'TTP' in l])
+
+    pnl_records = [t['pnl'] for t in trade_records if t['type'] in ['CLOSE', 'REVERSE'] and t['pnl'] != 0]
+    profits = [p for p in pnl_records if p > 0]
+    losses = [p for p in pnl_records if p < 0]
+
+    sorted_profits = sorted(profits, reverse=True)
+    sorted_losses = sorted(losses)
+    top10_profit_avg = sum(sorted_profits[:10]) / len(sorted_profits[:10]) if sorted_profits else 0
+    top10_loss_avg = sum(sorted_losses[:10]) / len(sorted_losses[:10]) if sorted_losses else 0
+
+    max_win_streak, max_win_amount = 0, 0
+    max_loss_streak, max_loss_amount = 0, 0
+    cw, cwa, cl, cla = 0, 0, 0, 0
+    for pnl in pnl_records:
+        if pnl > 0:
+            cw += 1; cwa += pnl; cl = 0; cla = 0
+            if cw > max_win_streak:
+                max_win_streak = cw; max_win_amount = cwa
+        elif pnl < 0:
+            cl += 1; cla += pnl; cw = 0; cwa = 0
+            if cl > max_loss_streak:
+                max_loss_streak = cl; max_loss_amount = cla
+
+    max_profit = max(pnl_records) if pnl_records else 0
+    max_loss = min(pnl_records) if pnl_records else 0
+
+    duration = (datetime.now() - start_time).total_seconds()
+    days = duration / 86400
+    daily_open = (open_count + reverse_count) / days if days > 0 else 0
+
+    report_data = {
+        'config': {
+            'preset': preset.name,
+            'network': preset.network,
+            'account': preset.account,
+            'coin': preset.coin,
+            'strategy': preset.strategy,
+            'interval': preset.interval,
+            'leverage': preset.leverage,
+        },
+        'balance': {
+            'initial': initial_balance,
+            'final': final_balance,
+            'total': final_balance,
+        },
+        'results': {
+            'total_trades': len(trade_records),
+            'open_count': open_count,
+            'close_count': close_count,
+            'reverse_count': reverse_count,
+            'ttp_count': ttp_count,
+            'total_pnl': final_balance - initial_balance,
+            'total_return': f"{((final_balance - initial_balance) / initial_balance * 100):.2f}%" if initial_balance > 0 else "0%",
+            'runtime_seconds': int(duration),
+            'runtime_days': round(days, 2),
+            'max_win_streak': max_win_streak,
+            'max_win_amount': max_win_amount,
+            'max_loss_streak': max_loss_streak,
+            'max_loss_amount': max_loss_amount,
+            'max_profit': max_profit,
+            'max_loss': max_loss,
+            'top10_avg': round((top10_profit_avg + top10_loss_avg) / 2, 2),
+            'daily_open': round(daily_open, 2),
+        },
+        'trades': trade_records,
+    }
+
+    report_dir = os.path.join(project_root, 'reports', 'trading')
+    os.makedirs(report_dir, exist_ok=True)
+    report_file = os.path.join(report_dir, f"quick_{preset.coin}_{preset.strategy}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+    with open(report_file, 'w', encoding='utf-8') as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+    if log_content.strip():
+        log_dir = os.path.join(project_root, 'logs', 'trading')
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, f"quick_{preset.coin}_{preset.strategy}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+        with open(log_file, 'w', encoding='utf-8') as f:
+            f.write(log_content)
+
+    for logger_name in ['TradingSystem', 'trading', 'exchange', 'strategy']:
+        logger = logging.getLogger(logger_name)
+        logger.removeHandler(log_handler)
+
+    adapter.disconnect()
+
+
+if __name__ == "__main__":
+    try:
+        curses.wrapper(main)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        import traceback
+        error_file = "error.log"
+        with open(error_file, 'w') as f:
+            traceback.print_exc(file=f)
+        print(f"错误: {e}")
+        print(f"错误已保存到: {error_file}")
+    finally:
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
+        for h in logging.getLogger().handlers:
+            if isinstance(h, logging.StreamHandler):
+                h.stream = sys.__stderr__
+        input("按回车键退出...")

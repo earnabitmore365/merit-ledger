@@ -1,0 +1,36 @@
+#!/bin/bash
+# Abby Auto Trading - 回测系统
+# 双击运行
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+cd "$PROJECT_DIR"
+
+python3 -c "
+import sys
+sys.path.insert(0, 'src')
+
+from backtest.backtest import run_backtest
+
+# 默认回测参数
+result = run_backtest(
+    coin='ETH',
+    strategy_name='vwap',
+    interval='1h',
+    days=365,
+    initial_capital=1000
+)
+
+print('=' * 50)
+print('回测完成')
+print('=' * 50)
+print(f'总交易: {result.total_trades}')
+print(f'胜率: {result.win_rate:.2%}')
+print(f'总收益: {result.total_return:.2%}')
+print(f'最终余额: \${result.final_balance:.2f}')
+print(f'夏普比率: {result.sharpe_ratio:.2f}')
+print(f'最大回撤: {result.max_drawdown:.2%}')
+"
+
+read -p "按回车键退出..."

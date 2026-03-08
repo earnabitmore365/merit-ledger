@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""
+全矩阵回测：所有策略 × 所有币种 × 所有周期
+统一 DAYS=365（1m 数据覆盖范围），公平对比
+"""
+
+import sys
+import os
+import time
+import json
+import traceback
+
+# 项目路径
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(PROJECT_ROOT, 'src'))
+
+from backtest.backtest import BacktestEngine
+
+# 配置
+COINS = ['BTC', 'ETH', 'XRP', 'BNB', 'SOL', 'ADA', 'TRX', 'AVAX', 'LINK', 'DOT']
+INTERVALS = ['1m', '5m', '15m', '1h']
+DAYS = 365  # 统一用 365 天，1m 数据完整覆盖
+
+# 自动发现策略
+STRATEGY_DIR = os.path.join(PROJECT_ROOT, 'src', 'core', 'strategy')
+STRATEGIES = []
+for f in sorted(os.listdir(STRATEGY_DIR)):
+    if f.startswith('strategy_') and f.endswith('.py'):
+        name = f[len('strategy_'):-len('.py')]
+        STRATEGIES.append(name)
+
+TOTAL = len(STRATEGIES) * len(COINS) * len(INTERVALS)
+
+print(f"全矩阵回测")
+print(f"  策略: {len(STRATEGIES)} 个")
+print(f"  币种: {len(COINS)} 个")
+print(f"  周期: {len(INTERVALS)} 个")
+print(f"  天数: {DAYS} 天（统一）")
+print(f"  总计: {TOTAL} 个回测")
+print(f"  初始资金: $500, 杠杆: 10x, 止损: 10%, TTP: 开启")
+print()
+
+success = 0
+failed = 0
+errors = []
+start_all = time.time()
+
+for si, strategy in enumerate(STRATEGIES):
+    for ci, coin in enumerate(COINS):
+        for ii, interval in enumerate(INTERVALS):
+            idx = si * len(COINS) * len(INTERVALS) + ci * len(INTERVALS) + ii + 1
+            elapsed = time.time() - start_all
+
+            # 进度估算
+            if idx > 1:
+                avg_time = elapsed / (idx - 1)
+                remaining = avg_time * (TOTAL - idx + 1)
+                eta = f"ETA {remaining/60:.0f}m"
+            else:
+                eta = ""
+
+            print(f"[{idx}/{TOTAL}] {strategy} × {coin} × {interval} ... ", end='', flush=True)
+
+            try:
+                engine = BacktestEngine(
+                    coin=coin,
+                    interval=interval,
+                    days=DAYS,
+                    initial_capital=500,
+                    enable_ttp=True,
+                    stop_loss_pct=0.1,
+                    leverage=10.0,
+                    enable_withdraw=False,
+                )
+                result = engine.run_backtest(strategy)
+
+                if result is None:
+                    print(f"无结果 {eta}")
+                    failed += 1
+                    errors.append(f"{strategy}×{coin}×{interval}: 返回 None")
+                    continue
+
+                engine.save_report(strategy)
+
+                # 简要显示结果
+                pnl = result.total_pnl
+                trades = result.total_trades
+                pnl_str = f"+${pnl:.0f}" if pnl >= 0 else f"-${abs(pnl):.0f}"
+                print(f"✓ {pnl_str} ({trades}笔) {eta}")
+                success += 1
+
+            except Exception as e:
+                print(f"✗ {str(e)[:60]} {eta}")
+                failed += 1
+                errors.append(f"{strategy}×{coin}×{interval}: {str(e)[:100]}")
+                continue
+
+elapsed_total = time.time() - start_all
+print()
+print(f"{'='*60}")
+print(f"全矩阵回测完成!")
+print(f"  耗时: {elapsed_total/60:.1f} 分钟")
+print(f"  成功: {success}/{TOTAL}")
+print(f"  失败: {failed}/{TOTAL}")
+
+if errors:
+    print(f"\n失败详情 (前20个):")
+    for e in errors[:20]:
+        print(f"  - {e}")
+    if len(errors) > 20:
+        print(f"  ... 还有 {len(errors)-20} 个")
+
+# 保存错误日志
+if errors:
+    error_log = os.path.join(PROJECT_ROOT, 'reports', 'backtest', 'matrix_errors.json')
+    os.makedirs(os.path.dirname(error_log), exist_ok=True)
+    with open(error_log, 'w') as f:
+        json.dump({
+            'total': TOTAL,
+            'success': success,
+            'failed': failed,
+            'elapsed_minutes': elapsed_total / 60,
+            'errors': errors,
+        }, f, indent=2, ensure_ascii=False)
+    print(f"\n错误日志: {error_log}")

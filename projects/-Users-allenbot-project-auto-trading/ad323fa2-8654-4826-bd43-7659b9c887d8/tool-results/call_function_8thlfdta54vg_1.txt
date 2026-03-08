@@ -1,0 +1,54 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→SMC Strategy - Smart Money Concepts
+     4→
+     5→Smart money analysis strategy.
+     6→
+     7→Features:
+     8→- Order Block detection
+     9→- FVG (Fair Value Gap) identification
+    10→- OTE (Optimal Trade Entry) zone
+    11→- Trend determination
+    12→"""
+    13→
+    14→from typing import Dict, List
+    15→from src.core.strategy import Signal
+    16→
+    17→
+    18→class SMCStrategy:
+    19→    """Smart Money Concepts trading strategy"""
+    20→    
+    21→    def __init__(self):
+    22→        self.name = "smc"
+    23→        self.short_ma = 20
+    24→        self.long_ma = 50
+    25→    
+    26→    def calculate_ma(self, closes: List[float], period: int) -> float:
+    27→        """Calculate Moving Average"""
+    28→        if len(closes) < period:
+    29→            return sum(closes) / len(closes) if closes else 0.0
+    30→        return sum(closes[-period:]) / period
+    31→    
+    32→    def calculate_ote_zone(self, closes: List[float]) -> Dict:
+    33→        """Calculate OTE zone"""
+    34→        if len(closes) < 20:
+    35→            return {"ote_high": closes[-1], "ote_low": closes[-1]}
+    36→        
+    37→        high = max(closes[-20:])
+    38→        low = min(closes[-20:])
+    39→        
+    40→        return {
+    41→            "ote_high": high - (high - low) * 0.382,
+    42→            "ote_low": low + (high - low) * 0.382,
+    43→        }
+    44→    
+    45→    def determine_trend(self, closes: List[float]) -> str:
+    46→        """Determine trend direction"""
+    47→        if len(closes) < self.long_ma:
+    48→            return "neutral"
+    49→        
+    50→        ma_short = self.calculate_ma(closes, self.short_ma)
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

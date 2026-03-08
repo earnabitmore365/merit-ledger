@@ -1,0 +1,115 @@
+"""
+历史数据格式转换脚本
+
+将 historical_data_latest/ 下的新格式数据转换为回测系统所需的旧格式：
+- 文件结构: {COIN}_USDT_{interval}_latest.json → {COIN}/{interval}.json
+- 时间字段: timestamp (ISO字符串) → time (毫秒时间戳)
+"""
+
+import json
+import os
+import re
+import shutil
+from datetime import datetime, timezone
+
+# 路径配置
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SOURCE_DIR = os.path.join(BASE_DIR, "historical_data_latest")
+TARGET_DIR = os.path.join(BASE_DIR, "src", "backtest", "data", "historical")
+
+
+def parse_filename(filename: str) -> tuple[str, str] | None:
+    """解析文件名，提取币种和时间间隔
+
+    例: BTC_USDT_1h_latest.json → ('BTC', '1h')
+    """
+    match = re.match(r"^([A-Z]+)_USDT_(\w+)_latest\.json$", filename)
+    if match:
+        return match.group(1), match.group(2)
+    return None
+
+
+def convert_candle(candle: dict) -> dict:
+    """将单条K线数据从新格式转为旧格式
+
+    新格式: {"timestamp": "2022-11-04T15:00:00.000", "open": ..., ...}
+    旧格式: {"time": 1667574000000, "open": ..., ...}
+    """
+    ts = candle["timestamp"]
+    dt = datetime.fromisoformat(ts).replace(tzinfo=timezone.utc)
+    time_ms = int(dt.timestamp() * 1000)
+
+    return {
+        "time": time_ms,
+        "open": candle["open"],
+        "high": candle["high"],
+        "low": candle["low"],
+        "close": candle["close"],
+        "volume": candle["volume"],
+    }
+
+
+def convert_file(source_path: str, target_path: str) -> int:
+    """转换单个数据文件，返回K线数量"""
+    with open(source_path, "r") as f:
+        data = json.load(f)
+
+    converted = [convert_candle(c) for c in data]
+
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    with open(target_path, "w") as f:
+        json.dump(converted, f, separators=(",", ":"))
+
+    return len(converted)
+
+
+def main():
+    # 1. 扫描源文件
+    files = sorted(os.listdir(SOURCE_DIR))
+    tasks = []
+    for f in files:
+        result = parse_filename(f)
+        if result:
+            coin, interval = result
+            tasks.append((f, coin, interval))
+
+    if not tasks:
+        print("❌ 未找到可转换的数据文件")
+        return
+
+    print(f"📂 找到 {len(tasks)} 个数据文件待转换\n")
+
+    # 2. 删除旧数据
+    if os.path.exists(TARGET_DIR):
+        old_coins = [d for d in os.listdir(TARGET_DIR) if os.path.isdir(os.path.join(TARGET_DIR, d))]
+        if old_coins:
+            print(f"🗑️  删除旧数据: {', '.join(sorted(old_coins))}")
+            for coin_dir in old_coins:
+                shutil.rmtree(os.path.join(TARGET_DIR, coin_dir))
+            print()
+
+    # 3. 转换新数据
+    print("🔄 开始转换...\n")
+    coin_summary: dict[str, list[str]] = {}
+
+    for filename, coin, interval in tasks:
+        source_path = os.path.join(SOURCE_DIR, filename)
+        target_path = os.path.join(TARGET_DIR, coin, f"{interval}.json")
+
+        count = convert_file(source_path, target_path)
+        print(f"  ✅ {coin}/{interval}.json — {count:,} 条K线")
+
+        coin_summary.setdefault(coin, []).append(interval)
+
+    # 4. 汇总
+    print(f"\n{'='*50}")
+    print(f"✅ 转换完成!")
+    print(f"   币种: {len(coin_summary)} 个 ({', '.join(sorted(coin_summary))})")
+    print(f"   文件: {len(tasks)} 个")
+    for coin in sorted(coin_summary):
+        intervals = sorted(coin_summary[coin], key=lambda x: ("1m","5m","15m","1h").index(x) if x in ("1m","5m","15m","1h") else 99)
+        print(f"   {coin}: {', '.join(intervals)}")
+
+
+if __name__ == "__main__":
+    main()

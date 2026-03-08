@@ -1,0 +1,264 @@
+{
+  "coin": "ETH",
+  "strategy": "demand_index_echo",
+  "interval": "1h",
+  "period": "1095天",
+  "timestamp": "20260217_184323",
+  "config": {
+    "initial_capital": 500,
+    "leverage": 10.0,
+    "min_margin": 100
+  },
+  "balance": {
+    "initial": 500,
+    "final": 479.65566663062816,
+    "max": 509.9077831104633,
+    "min": 314.83556847947045
+  },
+  "results": {
+    "total_return": -4.068866673874368,
+    "max_drawdown": 38.25637126796584,
+    "sharpe_ratio": 0.1470664781206249,
+    "sortino_ratio": 0.024747230665938102,
+    "calmar_ratio": -0.10635788338036789,
+    "total_trades": 28,
+    "winning_trades": 11,
+    "losing_trades": 0,
+    "win_rate": 100.0,
+    "avg_win": 5.08464848419324,
+    "avg_loss": 0,
+    "max_win": 32.35216800234338,
+    "max_loss": 0.13578139163913278,
+    "profit_factor": 0,
+    "expectancy_ratio": 0,
+    "consecutive_wins": 11,
+    "consecutive_losses": 0,
+    "liquidation_count": 0
+  },
+  "trades": [
+    {
+      "time": "2022-01-10",
+      "order_type": "SELL",
+      "price": 3031.55,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 500
+    },
+    {
+      "time": "2022-01-11",
+      "order_type": "TTP_SELL",
+      "price": 3029.75,
+      "capital": 100,
+      "pnl": 6.349722089360194,
+      "balance": 506.34972208936017
+    },
+    {
+      "time": "2022-01-11",
+      "order_type": "SELL",
+      "price": 3121.93,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 506.34972208936017
+    },
+    {
+      "time": "2022-02-11",
+      "order_type": "TTP_SELL",
+      "price": 3121.07,
+      "capital": 100,
+      "pnl": 0.6789069581956639,
+      "balance": 507.02862904755585
+    },
+    {
+      "time": "2022-02-11",
+      "order_type": "SELL",
+      "price": 3106.33,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 507.02862904755585
+    },
+    {
+      "time": "2022-03-25",
+      "order_type": "TTP_SELL",
+      "price": 3104.35,
+      "capital": 100,
+      "pnl": 1.0943782534373325,
+      "balance": 508.1230073009932
+    },
+    {
+      "time": "2022-03-26",
+      "order_type": "SELL",
+      "price": 3120.56,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 508.1230073009932
+    },
+    {
+      "time": "2022-03-27",
+      "order_type": "TTP_SELL",
+      "price": 3117.84,
+      "capital": 100,
+      "pnl": 1.784775809470115,
+      "balance": 509.9077831104633
+    },
+    {
+      "time": "2022-03-27",
+      "order_type": "SELL",
+      "price": 3120.36,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 509.9077831104633
+    },
+    {
+      "time": "2022-03-29",
+      "order_type": "STOP_LOSS_SELL",
+      "price": 3433.38,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 409.9077831104633
+    },
+    {
+      "time": "2022-03-30",
+      "order_type": "SELL",
+      "price": 3403.05,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 409.9077831104633
+    },
+    {
+      "time": "2022-03-30",
+      "order_type": "TTP_SELL",
+      "price": 3400.51,
+      "capital": 100,
+      "pnl": 4.927785369007179,
+      "balance": 414.83556847947045
+    },
+    {
+      "time": "2022-03-30",
+      "order_type": "SELL",
+      "price": 3372.61,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 414.83556847947045
+    },
+    {
+      "time": "2024-03-05",
+      "order_type": "STOP_LOSS_SELL",
+      "price": 3715.8,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 314.83556847947045
+    },
+    {
+      "time": "2024-03-06",
+      "order_type": "SELL",
+      "price": 3688.07,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 314.83556847947045
+    },
+    {
+      "time": "2024-03-06",
+      "order_type": "TTP_SELL",
+      "price": 3520.05,
+      "capital": 100,
+      "pnl": 81.41643190069598,
+      "balance": 396.25200038016646
+    },
+    {
+      "time": "2024-03-07",
+      "order_type": "SELL",
+      "price": 3775.18,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 396.25200038016646
+    },
+    {
+      "time": "2024-05-22",
+      "order_type": "TTP_SELL",
+      "price": 3774.1,
+      "capital": 100,
+      "pnl": 0.9296245477035961,
+      "balance": 397.1816249278701
+    },
+    {
+      "time": "2024-05-22",
+      "order_type": "SELL",
+      "price": 3746.79,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 397.1816249278701
+    },
+    {
+      "time": "2024-05-23",
+      "order_type": "TTP_SELL",
+      "price": 3744.53,
+      "capital": 100,
+      "pnl": 1.8067465750682266,
+      "balance": 398.9883715029383
+    },
+    {
+      "time": "2024-05-23",
+      "order_type": "SELL",
+      "price": 3733.43,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 398.9883715029383
+    },
+    {
+      "time": "2024-05-24",
+      "order_type": "TTP_SELL",
+      "price": 3684.8,
+      "capital": 100,
+      "pnl": 14.514668816610987,
+      "balance": 413.5030403195493
+    },
+    {
+      "time": "2024-05-25",
+      "order_type": "SELL",
+      "price": 3711.36,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 413.5030403195493
+    },
+    {
+      "time": "2024-06-08",
+      "order_type": "TTP_SELL",
+      "price": 3708.98,
+      "capital": 100,
+      "pnl": 4.39178629936198,
+      "balance": 417.8948266189113
+    },
+    {
+      "time": "2024-06-09",
+      "order_type": "SELL",
+      "price": 3668.26,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 417.8948266189113
+    },
+    {
+      "time": "2024-12-07",
+      "order_type": "STOP_LOSS_SELL",
+      "price": 4051.01,
+      "capital": 100,
+      "pnl": -100.0,
+      "balance": 317.8948266189113
+    },
+    {
+      "time": "2024-12-08",
+      "order_type": "SELL",
+      "price": 3994.23,
+      "capital": 100,
+      "pnl": 0,
+      "balance": 317.8948266189113
+    },
+    {
+      "time": "2025-01-08",
+      "order_type": "CLOSE_SELL",
+      "price": 3348.12,
+      "capital": 100,
+      "pnl": 161.7608400117169,
+      "balance": 479.65566663062816
+    }
+  ]
+}

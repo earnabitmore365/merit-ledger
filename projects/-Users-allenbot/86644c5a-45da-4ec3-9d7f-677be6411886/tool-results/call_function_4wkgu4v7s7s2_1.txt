@@ -1,0 +1,39 @@
+   430→                if result == "BACK":
+   431→                    step = 3
+   432→                    continue
+   433→                if result is None:
+   434→                    result = 10
+   435→                selections['杠杆'] = f"{result}x"
+   436→                step = 5
+   437→
+   438→            elif step == 5:
+   439→                # 步骤6: 仓位比例
+   440→                result = menu.get_number("仓位比例 (0.1 = 10%)", 10, selections)
+   441→                if result == "BACK":
+   442→                    step = 4
+   443→                    continue
+   444→                if result is None:
+   445→                    result = 10
+   446→                selections['仓位'] = f"{result}%"
+   447→                step = 6
+   448→
+   449→            elif step == 6:
+   450→                # 步骤7: 止损比例
+   451→                result = menu.get_number("止损比例 (0.1 = 10%)", 0, selections)
+   452→                if result == "BACK":
+   453→                    step = 5
+   454→                    continue
+   455→                if result is None:
+   456→                    result = 10
+   457→                selections['止损'] = f"{result}%"
+   458→                step = 7
+   459→
+   460→            elif step == 7:
+   461→                # 步骤8: TTP移动止盈
+   462→                result = menu.get_yes_no("是否启用移动止盈 (TTP)", True, selections)
+   463→                if result == "BACK":
+   464→                    step = 6
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

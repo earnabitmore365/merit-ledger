@@ -1,0 +1,9 @@
+{
+  "id": "1",
+  "subject": "阶段一：统一 Config 定义",
+  "description": "删除重复的 Config 定义，让 risk 模块使用 config_manager 的定义",
+  "activeForm": "统一 Config 定义",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

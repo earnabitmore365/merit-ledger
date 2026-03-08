@@ -1,0 +1,976 @@
+2026-02-23T01:42:35.021Z [DEBUG] Failed to check enabledPlatforms: TypeError: undefined is not an object (evaluating 'pK.join')
+2026-02-23T01:42:35.061Z [DEBUG] [init] configureGlobalMTLS starting
+2026-02-23T01:42:35.061Z [DEBUG] [init] configureGlobalMTLS complete
+2026-02-23T01:42:35.061Z [DEBUG] [init] configureGlobalAgents starting
+2026-02-23T01:42:35.061Z [DEBUG] [init] configureGlobalAgents complete
+2026-02-23T01:42:35.063Z [DEBUG] Applying permission update: Adding 22 allow rule(s) to destination 'localSettings': ["Bash(openclaw gateway:*)","Bash(openclaw sessions:*)","WebFetch(domain:docs.openclaw.ai)","Bash(head:*)","WebSearch","Bash(openclaw config:*)","Bash(python3:*)","Bash(openclaw:*)","Skill(agent-browser)","Bash(lsof:*)","Bash(ls:*)","Bash(grep:*)","Bash(cp:*)","Bash(cd:*)","Bash(find .:*)","Bash(chmod:*)","Bash(cd /Users/allenbot/.claude/projects/abby-auto-trading && python -m src.interface.run_bot --coin ETH --interval 1h --mode paper 2>&1)","Bash(pkill:*)","WebFetch(domain:thedocumentation.org)","WebFetch(domain:hyperliquid.gitbook.io)","WebFetch(domain:github.com)","WebFetch(domain:pypi.org)"]
+2026-02-23T01:42:35.063Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-02-23T01:42:35.063Z [DEBUG] [ToolSearch:optimistic] mode=tst-auto, ENABLE_TOOL_SEARCH=undefined, result=true
+2026-02-23T01:42:35.063Z [DEBUG] [STARTUP] Running setup()...
+2026-02-23T01:42:35.065Z [DEBUG] Loading skills from: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/allenbot/.claude/skills, project=[]
+2026-02-23T01:42:35.067Z [DEBUG] Error log sink initialized
+2026-02-23T01:42:35.067Z [DEBUG] [STARTUP] setup() completed in 4ms
+2026-02-23T01:42:35.067Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-02-23T01:42:35.067Z [DEBUG] Git remote URL: null
+2026-02-23T01:42:35.067Z [DEBUG] No git remote URL found
+2026-02-23T01:42:35.068Z [DEBUG] Loaded 13 unique skills (13 unconditional, 0 conditional, managed: 0, user: 13, project: 0, additional: 0, legacy commands: 0)
+2026-02-23T01:42:35.069Z [DEBUG] [Claude in Chrome] Found chrome profiles: Default
+2026-02-23T01:42:35.069Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+2026-02-23T01:42:35.069Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
+2026-02-23T01:42:35.069Z [DEBUG] Total plugin skills loaded: 0
+2026-02-23T01:42:35.069Z [DEBUG] Total plugin commands loaded: 0
+2026-02-23T01:42:35.069Z [DEBUG] Registered 0 hooks from 0 plugins
+2026-02-23T01:42:35.069Z [DEBUG] Total plugin agents loaded: 0
+2026-02-23T01:42:35.070Z [DEBUG] getSkills returning: 13 skill dir commands, 0 plugin skills, 3 bundled skills
+2026-02-23T01:42:35.071Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771810955071
+2026-02-23T01:42:35.071Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:42:35.071Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:42:35.071Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:42:35.071Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771810955071 to /Users/allenbot/.claude.json
+2026-02-23T01:42:35.071Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:42:35.071Z [DEBUG] [STARTUP] Commands and agents loaded in 4ms
+2026-02-23T01:42:35.074Z [DEBUG] [STARTUP] Running showSetupScreens()...
+2026-02-23T01:42:35.076Z [DEBUG] [keybindings] KeybindingSetup initialized with 103 bindings, 0 warnings
+2026-02-23T01:42:35.089Z [DEBUG] [keybindings] Skipping file watcher - user customization disabled
+2026-02-23T01:42:35.098Z [DEBUG] [Claude in Chrome] Found brave profiles: Default
+2026-02-23T01:42:35.098Z [DEBUG] Acquired mtime-based lock on running version: /Users/allenbot/.local/share/claude/versions/2.1.50
+2026-02-23T01:42:35.098Z [DEBUG] [Claude in Chrome] Extension not found in any browser
+2026-02-23T01:42:36.548Z [DEBUG] Not in a GitHub repository, skipping path mapping update
+2026-02-23T01:42:36.556Z [DEBUG] [Perfetto] initializePerfettoTracing called, env value: undefined
+2026-02-23T01:42:36.556Z [DEBUG] [3P telemetry] isTelemetryEnabled=false (CLAUDE_CODE_ENABLE_TELEMETRY=undefined)
+2026-02-23T01:42:36.558Z [DEBUG] [STARTUP] showSetupScreens() completed in 1484ms
+2026-02-23T01:42:36.558Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-02-23T01:42:36.558Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-02-23T01:42:36.558Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-02-23T01:42:36.559Z [DEBUG] Total LSP servers loaded: 0
+2026-02-23T01:42:36.559Z [DEBUG] Failed to fetch org fast mode status, defaulting to disabled
+2026-02-23T01:42:36.559Z [DEBUG] [STARTUP] MCP configs loaded in 1496ms
+2026-02-23T01:42:36.562Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-02-23T01:42:36.562Z [DEBUG] LSP manager initialized with 0 servers
+2026-02-23T01:42:36.563Z [DEBUG] Getting matching hook commands for SessionStart with query: startup
+2026-02-23T01:42:36.563Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:42:36.563Z [DEBUG] Matched 0 unique hooks for query "startup" (0 before deduplication)
+2026-02-23T01:42:36.563Z [DEBUG] installed_plugins.json doesn't exist, returning empty V2 object
+2026-02-23T01:42:36.563Z [DEBUG] Initialized versioned plugins system with 0 plugins
+2026-02-23T01:42:36.563Z [DEBUG] LSP server manager initialized successfully
+2026-02-23T01:42:36.563Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-02-23T01:42:36.563Z [DEBUG] [Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)
+2026-02-23T01:42:36.564Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771810956564
+2026-02-23T01:42:36.564Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:42:36.565Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:42:36.565Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:42:36.565Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771810956564 to /Users/allenbot/.claude.json
+2026-02-23T01:42:36.565Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:42:36.576Z [DEBUG] [keybindings] KeybindingSetup initialized with 103 bindings, 0 warnings
+2026-02-23T01:42:36.670Z [DEBUG] [keybindings] Skipping file watcher - user customization disabled
+2026-02-23T01:42:36.670Z [DEBUG] [REPL:mount] REPL mounted, disabled=false
+2026-02-23T01:42:36.670Z [DEBUG] Official marketplace auto-install skipped: already_attempted
+2026-02-23T01:42:36.670Z [DEBUG] performStartupChecks called
+2026-02-23T01:42:36.670Z [DEBUG] Starting background plugin installations
+2026-02-23T01:42:36.670Z [DEBUG] performBackgroundPluginInstallations called
+2026-02-23T01:42:36.671Z [DEBUG] No CLAUDE.md/rules files found
+2026-02-23T01:42:36.673Z [DEBUG] Watching for changes in setting files /Users/allenbot/.claude/settings.json, /Users/allenbot/.claude/settings.local.json...
+2026-02-23T01:42:36.673Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
+2026-02-23T01:42:36.673Z [DEBUG] [FileIndex] getFilesUsingGit called
+2026-02-23T01:42:36.677Z [DEBUG] [FileIndex] not a git repo, returning null
+2026-02-23T01:42:36.677Z [DEBUG] [claudeai-mcp] Checking gate (cached)...
+2026-02-23T01:42:36.677Z [DEBUG] [claudeai-mcp] Gate returned: false
+2026-02-23T01:42:36.677Z [DEBUG] [claudeai-mcp] Disabled via gate
+2026-02-23T01:42:36.677Z [DEBUG] [FileIndex] git ls-files returned null, falling back to ripgrep
+2026-02-23T01:42:36.678Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-23T01:42:36.679Z [DEBUG] Setting installation status: 0 marketplaces, 0 installable plugins, 0 uninstallable plugins
+2026-02-23T01:42:36.680Z [DEBUG] Security messages are fresh (<1h old), skipping fetch
+2026-02-23T01:42:36.680Z [DEBUG] Watching for changes in skill/command directories: /Users/allenbot/.claude/skills, /Users/allenbot/.claude/skills...
+2026-02-23T01:42:36.697Z [DEBUG] Loaded plugins - Enabled: 0, Disabled: 0, Commands: 0, Agents: 0, Errors: 0
+2026-02-23T01:42:36.736Z [DEBUG] Ripgrep first use test: FAILED (mode=builtin, path=/Users/allenbot/.local/share/claude/versions/2.1.50)
+2026-02-23T01:42:37.254Z [DEBUG] rg error (signal=undefined, code=ERR_CHILD_PROCESS_STDIO_MAXBUFFER, stderr: rg: ./Library/Caches/com.apple.ap.adprivacyd: Operation not permitted (os error 1)
+rg: ./Library/Caches/com.apple.homed: Operation not permitted (os error 1)
+rg: ./.openclaw/browser/openclaw/user-data/RunningChromeVersion: No such file or directory (os error 2)
+rg: ./.openclaw/browser/openclaw/user-data/SingletonCookie: No such file or directory (os error 2)
+rg: ./.openclaw/browser/openclaw/user-data/SingletonLock: No such file or directory (os error 2)
+rg: ./myopenclawbackup/.agents/docs/vercel-ai/README.md: No such file or directory (os error 2)
+rg: ./Library/Caches/FamilyCircle: Operation not permitted (os error 1)
+rg: ./Library/Trial: Operation not permitted (os error 1)
+rg: ./Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/com.apple.aiml.instrumentation: Operation not permitted (os error 1)
+rg: ./Library/Sharing: Operation not permitted (os error 1)
+rg: ./Library/Autosave Information: Operation not permitted (os error 1)
+rg: ./Library/HomeKit: Operation not permitted (os error 1)
+rg: ./Library/Daemon Containers: Operation not permitted (os error 1)
+rg: ./Library/Messages: Operation not permitted (os error 1)
+rg: ./Library/Assistant/SiriVocabulary: Operation not permitted (os error 1)
+rg: ./Library/IdentityServices: Operation not permitted (os error 1)
+rg: ./Library/Application Support/CallHistoryDB: Operation not permitted (os error 1)
+rg: ./Library/Application Support/DifferentialPrivacy: Operation not permitted (os error 1)
+rg: ./Library/Application Support/FaceTime: Operation not permitted (os error 1)
+rg: ./Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Application Support/FileProvider: Operation not permitted (os error 1)
+rg: ./Library/Application Support/com.apple.TCC: Operation not permitted (os error 1)
+rg: ./Library/Application Support/Knowledge: Operation not permitted (os error 1)
+rg: ./Library/Application Support/com.apple.sharedfilelist: Operation not permitted (os error 1)
+rg: ./Library/Application Support/CloudDocs: Operation not permitted (os error 1)
+rg: ./Library/Application Support/CallHistoryTransactions: Operation not permitted (os error 1)
+rg: ./Library/Application Support/Google/Chrome/RunningChromeVersion: No such file or directory (os error 2)
+rg: ./Library/Application Support/Google/Chrome/SingletonCookie: No such file or directory (os error 2)
+rg: ./Library/Application Support/Google/Chrome/SingletonLock: No such file or directory (os error 2)
+rg: ./Library/Shortcuts: Operation not permitted (os error 1)
+rg: ./Library/IntelligencePlatform: Operation not permitted (os error 1)
+rg: ./Library/Biome: Operation not permitted (os error 1)
+rg: ./Library/Safari: Operation not permitted (os error 1)
+rg: ./Library/Accounts: Operation not permitted (os error 1)
+rg: ./Library/AppleMediaServices: Operation not permitted (os error 1)
+rg: ./Library/DoNotDisturb: Operation not permitted (os error 1)
+rg: ./Library/StatusKit: Operation not permitted (os error 1)
+rg: ./Library/CoreFollowUp: Operation not permitted (os error 1)
+rg: ./Library/Cookies: Operation not permitted (os error 1)
+rg: ./Library/DuetExpertCenter: Operation not permitted (os error 1)
+rg: ./Library/Metadata/com.apple.IntelligentSuggestions: Operation not permitted (os error 1)
+rg: ./Library/Metadata/CoreSpotlight: Operation not permitted (os error 1)
+rg: ./Library/PersonalizationPortrait: Operation not permitted (os error 1)
+rg: ./Library/ContainerManager: Operation not permitted (os error 1)
+rg: ./.agents/docs/vercel-ai/README.md: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Family/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/pnpm/store/v10/projects/d7811188adfa216b33d6a616c549ce05: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Caches/com.apple.Safari: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.MobileSMS.MessagesActionExtension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Caches/CloudKit: Operation not permitted (os error 1)
+rg: ./Library/Caches/com.apple.HomeKit: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.reminders.quicklookextension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Caches/com.apple.containermanagerd: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.DiagnosticExtensions.HomeEnergyDiagnosticExtension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AuthKit.AKDiagnosticExtension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Caches/Homebrew/Cask/flutter_macos_arm64_3.41.2-stable.zip--3.41.2.zip: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.CalendarWidget.IntentsExtension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Sharing-Settings.extension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.mlhost.TelemetryWorker/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.tgondeviceinferenceproviderservice/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Mouse-Settings.extension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.ContactsUI.MonogramPosterExtension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.priml.PFLMLHostPlugins.SiriMASPFLCK/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.SonicKit.diagnostics/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.VoiceMemos: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.wallpaper.extension.macintosh/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AppleMediaServicesUI.ComposeReviewExtension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.weather.menu/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.Network-Settings.extension/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.settings-intents.WallpaperIntents/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AvatarUI.AvatarPosterExtension/Data/Library/Filters: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AvatarUI.AvatarPosterExtension/Data/Library/Calendars: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AvatarUI.AvatarPosterExtension/Data/Library/PDF Services: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AvatarUI.AvatarPosterExtension/Data/Library/KeyBindings: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AvatarUI.AvatarPosterExtension/Data/Library/ColorSync: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AvatarUI.AvatarPosterExtension/Data/Library/QuickLook: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.AvatarUI.AvatarPosterExtension/Data/Library/Mail: Operation not permitted (os error 1)
+rg: ./Library/Containers/com.apple.AvatarUI.AvatarPosterExtension/Data/Library/Components: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Images/People: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Preferences/com.apple.security.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Preferences/com.apple.security_common.plist: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Application Support/SyncServices: No such file or directory (os error 2)
+rg: ./Library/Containers/com.apple.adattributionkit.AAKPriMLPlugin/Data/Library/Application Support/AddressBook: Operation not permitted (os error 1)
+), 199318 results
+2026-02-23T01:42:37.314Z [DEBUG] [FileIndex] ripgrep: 199318 files in 637ms
+2026-02-23T01:42:37.440Z [DEBUG] [FileIndex] cache refresh completed in 767ms (rust index)
+2026-02-23T01:42:39.145Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-23T01:42:39.145Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-23T01:42:39.145Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-23T01:42:39.145Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-23T01:42:39.146Z [DEBUG] Sending 14 skills via attachment (initial, 14 total sent)
+2026-02-23T01:42:39.147Z [WARN] [3P telemetry] Event dropped (no event logger initialized): user_prompt
+2026-02-23T01:42:39.150Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-02-23T01:42:39.150Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:42:39.150Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:42:39.150Z [DEBUG] FileHistory: Added snapshot for 38f9ab38-b97f-43c5-b48c-6417586a17b3, tracking 0 files
+2026-02-23T01:42:39.151Z [DEBUG] [useDeferredValue] Messages deferred by 2 (0→2)
+2026-02-23T01:42:39.171Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-23T01:42:39.172Z [DEBUG] Plugin autoupdate: skipped (auto-updater disabled)
+2026-02-23T01:42:39.174Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771810959174
+2026-02-23T01:42:39.174Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:42:39.174Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:42:39.174Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:42:39.174Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771810959174 to /Users/allenbot/.claude.json
+2026-02-23T01:42:39.174Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:42:39.175Z [DEBUG] Total plugin output styles loaded: 0
+2026-02-23T01:42:39.175Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-23T01:42:39.175Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.d4b; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:42:39.175Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:42:39.175Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:42:39.176Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:42:39.178Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771810959178
+2026-02-23T01:42:39.178Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:42:39.178Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:42:39.178Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:42:39.178Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771810959178 to /Users/allenbot/.claude.json
+2026-02-23T01:42:39.178Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:42:39.179Z [DEBUG] autocompact: tokens=1350 threshold=167000 effectiveWindow=180000
+2026-02-23T01:42:39.179Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:42:39.182Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771810959182
+2026-02-23T01:42:39.182Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:42:39.182Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:42:39.183Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:42:39.183Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771810959182 to /Users/allenbot/.claude.json
+2026-02-23T01:42:39.183Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:42:39.183Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:42:39.183Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:42:39.183Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:42:39.183Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:42:39.188Z [DEBUG] [useDeferredValue] Messages deferred by 2 (0→2)
+2026-02-23T01:42:40.319Z [ERROR] API error (attempt 1/11): 400 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:42:40.321Z [ERROR] Error in API request: 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:42:42.455Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:42:43.415Z [DEBUG] [useDeferredValue] Messages deferred by 1 (2→3)
+2026-02-23T01:42:43.426Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-02-23T01:42:43.426Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:42:43.426Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:42:43.428Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771810963428
+2026-02-23T01:42:43.428Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:42:43.429Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:42:43.429Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:42:43.429Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771810963428 to /Users/allenbot/.claude.json
+2026-02-23T01:42:43.430Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:42:43.431Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771810963431
+2026-02-23T01:42:43.431Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:42:43.431Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:42:43.431Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:42:43.431Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771810963431 to /Users/allenbot/.claude.json
+2026-02-23T01:42:43.431Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:42:43.433Z [DEBUG] [useDeferredValue] Messages deferred by 2 (2→4)
+2026-02-23T01:42:43.439Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-23T01:46:30.705Z [DEBUG] Full reset (shrink->below): prevHeight=25, nextHeight=24, viewport=24
+2026-02-23T01:46:31.498Z [DEBUG] Full reset (shrink->below): prevHeight=24, nextHeight=23, viewport=24
+2026-02-23T01:46:32.051Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-23T01:46:32.051Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-23T01:46:32.051Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-23T01:46:32.051Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-23T01:46:32.056Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-02-23T01:46:32.056Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:46:32.056Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:46:32.057Z [DEBUG] FileHistory: Making snapshot for message db2e9379-9025-46bc-b340-9c56192a176c
+2026-02-23T01:46:32.057Z [DEBUG] FileHistory: Added snapshot for db2e9379-9025-46bc-b340-9c56192a176c, tracking 0 files
+2026-02-23T01:46:32.059Z [DEBUG] [useDeferredValue] Messages deferred by 1 (4→5)
+2026-02-23T01:46:32.072Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-23T01:46:32.075Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811192075
+2026-02-23T01:46:32.075Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:46:32.075Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:46:32.075Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:46:32.075Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811192075 to /Users/allenbot/.claude.json
+2026-02-23T01:46:32.075Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:46:32.076Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-23T01:46:32.076Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b69; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:46:32.076Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:46:32.076Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:46:32.076Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:46:32.077Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811192077
+2026-02-23T01:46:32.077Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:46:32.077Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:46:32.077Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:46:32.077Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811192077 to /Users/allenbot/.claude.json
+2026-02-23T01:46:32.078Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:46:32.078Z [DEBUG] autocompact: tokens=17621 threshold=167000 effectiveWindow=180000
+2026-02-23T01:46:32.079Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:46:32.081Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811192081
+2026-02-23T01:46:32.081Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:46:32.081Z [DEBUG] Temp file written successfully, size: 4855 bytes
+2026-02-23T01:46:32.081Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:46:32.081Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811192081 to /Users/allenbot/.claude.json
+2026-02-23T01:46:32.081Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:46:32.081Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:46:32.081Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:46:32.081Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:46:32.081Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:46:32.085Z [DEBUG] [useDeferredValue] Messages deferred by 1 (4→5)
+2026-02-23T01:46:33.178Z [ERROR] API error (attempt 1/11): 400 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:46:33.178Z [ERROR] Error in API request: 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:46:36.868Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:46:38.343Z [DEBUG] [useDeferredValue] Messages deferred by 1 (5→6)
+2026-02-23T01:46:38.363Z [DEBUG] [useDeferredValue] Messages deferred by 1 (5→6)
+2026-02-23T01:46:38.942Z [DEBUG] [useDeferredValue] Messages deferred by 1 (6→7)
+2026-02-23T01:46:38.956Z [DEBUG] executePreToolHooks called for tool: Bash
+2026-02-23T01:46:38.957Z [DEBUG] Getting matching hook commands for PreToolUse with query: Bash
+2026-02-23T01:46:38.957Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:46:38.957Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:46:38.967Z [DEBUG] [useDeferredValue] Messages deferred by 1 (6→7)
+2026-02-23T01:46:38.980Z [DEBUG] tree-sitter: loaded from embedded
+2026-02-23T01:46:38.985Z [DEBUG] Permission suggestions for Bash: [
+  {
+    "type": "addRules",
+    "rules": [
+      {
+        "toolName": "Bash",
+        "ruleContent": "claude mcp add --transport http github https://api.githubcopilot.com/mcp/"
+      }
+    ],
+    "behavior": "allow",
+    "destination": "localSettings"
+  }
+]
+2026-02-23T01:46:38.985Z [DEBUG] executePermissionRequestHooks called for tool: Bash
+2026-02-23T01:46:38.987Z [DEBUG] Getting matching hook commands for PermissionRequest with query: Bash
+2026-02-23T01:46:38.987Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:46:38.987Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:46:38.992Z [DEBUG] High write ratio: blit=0, write=1052 (100.0% writes), screen=39x80
+2026-02-23T01:46:38.993Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-23T01:46:45.156Z [DEBUG] Persisting permission update: addRules to source 'localSettings'
+2026-02-23T01:46:45.156Z [DEBUG] Persisting 1 allow rule(s) to localSettings
+2026-02-23T01:46:45.159Z [DEBUG] Writing to temp file: /Users/allenbot/.claude/settings.local.json.tmp.79437.1771811205159
+2026-02-23T01:46:45.159Z [DEBUG] Preserving file permissions: 100644
+2026-02-23T01:46:45.160Z [DEBUG] Temp file written successfully, size: 831 bytes
+2026-02-23T01:46:45.160Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:46:45.160Z [DEBUG] Renaming /Users/allenbot/.claude/settings.local.json.tmp.79437.1771811205159 to /Users/allenbot/.claude/settings.local.json
+2026-02-23T01:46:45.160Z [DEBUG] File /Users/allenbot/.claude/settings.local.json written atomically
+2026-02-23T01:46:45.161Z [DEBUG] Applying permission update: Adding 1 allow rule(s) to destination 'localSettings': ["Bash(claude mcp:*)"]
+2026-02-23T01:46:45.166Z [DEBUG] Creating shell snapshot for zsh (/bin/zsh)
+2026-02-23T01:46:45.166Z [DEBUG] Looking for shell config file: /Users/allenbot/.zshrc
+2026-02-23T01:46:45.166Z [DEBUG] Snapshots directory: /Users/allenbot/.claude/shell-snapshots
+2026-02-23T01:46:45.167Z [DEBUG] Creating snapshot at: /Users/allenbot/.claude/shell-snapshots/snapshot-zsh-1771811205166-n2vd9i.sh
+2026-02-23T01:46:45.167Z [DEBUG] Execution timeout: 10000ms
+2026-02-23T01:46:45.182Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-23T01:46:45.184Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-23T01:46:45.208Z [DEBUG] Shell snapshot created successfully (894 bytes)
+2026-02-23T01:46:45.209Z [DEBUG] No session environment scripts found
+2026-02-23T01:46:45.360Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-23T01:46:45.360Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.eeb; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:46:45.360Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:46:45.360Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:46:45.361Z [DEBUG] Getting matching hook commands for PostToolUse with query: Bash
+2026-02-23T01:46:45.361Z [DEBUG] Found 5 hook matchers in settings
+2026-02-23T01:46:45.361Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:46:45.361Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:46:45.362Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-23T01:46:45.362Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-23T01:46:45.362Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-23T01:46:45.362Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-23T01:46:45.362Z [DEBUG] autocompact: tokens=17724 threshold=167000 effectiveWindow=180000
+2026-02-23T01:46:45.362Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:46:45.364Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811205364
+2026-02-23T01:46:45.364Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:46:45.364Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:46:45.364Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:46:45.364Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811205364 to /Users/allenbot/.claude.json
+2026-02-23T01:46:45.364Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:46:45.364Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:46:45.364Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:46:45.364Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:46:45.364Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:46:45.365Z [DEBUG] [useDeferredValue] Messages deferred by 1 (7→8)
+2026-02-23T01:46:45.387Z [DEBUG] High write ratio: blit=0, write=1101 (100.0% writes), screen=35x80
+2026-02-23T01:46:48.099Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:46:48.200Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:46:49.354Z [DEBUG] [useDeferredValue] Messages deferred by 1 (8→9)
+2026-02-23T01:46:49.378Z [DEBUG] High write ratio: blit=0, write=1111 (100.0% writes), screen=35x80
+2026-02-23T01:46:50.492Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-02-23T01:46:50.492Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:46:50.492Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:46:50.492Z [DEBUG] autocompact: tokens=18068 threshold=167000 effectiveWindow=180000
+2026-02-23T01:46:50.494Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:46:50.498Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811210498
+2026-02-23T01:46:50.498Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:46:50.499Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:46:50.499Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:46:50.499Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811210498 to /Users/allenbot/.claude.json
+2026-02-23T01:46:50.499Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:46:50.500Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:46:50.500Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:46:50.500Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:46:50.500Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:46:50.502Z [DEBUG] [useDeferredValue] Messages deferred by 1 (9→10)
+2026-02-23T01:46:50.510Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-23T01:46:50.526Z [DEBUG] High write ratio: blit=0, write=1056 (100.0% writes), screen=34x80
+2026-02-23T01:46:52.571Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:46:56.740Z [DEBUG] Forked agent [prompt_suggestion] received message: type=assistant
+2026-02-23T01:46:56.746Z [DEBUG] Forked agent [prompt_suggestion] received message: type=assistant
+2026-02-23T01:46:56.752Z [DEBUG] Getting matching hook commands for SubagentStop with query:
+2026-02-23T01:46:56.752Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:46:56.752Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:46:56.752Z [DEBUG] Forked agent [prompt_suggestion] finished: 2 messages, types=[assistant, assistant], totalUsage: input=329 output=227 cacheRead=17461 cacheCreate=210
+2026-02-23T01:46:56.754Z [DEBUG] [Speculation] enabled=false
+2026-02-23T01:47:04.370Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-23T01:47:04.370Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-23T01:47:04.370Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-23T01:47:04.370Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-23T01:47:04.372Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-02-23T01:47:04.372Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:04.372Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:47:04.373Z [DEBUG] FileHistory: Making snapshot for message 3c429445-75ac-4b53-928f-0fee807232db
+2026-02-23T01:47:04.373Z [DEBUG] FileHistory: Added snapshot for 3c429445-75ac-4b53-928f-0fee807232db, tracking 0 files
+2026-02-23T01:47:04.374Z [DEBUG] [useDeferredValue] Messages deferred by 1 (10→11)
+2026-02-23T01:47:04.385Z [DEBUG] High write ratio: blit=0, write=1070 (100.0% writes), screen=36x80
+2026-02-23T01:47:04.387Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-23T01:47:04.388Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811224388
+2026-02-23T01:47:04.388Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:04.389Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:04.389Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:04.389Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811224388 to /Users/allenbot/.claude.json
+2026-02-23T01:47:04.389Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:04.389Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-23T01:47:04.390Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.a59; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:04.390Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:04.390Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:04.390Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:04.390Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811224390
+2026-02-23T01:47:04.390Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:04.391Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:04.391Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:04.391Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811224390 to /Users/allenbot/.claude.json
+2026-02-23T01:47:04.391Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:04.391Z [DEBUG] autocompact: tokens=17797 threshold=167000 effectiveWindow=180000
+2026-02-23T01:47:04.392Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:47:04.394Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811224394
+2026-02-23T01:47:04.394Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:04.394Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:04.394Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:04.394Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811224394 to /Users/allenbot/.claude.json
+2026-02-23T01:47:04.394Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:04.395Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:04.395Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:04.395Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:04.395Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:04.400Z [DEBUG] [useDeferredValue] Messages deferred by 1 (10→11)
+2026-02-23T01:47:04.420Z [DEBUG] High write ratio: blit=0, write=1088 (100.0% writes), screen=38x80
+2026-02-23T01:47:04.661Z [ERROR] API error (attempt 1/11): 400 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:47:04.662Z [ERROR] Error in API request: 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:47:05.639Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:47:06.814Z [DEBUG] [useDeferredValue] Messages deferred by 1 (11→12)
+2026-02-23T01:47:06.836Z [DEBUG] High write ratio: blit=0, write=1098 (100.0% writes), screen=38x80
+2026-02-23T01:47:07.350Z [DEBUG] High write ratio: blit=0, write=1098 (100.0% writes), screen=38x80
+2026-02-23T01:47:07.436Z [DEBUG] executePreToolHooks called for tool: Bash
+2026-02-23T01:47:07.438Z [DEBUG] Getting matching hook commands for PreToolUse with query: Bash
+2026-02-23T01:47:07.438Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:07.438Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:47:07.445Z [DEBUG] Permission suggestions for Bash: [
+  {
+    "type": "addRules",
+    "rules": [
+      {
+        "toolName": "Bash",
+        "ruleContent": "pgrep -f \"claude\""
+      }
+    ],
+    "behavior": "allow",
+    "destination": "localSettings"
+  }
+]
+2026-02-23T01:47:07.445Z [DEBUG] executePermissionRequestHooks called for tool: Bash
+2026-02-23T01:47:07.446Z [DEBUG] Getting matching hook commands for PermissionRequest with query: Bash
+2026-02-23T01:47:07.446Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:07.446Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:47:07.446Z [DEBUG] [useDeferredValue] Messages deferred by 1 (12→13)
+2026-02-23T01:47:07.452Z [DEBUG] High write ratio: blit=0, write=1166 (100.0% writes), screen=44x80
+2026-02-23T01:47:07.452Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-23T01:47:07.452Z [DEBUG] [useDeferredValue] Messages deferred by 1 (12→13)
+2026-02-23T01:47:07.468Z [DEBUG] High write ratio: blit=0, write=1193 (100.0% writes), screen=47x80
+2026-02-23T01:47:13.455Z [DEBUG] Getting matching hook commands for Notification with query: permission_prompt
+2026-02-23T01:47:13.455Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:13.455Z [DEBUG] Matched 0 unique hooks for query "permission_prompt" (0 before deduplication)
+2026-02-23T01:47:14.853Z [DEBUG] Persisting permission update: addRules to source 'localSettings'
+2026-02-23T01:47:14.853Z [DEBUG] Persisting 1 allow rule(s) to localSettings
+2026-02-23T01:47:14.855Z [DEBUG] Writing to temp file: /Users/allenbot/.claude/settings.local.json.tmp.79437.1771811234855
+2026-02-23T01:47:14.855Z [DEBUG] Preserving file permissions: 100644
+2026-02-23T01:47:14.855Z [DEBUG] Temp file written successfully, size: 854 bytes
+2026-02-23T01:47:14.856Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:14.856Z [DEBUG] Renaming /Users/allenbot/.claude/settings.local.json.tmp.79437.1771811234855 to /Users/allenbot/.claude/settings.local.json
+2026-02-23T01:47:14.856Z [DEBUG] File /Users/allenbot/.claude/settings.local.json written atomically
+2026-02-23T01:47:14.856Z [DEBUG] Applying permission update: Adding 1 allow rule(s) to destination 'localSettings': ["Bash(pgrep:*)"]
+2026-02-23T01:47:14.872Z [DEBUG] High write ratio: blit=0, write=1136 (100.0% writes), screen=41x80
+2026-02-23T01:47:14.874Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-23T01:47:14.875Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-23T01:47:14.890Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-23T01:47:14.890Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.526; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:14.891Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:14.891Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:14.891Z [DEBUG] Getting matching hook commands for PostToolUse with query: Bash
+2026-02-23T01:47:14.891Z [DEBUG] Found 5 hook matchers in settings
+2026-02-23T01:47:14.891Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:47:14.891Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:14.891Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-23T01:47:14.891Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-23T01:47:14.892Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-23T01:47:14.892Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-23T01:47:14.892Z [DEBUG] autocompact: tokens=17844 threshold=167000 effectiveWindow=180000
+2026-02-23T01:47:14.892Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:47:14.893Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811234893
+2026-02-23T01:47:14.893Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:14.893Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:14.893Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:14.893Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811234893 to /Users/allenbot/.claude.json
+2026-02-23T01:47:14.893Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:14.894Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:14.894Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:14.894Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:14.894Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:14.894Z [DEBUG] [useDeferredValue] Messages deferred by 1 (13→14)
+2026-02-23T01:47:14.898Z [DEBUG] High write ratio: blit=0, write=1136 (100.0% writes), screen=41x80
+2026-02-23T01:47:14.915Z [DEBUG] High write ratio: blit=0, write=1139 (100.0% writes), screen=41x80
+2026-02-23T01:47:16.071Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:47:16.267Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:47:16.503Z [DEBUG] [useDeferredValue] Messages deferred by 1 (14→15)
+2026-02-23T01:47:16.524Z [DEBUG] High write ratio: blit=0, write=1149 (100.0% writes), screen=41x80
+2026-02-23T01:47:17.098Z [DEBUG] [useDeferredValue] Messages deferred by 1 (15→16)
+2026-02-23T01:47:17.104Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-02-23T01:47:17.104Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:17.104Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:47:17.105Z [DEBUG] autocompact: tokens=18185 threshold=167000 effectiveWindow=180000
+2026-02-23T01:47:17.105Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:47:17.109Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811237109
+2026-02-23T01:47:17.110Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:17.110Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:17.110Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:17.110Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811237109 to /Users/allenbot/.claude.json
+2026-02-23T01:47:17.110Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:17.111Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:17.111Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:17.111Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:17.111Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:17.113Z [DEBUG] [useDeferredValue] Messages deferred by 1 (15→16)
+2026-02-23T01:47:17.120Z [DEBUG] High write ratio: blit=0, write=1124 (100.0% writes), screen=39x80
+2026-02-23T01:47:17.121Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-23T01:47:17.136Z [DEBUG] High write ratio: blit=0, write=1189 (100.0% writes), screen=42x80
+2026-02-23T01:47:19.055Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:47:21.000Z [DEBUG] Forked agent [prompt_suggestion] received message: type=assistant
+2026-02-23T01:47:21.014Z [DEBUG] Forked agent [prompt_suggestion] received message: type=assistant
+2026-02-23T01:47:21.018Z [DEBUG] Getting matching hook commands for SubagentStop with query:
+2026-02-23T01:47:21.018Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:21.018Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:47:21.018Z [DEBUG] Forked agent [prompt_suggestion] finished: 2 messages, types=[assistant, assistant], totalUsage: input=314 output=121 cacheRead=17624 cacheCreate=164
+2026-02-23T01:47:33.366Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-23T01:47:33.366Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-23T01:47:33.366Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-23T01:47:33.366Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-23T01:47:33.370Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-02-23T01:47:33.370Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:33.370Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:47:33.370Z [DEBUG] FileHistory: Making snapshot for message c36f2f5c-4e42-4496-9a12-2d1a4476f471
+2026-02-23T01:47:33.370Z [DEBUG] FileHistory: Added snapshot for c36f2f5c-4e42-4496-9a12-2d1a4476f471, tracking 0 files
+2026-02-23T01:47:33.372Z [DEBUG] [useDeferredValue] Messages deferred by 1 (16→17)
+2026-02-23T01:47:33.385Z [DEBUG] High write ratio: blit=0, write=1204 (100.0% writes), screen=44x80
+2026-02-23T01:47:33.387Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-23T01:47:33.390Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811253390
+2026-02-23T01:47:33.390Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:33.390Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:33.390Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:33.390Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811253390 to /Users/allenbot/.claude.json
+2026-02-23T01:47:33.390Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:33.390Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-23T01:47:33.391Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.ee7; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:33.391Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:33.391Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:33.391Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:33.392Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811253392
+2026-02-23T01:47:33.392Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:33.392Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:33.392Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:33.392Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811253392 to /Users/allenbot/.claude.json
+2026-02-23T01:47:33.393Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:33.393Z [DEBUG] autocompact: tokens=17912 threshold=167000 effectiveWindow=180000
+2026-02-23T01:47:33.393Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:47:33.395Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811253395
+2026-02-23T01:47:33.395Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:33.395Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:33.395Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:33.395Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811253395 to /Users/allenbot/.claude.json
+2026-02-23T01:47:33.396Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:33.396Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:33.396Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:33.396Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:33.396Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:33.400Z [DEBUG] [useDeferredValue] Messages deferred by 1 (16→17)
+2026-02-23T01:47:33.421Z [DEBUG] High write ratio: blit=0, write=1213 (100.0% writes), screen=46x80
+2026-02-23T01:47:33.663Z [ERROR] API error (attempt 1/11): 400 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:47:33.663Z [ERROR] Error in API request: 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:47:35.114Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:47:35.667Z [DEBUG] [useDeferredValue] Messages deferred by 1 (17→18)
+2026-02-23T01:47:35.679Z [DEBUG] High write ratio: blit=0, write=1223 (100.0% writes), screen=46x80
+2026-02-23T01:47:36.475Z [DEBUG] High write ratio: blit=0, write=1223 (100.0% writes), screen=46x80
+2026-02-23T01:47:36.478Z [DEBUG] executePreToolHooks called for tool: Bash
+2026-02-23T01:47:36.479Z [DEBUG] Getting matching hook commands for PreToolUse with query: Bash
+2026-02-23T01:47:36.479Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:36.479Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:47:36.481Z [DEBUG] Permission suggestions for Bash: [
+  {
+    "type": "addRules",
+    "rules": [
+      {
+        "toolName": "Bash",
+        "ruleContent": "claude"
+      }
+    ],
+    "behavior": "allow",
+    "destination": "localSettings"
+  }
+]
+2026-02-23T01:47:36.482Z [DEBUG] executePermissionRequestHooks called for tool: Bash
+2026-02-23T01:47:36.482Z [DEBUG] Getting matching hook commands for PermissionRequest with query: Bash
+2026-02-23T01:47:36.482Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:36.482Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:47:36.483Z [DEBUG] [useDeferredValue] Messages deferred by 1 (18→19)
+2026-02-23T01:47:36.489Z [DEBUG] High write ratio: blit=0, write=1273 (100.0% writes), screen=54x80
+2026-02-23T01:47:36.489Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-23T01:47:36.490Z [DEBUG] [useDeferredValue] Messages deferred by 1 (18→19)
+2026-02-23T01:47:36.510Z [DEBUG] High write ratio: blit=0, write=1301 (100.0% writes), screen=57x80
+2026-02-23T01:47:36.561Z [DEBUG] Failed to check metrics opt-out status: Auth error: No API key available
+2026-02-23T01:47:36.561Z [DEBUG] Metrics export disabled by organization setting
+2026-02-23T01:47:39.587Z [DEBUG] Persisting permission update: addRules to source 'localSettings'
+2026-02-23T01:47:39.587Z [DEBUG] Persisting 1 allow rule(s) to localSettings
+2026-02-23T01:47:39.589Z [DEBUG] Writing to temp file: /Users/allenbot/.claude/settings.local.json.tmp.79437.1771811259589
+2026-02-23T01:47:39.589Z [DEBUG] Preserving file permissions: 100644
+2026-02-23T01:47:39.590Z [DEBUG] Temp file written successfully, size: 878 bytes
+2026-02-23T01:47:39.590Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:39.590Z [DEBUG] Renaming /Users/allenbot/.claude/settings.local.json.tmp.79437.1771811259589 to /Users/allenbot/.claude/settings.local.json
+2026-02-23T01:47:39.590Z [DEBUG] File /Users/allenbot/.claude/settings.local.json written atomically
+2026-02-23T01:47:39.591Z [DEBUG] Applying permission update: Adding 1 allow rule(s) to destination 'localSettings': ["Bash(claude:*)"]
+2026-02-23T01:47:39.608Z [DEBUG] High write ratio: blit=0, write=1241 (100.0% writes), screen=49x80
+2026-02-23T01:47:39.610Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-23T01:47:39.611Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-02-23T01:47:39.667Z [DEBUG] Bash tool error (75ms): Shell command failed
+2026-02-23T01:47:39.668Z [DEBUG] Getting matching hook commands for PostToolUseFailure with query: Bash
+2026-02-23T01:47:39.668Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:39.668Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-02-23T01:47:39.668Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-23T01:47:39.668Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-23T01:47:39.668Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-23T01:47:39.668Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-23T01:47:39.669Z [DEBUG] autocompact: tokens=18021 threshold=167000 effectiveWindow=180000
+2026-02-23T01:47:39.669Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:47:39.670Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811259670
+2026-02-23T01:47:39.670Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:39.670Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:39.670Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:39.670Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811259670 to /Users/allenbot/.claude.json
+2026-02-23T01:47:39.670Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:39.670Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:39.670Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:39.670Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:39.670Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:39.671Z [DEBUG] [useDeferredValue] Messages deferred by 1 (19→20)
+2026-02-23T01:47:39.674Z [DEBUG] High write ratio: blit=0, write=1241 (100.0% writes), screen=49x80
+2026-02-23T01:47:39.692Z [DEBUG] High write ratio: blit=0, write=1675 (100.0% writes), screen=56x80
+2026-02-23T01:47:40.993Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:47:41.753Z [DEBUG] [useDeferredValue] Messages deferred by 1 (20→21)
+2026-02-23T01:47:41.782Z [DEBUG] High write ratio: blit=0, write=1685 (100.0% writes), screen=56x80
+2026-02-23T01:47:42.236Z [DEBUG] [useDeferredValue] Messages deferred by 1 (21→22)
+2026-02-23T01:47:42.246Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-02-23T01:47:42.246Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:42.246Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:47:42.246Z [DEBUG] autocompact: tokens=18377 threshold=167000 effectiveWindow=180000
+2026-02-23T01:47:42.247Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:47:42.250Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811262250
+2026-02-23T01:47:42.250Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:42.250Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:42.250Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:42.250Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811262250 to /Users/allenbot/.claude.json
+2026-02-23T01:47:42.251Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:42.251Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:42.251Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:42.251Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:42.251Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:42.253Z [DEBUG] [useDeferredValue] Messages deferred by 1 (21→22)
+2026-02-23T01:47:42.259Z [DEBUG] High write ratio: blit=0, write=1658 (100.0% writes), screen=54x80
+2026-02-23T01:47:42.259Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-23T01:47:42.275Z [DEBUG] High write ratio: blit=0, write=1753 (100.0% writes), screen=58x80
+2026-02-23T01:47:43.898Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:47:47.451Z [DEBUG] Forked agent [prompt_suggestion] received message: type=assistant
+2026-02-23T01:47:47.459Z [DEBUG] Forked agent [prompt_suggestion] received message: type=assistant
+2026-02-23T01:47:47.464Z [DEBUG] Getting matching hook commands for SubagentStop with query:
+2026-02-23T01:47:47.464Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:47.464Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:47:47.465Z [DEBUG] Forked agent [prompt_suggestion] finished: 2 messages, types=[assistant, assistant], totalUsage: input=308 output=205 cacheRead=17721 cacheCreate=259
+2026-02-23T01:47:47.465Z [DEBUG] [Speculation] enabled=false
+2026-02-23T01:47:52.485Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-02-23T01:47:52.485Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-02-23T01:47:52.485Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-02-23T01:47:52.485Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-02-23T01:47:52.487Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-02-23T01:47:52.487Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:52.487Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:47:52.487Z [DEBUG] FileHistory: Making snapshot for message abea800d-7680-46bd-b843-a42e29ffdbe9
+2026-02-23T01:47:52.487Z [DEBUG] FileHistory: Added snapshot for abea800d-7680-46bd-b843-a42e29ffdbe9, tracking 0 files
+2026-02-23T01:47:52.489Z [DEBUG] [useDeferredValue] Messages deferred by 1 (22→23)
+2026-02-23T01:47:52.501Z [DEBUG] High write ratio: blit=0, write=1763 (100.0% writes), screen=60x80
+2026-02-23T01:47:52.503Z [DEBUG] Started caffeinate to prevent sleep
+2026-02-23T01:47:52.504Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811272504
+2026-02-23T01:47:52.504Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:52.505Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:52.505Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:52.505Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811272504 to /Users/allenbot/.claude.json
+2026-02-23T01:47:52.505Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:52.505Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-02-23T01:47:52.505Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.42f; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:52.505Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:52.505Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:52.506Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:52.506Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811272506
+2026-02-23T01:47:52.506Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:52.507Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:52.507Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:52.507Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811272506 to /Users/allenbot/.claude.json
+2026-02-23T01:47:52.507Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:52.507Z [DEBUG] autocompact: tokens=18105 threshold=167000 effectiveWindow=180000
+2026-02-23T01:47:52.508Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:47:52.509Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811272509
+2026-02-23T01:47:52.509Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:52.510Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:52.510Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:52.510Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811272509 to /Users/allenbot/.claude.json
+2026-02-23T01:47:52.510Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:52.510Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:52.510Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:52.510Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:52.510Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:52.515Z [DEBUG] [useDeferredValue] Messages deferred by 1 (22→23)
+2026-02-23T01:47:52.537Z [DEBUG] High write ratio: blit=0, write=1779 (100.0% writes), screen=62x80
+2026-02-23T01:47:52.779Z [ERROR] API error (attempt 1/11): 400 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:47:52.779Z [ERROR] Error in API request: 400 {"type":"error","error":{"type":"invalid_request_error","message":"invalid params"}}
+2026-02-23T01:47:57.509Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:47:59.281Z [DEBUG] [useDeferredValue] Messages deferred by 1 (23→24)
+2026-02-23T01:47:59.305Z [DEBUG] High write ratio: blit=0, write=1789 (100.0% writes), screen=62x80
+2026-02-23T01:47:59.959Z [DEBUG] [useDeferredValue] Messages deferred by 1 (24→25)
+2026-02-23T01:47:59.966Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-02-23T01:47:59.966Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:47:59.966Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:47:59.966Z [DEBUG] autocompact: tokens=18445 threshold=167000 effectiveWindow=180000
+2026-02-23T01:47:59.967Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-02-23T01:47:59.971Z [DEBUG] Writing to temp file: /Users/allenbot/.claude.json.tmp.79437.1771811279971
+2026-02-23T01:47:59.971Z [DEBUG] Preserving file permissions: 100600
+2026-02-23T01:47:59.971Z [DEBUG] Temp file written successfully, size: 4972 bytes
+2026-02-23T01:47:59.971Z [DEBUG] Applied original permissions to temp file
+2026-02-23T01:47:59.971Z [DEBUG] Renaming /Users/allenbot/.claude.json.tmp.79437.1771811279971 to /Users/allenbot/.claude.json
+2026-02-23T01:47:59.972Z [DEBUG] File /Users/allenbot/.claude.json written atomically
+2026-02-23T01:47:59.973Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=cli; cch=00000;
+2026-02-23T01:47:59.973Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-02-23T01:47:59.973Z [DEBUG] [API:auth] OAuth token check starting
+2026-02-23T01:47:59.973Z [DEBUG] [API:auth] OAuth token check complete
+2026-02-23T01:47:59.975Z [DEBUG] [useDeferredValue] Messages deferred by 1 (24→25)
+2026-02-23T01:47:59.982Z [DEBUG] High write ratio: blit=0, write=1769 (100.0% writes), screen=60x80
+2026-02-23T01:47:59.982Z [DEBUG] Stopped caffeinate, allowing sleep
+2026-02-23T01:47:59.997Z [DEBUG] High write ratio: blit=0, write=1836 (100.0% writes), screen=66x80
+2026-02-23T01:48:02.635Z [DEBUG] Stream started - received first chunk
+2026-02-23T01:48:06.314Z [DEBUG] Forked agent [prompt_suggestion] received message: type=assistant
+2026-02-23T01:48:06.323Z [DEBUG] Forked agent [prompt_suggestion] received message: type=assistant
+2026-02-23T01:48:06.327Z [DEBUG] Getting matching hook commands for SubagentStop with query:
+2026-02-23T01:48:06.327Z [DEBUG] Found 0 hook matchers in settings
+2026-02-23T01:48:06.327Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-02-23T01:48:06.327Z [DEBUG] Forked agent [prompt_suggestion] finished: 2 messages, types=[assistant, assistant], totalUsage: input=287 output=190 cacheRead=17881 cacheCreate=167
+2026-02-23T01:48:06.328Z [DEBUG] [Speculation] enabled=false

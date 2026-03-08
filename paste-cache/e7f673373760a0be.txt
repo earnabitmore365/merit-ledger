@@ -1,0 +1,53 @@
+有意思。T2 (e30/x14) 比 T1 (e28/x15) 更高（435 >
+  363），这不符合直觉。说明问题不在 ranging↔trend
+  的穿越上，而是另一种类型的切换在主导。
+
+  ---
+  诊断：切换类型分布
+
+  先确认根因，在测试脚本里加一行：
+
+  # 统计切换类型
+  from collections import Counter
+  types = Counter(
+      f"{s['from']}→{s['to']}"
+      for s in strategy._switch_history
+  )
+  print(dict(types))
+
+  我的猜测：bull↔bear 直接翻转占大多数，而不是 ranging↔trend。
+
+  ---
+  为什么 e30/x14 反而更多切换
+
+  - exit=14 极低 → 系统长时间锁在"trend"状态
+  - 在 trend 状态内，SMA 斜率翻转（bull→bear）不受 exit 阈值约束，confirmation=6
+   只过滤了短暂的斜率抖动，但斜率中期反转仍然触发直接 bull→bear 切换
+  - e30 让系统更少进入 trend，但一旦进去就被低 exit 锁住——期间方向反转累积更多
+
+  ---
+  建议：禁止 bull→bear 直接跳，必须经过 ranging
+
+  # strategy.py 的 generate_signal 里
+  if (self._current_regime in ("bull", "bear")
+          and new_regime in ("bull", "bear")
+          and new_regime != self._current_regime):
+      # 方向反转：强制先过 ranging，不允许直接跳
+      new_regime = "ranging"
+
+  效果：bull→ranging→bear，每次方向反转多一个 ranging
+  缓冲期，切换次数理论上减半。
+
+  ---
+  同时测试的参数组合
+
+  ┌───────────────┬───────┬──────┬──────────┬─────┬──────────────────────────┐
+  │     配置      │ enter │ exit │ min_bars │  c  │           特殊           │
+  ├───────────────┼───────┼──────┼──────────┼─────┼──────────────────────────┤
+  │ 加中间态      │ 28    │ 18   │ 48       │ 6   │ bull→bear 必须经 ranging │
+  ├───────────────┼───────┼──────┼──────────┼─────┼──────────────────────────┤
+  │ 加中间态+激进 │ 27    │ 18   │ 96       │ 4   │ bull→bear 必须经 ranging │
+  └───────────────┴───────┴──────┴──────────┴─────┴──────────────────────────┘
+
+  先跑"加中间态"这一条，如果降幅明显说明诊断正确。
+

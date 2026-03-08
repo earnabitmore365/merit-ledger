@@ -1,0 +1,9 @@
+{
+  "id": "11",
+  "subject": "验证 — 单币种 + 10 币种回测对比",
+  "description": "验证 ADX 值合理性，单币种 LINK 回测，10 币种全量回测对比 proc 基准",
+  "activeForm": "验证回测结果",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

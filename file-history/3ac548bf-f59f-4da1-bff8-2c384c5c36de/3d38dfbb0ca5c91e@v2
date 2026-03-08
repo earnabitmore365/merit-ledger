@@ -1,0 +1,4 @@
+#!/bin/bash
+# 启动黑丝（Claude Opus — 执行工程师）
+cd "$(dirname "$0")"
+python3 wrapper.py heisi --model claude-opus-4-6

@@ -1,0 +1,416 @@
+#!/usr/bin/env python3
+"""
+第一层筛选 — 照妖镜 validate_seeds.py
+
+Step 1: 105组 avg_r > 0.05 候选
+  - Walk-Forward 80/20: oos_avg_r > 0 且 >= train_avg_r * 0.5
+  - Monte Carlo 100次: 能翻倍比例 >= 80%
+  - 两项都通过 → 尖子生池
+
+Step 2: 418组扯平拆方向
+  - SQL 按 direction 分组，单方向 avg_r > 0.05 → 追加验证
+  - 通过标准同 Step 1
+
+输出: lab/results/champions_layer1.json
+"""
+
+import sqlite3
+import os
+import json
+import random
+import math
+import statistics
+from datetime import datetime
+
+DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'reports', 'seed_report.db'
+)
+
+INITIAL_BALANCE = 500.0
+POSITION_PCT = 0.1
+MC_RUNS = 100
+MC_PASS_THRESHOLD = 0.80  # 80% 能翻倍
+WF_OOS_MIN_RATIO = 0.50   # oos_avg_r >= train_avg_r * 50%
+
+EXCLUDE_COINS = ('BTC_COIN', 'ETH_COIN', 'BNB_COIN')
+
+
+# ══════════════════════════════════════════════════════════════
+#  数据查询
+# ══════════════════════════════════════════════════════════════
+
+def get_candidates(db_path, min_avg_r=0.05):
+    """查出 avg_r > 门槛的 combo（trades ≥ 100，排除币本位）"""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT cs.id, cs.strategy, cs.coin, cs.interval,
+               AVG(pt.r_value) AS avg_r,
+               COUNT(*) AS trades,
+               cs.win_rate, cs.max_drawdown,
+               cs.fastest_double_days, cs.sharpe_ratio
+        FROM combo_summary cs
+        JOIN paired_trades pt ON pt.combo_id = cs.id
+        WHERE cs.coin NOT IN (?, ?, ?)
+        GROUP BY cs.id
+        HAVING COUNT(*) >= 100 AND AVG(pt.r_value) > ?
+        ORDER BY AVG(pt.r_value) DESC
+    """, (*EXCLUDE_COINS, min_avg_r)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_directional_candidates(db_path, avg_r_low=0.0, avg_r_high=0.05, dir_min_avg_r=0.05):
+    """查出扯平区（0~0.05）中单方向 avg_r > 门槛的 combo+direction"""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    # 先找扯平区的 combo
+    combos = conn.execute("""
+        SELECT cs.id, cs.strategy, cs.coin, cs.interval,
+               AVG(pt.r_value) AS avg_r,
+               COUNT(*) AS trades
+        FROM combo_summary cs
+        JOIN paired_trades pt ON pt.combo_id = cs.id
+        WHERE cs.coin NOT IN (?, ?, ?)
+        GROUP BY cs.id
+        HAVING COUNT(*) >= 100
+            AND AVG(pt.r_value) >= ? AND AVG(pt.r_value) <= ?
+    """, (*EXCLUDE_COINS, avg_r_low, avg_r_high)).fetchall()
+
+    # 对每个 combo 拆方向
+    results = []
+    for c in combos:
+        for direction in ('long', 'short'):
+            rows = conn.execute("""
+                SELECT AVG(r_value) AS dir_avg_r, COUNT(*) AS dir_trades
+                FROM paired_trades
+                WHERE combo_id = ? AND LOWER(direction) = ?
+            """, (c['id'], direction)).fetchone()
+
+            if rows['dir_trades'] and rows['dir_trades'] >= 50 and rows['dir_avg_r'] > dir_min_avg_r:
+                results.append({
+                    'combo_id': c['id'],
+                    'strategy': c['strategy'],
+                    'coin': c['coin'],
+                    'interval': c['interval'],
+                    'direction_filter': direction.upper(),
+                    'overall_avg_r': round(c['avg_r'], 4),
+                    'dir_avg_r': round(rows['dir_avg_r'], 4),
+                    'dir_trades': rows['dir_trades'],
+                })
+
+    conn.close()
+    return results
+
+
+def get_candle_ranges(db_path):
+    """获取各 coin/interval 的 K 线范围"""
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute("""
+        SELECT coin, interval, MIN(candle_idx) as min_idx, MAX(candle_idx) as max_idx
+        FROM regime_timeline
+        GROUP BY coin, interval
+    """).fetchall()
+    conn.close()
+    return {(r[0], r[1]): (r[2], r[3]) for r in rows}
+
+
+def get_trades(db_path, combo_id, direction_filter=None):
+    """获取 combo 的所有交易（按 open_candle_idx 排序）"""
+    conn = sqlite3.connect(db_path)
+    if direction_filter:
+        rows = conn.execute("""
+            SELECT open_candle_idx, r_value
+            FROM paired_trades
+            WHERE combo_id = ? AND LOWER(direction) = LOWER(?)
+            ORDER BY open_candle_idx
+        """, (combo_id, direction_filter)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT open_candle_idx, r_value
+            FROM paired_trades
+            WHERE combo_id = ?
+            ORDER BY open_candle_idx
+        """, (combo_id,)).fetchall()
+    conn.close()
+    return rows
+
+
+# ══════════════════════════════════════════════════════════════
+#  验证函数
+# ══════════════════════════════════════════════════════════════
+
+def walk_forward(trades, split_idx):
+    """Walk-Forward 80/20 验证"""
+    train = [t for t in trades if t[0] < split_idx]
+    test = [t for t in trades if t[0] >= split_idx]
+
+    train_avg_r = statistics.mean([t[1] for t in train]) if train else 0
+    oos_avg_r = statistics.mean([t[1] for t in test]) if test else 0
+    train_count = len(train)
+    oos_count = len(test)
+
+    passed = (
+        oos_count >= 10
+        and oos_avg_r > 0
+        and oos_avg_r >= train_avg_r * WF_OOS_MIN_RATIO
+    )
+
+    return {
+        'train_avg_r': round(train_avg_r, 4),
+        'oos_avg_r': round(oos_avg_r, 4),
+        'train_count': train_count,
+        'oos_count': oos_count,
+        'wf_pass': passed,
+    }
+
+
+def monte_carlo(r_values, n_runs=MC_RUNS):
+    """Monte Carlo 打乱 100 次，检查翻倍率"""
+    if not r_values:
+        return {'mc_pass_rate': 0.0, 'mc_pass': False, 'mc_avg_d2d_trades': None}
+
+    doubles = 0
+    d2d_trades_list = []
+
+    for _ in range(n_runs):
+        shuffled = r_values[:]
+        random.shuffle(shuffled)
+
+        balance = INITIAL_BALANCE
+        doubled = False
+        for i, r in enumerate(shuffled):
+            pnl = r * balance * POSITION_PCT
+            balance += pnl
+            if balance <= 0:
+                break
+            if balance >= INITIAL_BALANCE * 2:
+                doubled = True
+                d2d_trades_list.append(i + 1)
+                break
+
+        if doubled:
+            doubles += 1
+
+    pass_rate = doubles / n_runs
+    avg_d2d_trades = (statistics.mean(d2d_trades_list)
+                      if d2d_trades_list else None)
+
+    return {
+        'mc_pass_rate': round(pass_rate, 2),
+        'mc_pass': pass_rate >= MC_PASS_THRESHOLD,
+        'mc_avg_d2d_trades': round(avg_d2d_trades) if avg_d2d_trades else None,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+#  主流程
+# ══════════════════════════════════════════════════════════════
+
+def validate_batch(db_path, candidates, candle_ranges, label, direction_filter_map=None):
+    """对一批候选跑 walk-forward + Monte Carlo"""
+    champions = []
+    wf_pass_count = 0
+    mc_pass_count = 0
+    both_pass_count = 0
+
+    for i, c in enumerate(candidates):
+        combo_id = c.get('combo_id') or c.get('id')
+        coin = c['coin']
+        interval = c['interval']
+        strategy = c['strategy']
+        direction_filter = None
+
+        if direction_filter_map:
+            direction_filter = c.get('direction_filter')
+
+        # 获取 K 线范围
+        key = (coin, interval)
+        if key not in candle_ranges:
+            continue
+        min_idx, max_idx = candle_ranges[key]
+        split_idx = min_idx + int((max_idx - min_idx + 1) * 0.8)
+        total_days = (max_idx - min_idx + 1) / 24.0
+
+        # 获取交易
+        trades = get_trades(db_path, combo_id, direction_filter)
+        if len(trades) < 20:
+            continue
+
+        # Walk-Forward
+        wf = walk_forward(trades, split_idx)
+        if wf['wf_pass']:
+            wf_pass_count += 1
+
+        # Monte Carlo
+        r_values = [t[1] for t in trades]
+        mc = monte_carlo(r_values)
+        if mc['mc_pass']:
+            mc_pass_count += 1
+
+        # 两项都通过
+        passed = wf['wf_pass'] and mc['mc_pass']
+        if passed:
+            both_pass_count += 1
+
+            # 计算 compound d2d（原始顺序）
+            balance = INITIAL_BALANCE
+            d2d_days = None
+            for t in trades:
+                pnl = t[1] * balance * POSITION_PCT
+                balance += pnl
+                if balance <= 0:
+                    break
+                if balance >= INITIAL_BALANCE * 2 and d2d_days is None:
+                    trade_idx_in_list = trades.index(t)
+                    d2d_days = round(
+                        (t[0] - trades[0][0]) / 24.0, 1
+                    )
+
+            entry = {
+                'strategy': strategy,
+                'coin': coin,
+                'interval': interval,
+                'avg_r': round(c.get('avg_r') or c.get('dir_avg_r', 0), 4),
+                'total_trades': len(trades),
+                'win_rate': round(c.get('win_rate', 0), 1),
+                'train_avg_r': wf['train_avg_r'],
+                'oos_avg_r': wf['oos_avg_r'],
+                'train_count': wf['train_count'],
+                'oos_count': wf['oos_count'],
+                'mc_pass_rate': mc['mc_pass_rate'],
+                'mc_avg_d2d_trades': mc['mc_avg_d2d_trades'],
+                'original_d2d_days': d2d_days,
+                'max_drawdown': round(c.get('max_drawdown', 0), 1),
+                'sharpe': round(c.get('sharpe_ratio', 0), 2),
+                'total_days': round(total_days),
+            }
+
+            if direction_filter:
+                entry['direction_filter'] = direction_filter
+
+            champions.append(entry)
+
+        # 进度
+        if (i + 1) % 20 == 0 or i + 1 == len(candidates):
+            print(f"  [{label}] {i+1}/{len(candidates)} "
+                  f"(WF通过:{wf_pass_count} MC通过:{mc_pass_count} 双通过:{both_pass_count})")
+
+    return champions, wf_pass_count, mc_pass_count, both_pass_count
+
+
+def main():
+    random.seed(42)  # 可复现
+
+    if not os.path.exists(DB_PATH):
+        print(f"数据库不存在: {DB_PATH}")
+        return
+
+    print(f"数据库: {DB_PATH}")
+
+    # 加载 K 线范围
+    candle_ranges = get_candle_ranges(DB_PATH)
+    print(f"K 线范围: {len(candle_ranges)} 组 coin/interval")
+
+    # ══════════ Step 1: 105组直接候选 ══════════
+
+    print(f"\n{'#'*70}")
+    print(f"  Step 1: 照妖镜 — avg_r > 0.05 直接候选")
+    print(f"{'#'*70}")
+
+    candidates = get_candidates(DB_PATH, min_avg_r=0.05)
+    print(f"  候选数量: {len(candidates)}")
+
+    champs1, wf1, mc1, both1 = validate_batch(
+        DB_PATH, candidates, candle_ranges, "Step1"
+    )
+
+    print(f"\n  Step 1 结果:")
+    print(f"    Walk-Forward 通过: {wf1}/{len(candidates)}")
+    print(f"    Monte Carlo 通过: {mc1}/{len(candidates)}")
+    print(f"    双通过（尖子生）: {both1}/{len(candidates)}")
+
+    # ══════════ Step 2: 扯平拆方向 ══════════
+
+    print(f"\n{'#'*70}")
+    print(f"  Step 2: 扯平区拆方向 — overall avg_r 0~0.05, 单方向 > 0.05")
+    print(f"{'#'*70}")
+
+    dir_candidates = get_directional_candidates(DB_PATH)
+    print(f"  方向拆分候选: {len(dir_candidates)}")
+
+    if dir_candidates:
+        champs2, wf2, mc2, both2 = validate_batch(
+            DB_PATH, dir_candidates, candle_ranges, "Step2",
+            direction_filter_map=True
+        )
+
+        print(f"\n  Step 2 结果:")
+        print(f"    Walk-Forward 通过: {wf2}/{len(dir_candidates)}")
+        print(f"    Monte Carlo 通过: {mc2}/{len(dir_candidates)}")
+        print(f"    双通过（追加尖子生）: {both2}/{len(dir_candidates)}")
+    else:
+        champs2 = []
+        print(f"  无方向拆分候选")
+
+    # ══════════ 合并输出 ══════════
+
+    all_champions = champs1 + champs2
+    all_champions.sort(key=lambda x: x['oos_avg_r'], reverse=True)
+
+    print(f"\n{'#'*70}")
+    print(f"  合并尖子生池")
+    print(f"{'#'*70}")
+    print(f"  Step 1 尖子生: {len(champs1)}")
+    print(f"  Step 2 追加: {len(champs2)}")
+    print(f"  总计: {len(all_champions)}")
+
+    if all_champions:
+        print(f"\n  {'策略':<24} {'币种':<6} {'周期':<5} {'方向':<6} "
+              f"{'avg_r':>7} {'OOS_r':>7} {'MC%':>5} {'d2d天':>7}")
+        print(f"  {'-'*24} {'-'*6} {'-'*5} {'-'*6} "
+              f"{'-'*7} {'-'*7} {'-'*5} {'-'*7}")
+
+        for c in all_champions:
+            direction = c.get('direction_filter', '—')
+            d2d = f"{c['original_d2d_days']}" if c['original_d2d_days'] else 'N/A'
+            print(f"  {c['strategy']:<24} {c['coin']:<6} {c['interval']:<5} {direction:<6} "
+                  f"{c['avg_r']:>7.4f} {c['oos_avg_r']:>7.4f} {c['mc_pass_rate']:>4.0%} {d2d:>7}")
+
+    # 保存
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, 'champions_layer1.json')
+
+    report = {
+        'generated_at': datetime.now().isoformat(),
+        'parameters': {
+            'initial_balance': INITIAL_BALANCE,
+            'position_pct': POSITION_PCT,
+            'mc_runs': MC_RUNS,
+            'mc_pass_threshold': MC_PASS_THRESHOLD,
+            'wf_oos_min_ratio': WF_OOS_MIN_RATIO,
+        },
+        'step1': {
+            'candidates': len(candidates),
+            'wf_pass': wf1,
+            'mc_pass': mc1,
+            'both_pass': both1,
+        },
+        'step2': {
+            'candidates': len(dir_candidates),
+            'wf_pass': wf2 if dir_candidates else 0,
+            'mc_pass': mc2 if dir_candidates else 0,
+            'both_pass': both2 if dir_candidates else 0,
+        },
+        'champions': all_champions,
+    }
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
+    print(f"\n  报告已保存: {output_path}")
+
+
+if __name__ == '__main__':
+    main()

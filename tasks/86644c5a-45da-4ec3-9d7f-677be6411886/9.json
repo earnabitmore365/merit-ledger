@@ -1,0 +1,9 @@
+{
+  "id": "9",
+  "subject": "验证交易系统",
+  "description": "验证账号管理、WebSocket、adapter 集成是否正常工作",
+  "activeForm": "测试交易系统",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,119 @@
+"""BB Squeeze 真正版（TTM Squeeze）
+
+真正的 Squeeze 分两段：
+1. 蓄力期：BB 收窄到 Keltner Channel 内部 → 市场在憋
+2. 爆发期：BB 张开超出 KC → 市场爆发，跟方向进场
+
+方向判断用 Momentum（close 与 SMA 的差值变化率）。
+
+Logic:
+- Squeeze ON → OFF（BB从KC内跑到KC外）+ Momentum > 0 → BUY
+- Squeeze ON → OFF + Momentum < 0 → SELL
+"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+from core.indicator_cache import get_indicator
+
+
+@dataclass
+class BBSqueeze2yiConfig:
+    bb_period: int = 20
+    bb_std: float = 2.0
+    kc_period: int = 20
+    kc_atr_period: int = 14
+    kc_multiplier: float = 1.5
+    mom_period: int = 12        # Momentum 回看
+
+
+class BBSqueeze2yi(Strategy):
+
+    REQUIRES = ['bb', 'atr', 'sma', 'ema']
+
+    def __init__(self, exchange=None, config: Optional[BBSqueeze2yiConfig] = None):
+        self.exchange = exchange
+        self.config = config or BBSqueeze2yiConfig()
+
+    @property
+    def name(self) -> str:
+        return "bb_squeeze_2yi"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = max(self.config.bb_period, self.config.kc_period,
+                          self.config.kc_atr_period) + self.config.mom_period + 5
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        idx = self.current_idx
+
+        # Bollinger Bands
+        bb = get_indicator('bb', period=self.config.bb_period, std=self.config.bb_std)
+
+        # Keltner Channel = EMA(period) ± multiplier × ATR(atr_period)
+        kc_mid = get_indicator('ema', period=self.config.kc_period)
+        atr_series = get_indicator('atr', period=self.config.kc_atr_period)
+
+        kc_upper = kc_mid[idx] + self.config.kc_multiplier * atr_series[idx]
+        kc_lower = kc_mid[idx] - self.config.kc_multiplier * atr_series[idx]
+
+        # 前一根的 KC
+        kc_upper_prev = kc_mid[idx - 1] + self.config.kc_multiplier * atr_series[idx - 1]
+        kc_lower_prev = kc_mid[idx - 1] - self.config.kc_multiplier * atr_series[idx - 1]
+
+        # Squeeze 检测：BB 在 KC 内 = Squeeze ON
+        squeeze_now = bb['lower'][idx] > kc_lower and bb['upper'][idx] < kc_upper
+        squeeze_prev = bb['lower'][idx - 1] > kc_lower_prev and bb['upper'][idx - 1] < kc_upper_prev
+
+        # Momentum = close - SMA(mom_period)，看方向变化
+        sma_mom = get_indicator('sma', period=self.config.mom_period)
+        mom_now = klines[-1]["close"] - sma_mom[idx]
+        mom_prev = klines[-2]["close"] - sma_mom[idx - 1] if idx > 0 else 0
+
+        signal = Signal.HOLD
+        confidence = 0.0
+        state = "neutral"
+
+        if squeeze_prev and not squeeze_now:
+            # Squeeze 刚释放 → 爆发进场
+            state = "squeeze_fire"
+
+            # 信心 = BB 超出 KC 的幅度
+            bb_width = bb['upper'][idx] - bb['lower'][idx]
+            kc_width = kc_upper - kc_lower
+            if kc_width > 0:
+                expansion = bb_width / kc_width
+                confidence = min((expansion - 1.0) * 2, 1.0)
+            else:
+                confidence = 0.5
+
+            if mom_now > 0:
+                signal = Signal.BUY
+                # Momentum 加速中更有信心
+                if mom_now > mom_prev:
+                    confidence = min(confidence + 0.1, 1.0)
+            elif mom_now < 0:
+                signal = Signal.SELL
+                if mom_now < mom_prev:
+                    confidence = min(confidence + 0.1, 1.0)
+        elif squeeze_now:
+            state = "squeeze_on"
+        else:
+            state = "no_squeeze"
+
+        return TradingSignal(
+            signal=signal,
+            confidence=confidence,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "state": state,
+                "squeeze_on": squeeze_now,
+                "bb_upper": bb['upper'][idx], "bb_lower": bb['lower'][idx],
+                "kc_upper": kc_upper, "kc_lower": kc_lower,
+                "momentum": mom_now,
+                "price": klines[-1]["close"],
+            },
+        )

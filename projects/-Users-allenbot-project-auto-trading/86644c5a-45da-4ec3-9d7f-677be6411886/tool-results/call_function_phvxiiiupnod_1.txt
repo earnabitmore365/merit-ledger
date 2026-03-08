@@ -1,0 +1,54 @@
+   240→                    return result
+   241→            
+   242→            # 5. 执行交易
+   243→            # 获取信号值（统一处理 TradingSignal 和 Signal）
+   244→            if hasattr(signal, 'signal'):
+   245→                signal_val = signal.signal  # TradingSignal.signal 是 Signal 枚举
+   246→            else:
+   247→                signal_val = signal  # 直接是 Signal 枚举
+   248→
+   249→            if signal_val == Signal.BUY and self.position == "NO_POSITION":
+   250→                self._open_position(Action.BUY)
+   251→                result['action'] = Action.BUY.value
+   252→                self.logger.info(f"[{result['timestamp']}] {result['action']} | 信号: BUY")
+   253→
+   254→            elif signal_val == Signal.SELL and self.position == "NO_POSITION":
+   255→                self._open_position(Action.SELL)
+   256→                result['action'] = Action.SELL.value
+   257→                self.logger.info(f"[{result['timestamp']}] {result['action']} | 信号: SELL")
+   258→
+   259→            else:
+   260→                self.logger.debug(f"[{result['timestamp']}] 持仓: {self.position} | 信号: {signal_val.value}")
+   261→        
+   262→        except Exception as e:
+   263→            self.logger.error(f"执行错误: {e}", exc_info=True)
+   264→        
+   265→        return result
+   266→    
+   267→    def stop(self):
+   268→        """停止交易系统"""
+   269→        self.running = False
+   270→        self.logger.info("交易系统已停止")
+   271→        self.logger.info("=" * 50)
+   272→    
+   273→    # ==================== 配置方法 ====================
+   274→    
+   275→    def set_coin(self, coin: str):
+   276→        """设置交易币种
+   277→        
+   278→        Args:
+   279→            coin: 币种名称
+   280→        """
+   281→        self.config['coin'] = coin.upper()
+   282→        self.logger.info(f"设置交易币种: {self.config['coin']}")
+   283→    
+   284→    def set_leverage(self, leverage: float):
+   285→        """设置杠杆
+   286→        
+   287→        Args:
+   288→            leverage: 杠杆倍数
+   289→        """
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

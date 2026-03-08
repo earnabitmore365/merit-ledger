@@ -1,0 +1,14 @@
+                                                                                File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 316, in _sync_position
+                if pos['side'] == "LONG":
+                                                ~~~^^^^^^^^
+                                                           TypeError: 'Position' object is not subscriptable
+                           2026-02-24 15:21:50,766 - HyperLiquidWebSocket - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+                                                          2026-02-24 15:22:37,774 - TradingSystem - ERROR - 执行错误: 'Position' object is not subscriptable
+                                                                           Traceback (most recent call last):
+                              File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 180, in run_once
+                                         self._sync_position()
+                                                                File "/Users/allenbot/project/auto-trading/src/trading/system.py", line 316, in _sync_position
+                                                                                 if pos['side'] == "LONG":
+                                ~~~^^^^^^^^
+                                           TypeError: 'Position' object is not subscriptable
+

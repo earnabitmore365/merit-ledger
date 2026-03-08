@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""
+Adaptive Strategy
+
+Adaptive market strategy.
+
+Features:
+- Market regime detection
+- Trend-adaptive signals
+
+Migrated from echo-auto-trading project.
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class AdaptiveConfig:
+    """Adaptive configuration"""
+    short_period: int = 7
+    long_period: int = 25
+    rsi_period: int = 14
+
+
+class Adaptive(Strategy):
+    """Adaptive trading strategy"""
+    
+    def __init__(self, exchange=None, config: Optional[AdaptiveConfig] = None):
+        """Initialize Adaptive strategy"""
+        self.exchange = exchange
+        self.config = config or AdaptiveConfig()
+    
+    @property
+    def name(self) -> str:
+        return "adaptive"
+    
+    def calculate_ma(self, closes: List[float], period: int) -> float:
+        """Calculate Moving Average"""
+        if len(closes) < period:
+            return sum(closes) / len(closes) if closes else 0.0
+        return sum(closes[-period:]) / period
+    
+    def calculate_rsi(self, prices: List[float], period: int = 14) -> float:
+        """Calculate RSI"""
+        if len(prices) < period + 1:
+            return 50.0
+        gains, losses = [], []
+        for i in range(-period, 0):
+            change = prices[i] - prices[i - 1]
+            gains.append(max(0, change))
+            losses.append(max(0, -change))
+        avg_gain = sum(gains) / period if gains else 0.0
+        avg_loss = sum(losses) / period if losses else 0.0
+        if avg_loss == 0:
+            return 100.0 if avg_gain > 0 else 50.0
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+    
+    def detect_regime(self, closes: List[float]) -> Dict:
+        """Detect market regime"""
+        if len(closes) < 30:
+            return {"regime": "unknown", "ma_short": 0, "ma_long": 0, "rsi": 50}
+        ma_short = self.calculate_ma(closes, self.config.short_period)
+        ma_long = self.calculate_ma(closes, self.config.long_period)
+        rsi = self.calculate_rsi(closes, self.config.rsi_period)
+        recent = closes[-10:]
+        trend = (sum(recent[-5:]) / 5) - (sum(recent[:5]) / 5)
+        if trend > 0 and ma_short > ma_long and rsi > 55:
+            regime = "strong_trend"
+        elif trend < 0 and ma_short < ma_long and rsi < 45:
+            regime = "strong_trend"
+        else:
+            regime = "moderate_trend"
+        return {"regime": regime, "ma_short": ma_short, "ma_long": ma_long, "rsi": rsi}
+    
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        """Generate Adaptive signal"""
+        min_required = 30
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"})
+        closes = [c["close"] for c in klines]
+        regime = self.detect_regime(closes)
+        rsi = regime["rsi"]
+        ma_short = regime["ma_short"]
+        ma_long = regime["ma_long"]
+        if regime["regime"] == "strong_trend":
+            signal = Signal.BUY if ma_short > ma_long else Signal.SELL
+        elif regime["regime"] == "moderate_trend":
+            if rsi < 35:
+                signal = Signal.BUY
+            elif rsi > 65:
+                signal = Signal.SELL
+            else:
+                signal = Signal.HOLD
+        else:
+            signal = Signal.HOLD
+        return TradingSignal(signal=signal, confidence=0.6, coin=coin,
+            timestamp=klines[-1]["time"], metadata={"regime": regime["regime"], "rsi": rsi})

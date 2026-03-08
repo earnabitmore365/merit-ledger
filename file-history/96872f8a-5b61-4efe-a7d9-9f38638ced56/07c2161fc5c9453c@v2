@@ -1,0 +1,245 @@
+"""BNB_COIN 单币种 Gate 2→4 pipeline — regime_v2 三维度 × 全周期"""
+import sqlite3, json, random
+from itertools import product
+
+conn = sqlite3.connect('/Users/allenbot/project/auto-trading/reports/seed_report.db')
+REGIMES = ['bull', 'bear', 'ranging']  # regime_v2 三维度
+SEGMENTS = [
+    ('2018-01', '2019-07', 'S1'),
+    ('2019-07', '2021-01', 'S2'),
+    ('2021-01', '2022-07', 'S3'),
+    ('2022-07', '2024-01', 'S4'),
+    ('2024-01', '2026-12', 'S5'),
+]
+
+coin = 'BNB_COIN'
+MIN_TRADES = 10
+
+def run_pipeline(tf):
+    X = 350 if tf == '1h' else 500
+
+    print(f"\n{'='*60}")
+    print(f"  BNB_COIN × {tf} × regime_v2 (3维度)")
+    print(f"{'='*60}")
+
+    # Gate 1
+    combos = conn.execute('''
+        SELECT cs.id, cs.strategy, cs.coin, cs.interval, cs.total_trades,
+               MAX(pt.close_candle_idx) as max_idx
+        FROM combo_summary cs
+        JOIN paired_trades pt ON pt.combo_id = cs.id
+        WHERE cs.interval = ? AND cs.coin = ?
+        GROUP BY cs.id
+    ''', (tf, coin)).fetchall()
+
+    passed = [c for c in combos if c[4] >= c[5] / X]
+    print(f'Gate 1: {len(combos)} → {len(passed)} 通过')
+    if not passed:
+        print(f'  ⚠️ 无combo通过Gate 1，跳过')
+        return None
+    passed_ids = set(c[0] for c in passed)
+
+    # Gate 2 — 用 regime_v2
+    scorecard = {}
+    for regime in REGIMES:
+        rows = conn.execute('''
+            SELECT cs.strategy, cs.coin, pt.direction,
+                   COUNT(*) as trades, AVG(pt.r_value) as avg_r,
+                   SUM(CASE WHEN pt.r_value > 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as wr
+            FROM paired_trades pt
+            JOIN combo_summary cs ON cs.id = pt.combo_id
+            WHERE pt.regime_v2 = ? AND pt.combo_id IN ({})
+            GROUP BY cs.strategy, cs.coin, pt.direction
+            HAVING COUNT(*) >= ?
+            ORDER BY AVG(pt.r_value) DESC
+            LIMIT 30
+        '''.format(','.join(str(i) for i in passed_ids)), (regime, MIN_TRADES)).fetchall()
+
+        scorecard[regime] = [{
+            'strategy': r[0], 'coin': r[1], 'direction': r[2],
+            'trades': r[3], 'avg_r': round(r[4], 4), 'win_rate': round(r[5], 1)
+        } for r in rows]
+
+        print(f'\n  {regime} TOP5:')
+        for i, r in enumerate(rows[:5]):
+            print(f'    {i+1}. {r[0]:<25s} {r[2]:<6s} {r[3]:>4}笔  avg_r={r[4]:+.4f}  wr={r[5]:.0f}%')
+
+    # Gate 3: 去重取3
+    candidates = {}
+    for regime in REGIMES:
+        entries = scorecard[regime]
+        if not entries:
+            print(f'\n  ⚠️ {regime} 无候选，{tf}无法组队')
+            return None
+
+        seen = {}
+        deduped = []
+        for e in entries:
+            if e['strategy'] not in seen:
+                seen[e['strategy']] = True
+                deduped.append(e)
+
+        top = deduped[:3]
+        candidates[regime] = [(e['strategy'], e['coin'], tf, e['direction']) for e in top]
+        names = ', '.join(f"{e['strategy']} {e['direction']}" for e in top)
+        print(f'  {regime} 代表: {names}')
+
+    # Gate 4
+    rep_stats = {}
+    for regime in REGIMES:
+        for rep in candidates[regime]:
+            strat, c, intv, direction = rep
+            key = (strat, c, intv, direction, regime)
+            combo = conn.execute(
+                'SELECT id FROM combo_summary WHERE strategy=? AND coin=? AND interval=?',
+                (strat, c, intv)).fetchone()
+            if not combo:
+                rep_stats[key] = {s[2]: (0, 0) for s in SEGMENTS}
+                continue
+            for seg_start, seg_end, seg_name in SEGMENTS:
+                rows = conn.execute('''
+                    SELECT SUM(r_value), COUNT(*)
+                    FROM paired_trades
+                    WHERE combo_id=? AND regime_v2=? AND direction=?
+                    AND open_time >= ? AND open_time < ?
+                ''', (combo[0], regime, direction, seg_start, seg_end)).fetchone()
+                rep_stats.setdefault(key, {})[seg_name] = (rows[0] or 0, rows[1] or 0)
+
+    regime_lists = [candidates[r] for r in REGIMES]
+    total_teams = 1
+    for c in regime_lists:
+        total_teams *= len(c)
+
+    print(f'\nGate 4: {total_teams} 支队伍')
+
+    teams = []
+    for combo_tuple in product(*regime_lists):
+        team = dict(zip(REGIMES, combo_tuple))
+        seg_results = []
+        total_r = 0
+        total_trades = 0
+        pass_count = 0
+        for seg_start, seg_end, seg_name in SEGMENTS:
+            seg_r = seg_t = 0
+            for regime in REGIMES:
+                rep = team[regime]
+                key = (rep[0], rep[1], rep[2], rep[3], regime)
+                sr, sc = rep_stats.get(key, {}).get(seg_name, (0, 0))
+                seg_r += sr
+                seg_t += sc
+            if seg_r > 0: pass_count += 1
+            seg_results.append({'name': seg_name, 'r': round(seg_r, 2), 'trades': seg_t, 'pass': seg_r > 0})
+            total_r += seg_r
+            total_trades += seg_t
+        teams.append({
+            'team': {r: list(team[r]) for r in REGIMES},
+            'segments': seg_results,
+            'total_r': round(total_r, 2),
+            'total_trades': total_trades,
+            'pass_count': pass_count,
+        })
+
+    teams.sort(key=lambda x: (-x['pass_count'], -x['total_r']))
+    champ = teams[0]
+    full_pass = sum(1 for t in teams if t['pass_count'] == 5)
+
+    print(f'  5段全过: {full_pass}/{total_teams}')
+    print(f'\n  冠军: {champ["total_r"]:+.2f}R / {champ["total_trades"]}笔 / {champ["pass_count"]}/5段')
+    for seg in champ['segments']:
+        status = "PASS" if seg['pass'] else "FAIL"
+        print(f'    {seg["name"]}: {seg["r"]:+.2f}R / {seg["trades"]}笔 {status}')
+    for r in REGIMES:
+        rep = champ['team'][r]
+        print(f'    {r}: {rep[0]} {rep[3]}')
+
+    # Monte Carlo
+    champ_trades = []
+    for regime in REGIMES:
+        rep = champ['team'][regime]
+        strat, c, intv, direction = rep
+        combo = conn.execute(
+            'SELECT id FROM combo_summary WHERE strategy=? AND coin=? AND interval=?',
+            (strat, c, intv)).fetchone()
+        if not combo: continue
+        rows = conn.execute('''
+            SELECT r_value FROM paired_trades
+            WHERE combo_id=? AND regime_v2=? AND direction=?
+        ''', (combo[0], regime, direction)).fetchall()
+        champ_trades.extend([r[0] for r in rows])
+
+    print(f'\n  Monte Carlo: {len(champ_trades)} 笔, 1000次模拟, f=2%')
+    random.seed(42)
+    mc_results = []
+    for _ in range(1000):
+        shuffled = champ_trades[:]
+        random.shuffle(shuffled)
+        balance = 500.0
+        peak = 500.0
+        max_dd = 0.0
+        d2d = None
+        for i, rv in enumerate(shuffled):
+            pnl = rv * 0.02 * balance
+            balance += pnl
+            if balance > peak: peak = balance
+            dd = (peak - balance) / peak * 100
+            if dd > max_dd: max_dd = dd
+            if d2d is None and balance >= 1000.0: d2d = i + 1
+            if balance <= 0: balance = 0; break
+        mc_results.append({'balance': round(balance, 2), 'max_dd': round(max_dd, 1), 'd2d': d2d})
+
+    d2ds = sorted([m['d2d'] for m in mc_results if m['d2d'] is not None])
+    max_dds = sorted([m['max_dd'] for m in mc_results])
+    double_rate = len(d2ds) / len(mc_results) * 100
+
+    print(f'  翻倍率: {double_rate:.1f}%')
+    if d2ds:
+        lo = d2ds[int(len(d2ds)*0.025)]
+        hi = d2ds[int(len(d2ds)*0.975)]
+        mid = d2ds[len(d2ds)//2]
+        print(f'  d2d 95% CI: {lo}~{hi} 笔 (中位{mid})')
+    print(f'  max_dd 95% CI: {max_dds[25]}%~{max_dds[974]}%')
+    print(f'  爆仓率: {sum(1 for m in mc_results if m["balance"] <= 0) / 10:.1f}%')
+
+    # 保存
+    result = {
+        'coin': coin, 'timeframe': tf, 'regime_type': 'regime_v2',
+        'gate1': {'total': len(combos), 'passed': len(passed)},
+        'gate2_top5': {r: scorecard[r][:5] for r in REGIMES},
+        'gate3_candidates': {r: [list(c) for c in candidates[r]] for r in REGIMES},
+        'gate4': {
+            'total_teams': total_teams, 'full_pass_count': full_pass,
+            'champion': champ,
+        },
+        'monte_carlo': {
+            'trades': len(champ_trades),
+            'double_rate_pct': round(double_rate, 1),
+            'd2d_95ci': [d2ds[int(len(d2ds)*0.025)], d2ds[int(len(d2ds)*0.975)]] if d2ds else None,
+            'max_dd_95ci': [max_dds[25], max_dds[974]],
+        },
+    }
+    outpath = f'/Users/allenbot/project/auto-trading/lab/results/gate4_bnb_coin_{tf}_v2.json'
+    with open(outpath, 'w') as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+    print(f'\n  存档: {outpath}')
+    return result
+
+# 全周期
+results = {}
+for tf in ['1m', '5m', '15m', '1h']:
+    r = run_pipeline(tf)
+    results[tf] = r
+
+print(f"\n{'='*60}")
+print("  === BNB_COIN regime_v2 全周期汇总 ===")
+print(f"{'='*60}")
+for tf in ['1m', '5m', '15m', '1h']:
+    r = results[tf]
+    if r is None:
+        print(f"  {tf}: 无法组队")
+    else:
+        c = r['gate4']['champion']
+        mc = r['monte_carlo']
+        d2d_str = f"{mc['d2d_95ci'][0]}~{mc['d2d_95ci'][1]}" if mc['d2d_95ci'] else "—"
+        print(f"  {tf}: {c['total_r']:+.2f}R/{c['total_trades']}笔 WF {c['pass_count']}/5 | 翻倍{mc['double_rate_pct']}% | d2d {d2d_str} | max_dd {mc['max_dd_95ci'][0]}~{mc['max_dd_95ci'][1]}%")
+
+conn.close()

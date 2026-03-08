@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""
+Always Short Strategy - 永远做空
+
+无条件做空策略。不判断市场方向，永远发出SELL信号。
+熊市死空头 — 在熊市里"永远做空"本来就是正确答案。
+
+来源：原 cmf 策略的代码逻辑（典型价×成交量永远为正，等价于无条件做多）。
+反转信号后变成无条件做空，用于熊市兔子班。
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+
+
+@dataclass
+class AlwaysShortConfig:
+    """Always Short configuration"""
+    period: int = 20
+
+
+class AlwaysShort(Strategy):
+    """Always Short trading strategy — 永远做空"""
+
+    def __init__(self, exchange=None, config: Optional[AlwaysShortConfig] = None):
+        self.exchange = exchange
+        self.config = config or AlwaysShortConfig()
+
+    @property
+    def name(self) -> str:
+        return "always_short"
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        min_required = self.config.period
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD,
+                confidence=0.0,
+                coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        return TradingSignal(
+            signal=Signal.SELL,
+            confidence=0.6,
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={"trend": "always_short"},
+        )

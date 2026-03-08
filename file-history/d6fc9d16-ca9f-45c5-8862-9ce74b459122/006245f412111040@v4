@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""
+运行推荐策略回测（扩展版）
+
+5 策略 × 10 币种 = 50 组回测
+- proc (双向) / 15m
+- demandindex_short (做空) / 5m
+- demandindex_long (做多) / 5m
+- cci_short (做空) / 5m
+- cci_long (做多) / 5m
+
+币种：市值前十（不含稳定币和 meme）
+BTC, ETH, XRP, BNB, SOL, ADA, TRX, AVAX, LINK, DOT
+
+结果保存到 reports/backtest/
+"""
+
+import sys
+import os
+import time
+import json
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from backtest.backtest import BacktestEngine
+
+
+# ==================== 配置 ====================
+
+COINS = ['BTC', 'ETH', 'XRP', 'BNB', 'SOL', 'ADA', 'TRX', 'AVAX', 'LINK', 'DOT']
+
+STRATEGIES = [
+    {"strategy": "proc",               "interval": "15m", "tag": "双向"},
+    {"strategy": "demandindex_short",   "interval": "5m",  "tag": "做空"},
+    {"strategy": "demandindex_long",    "interval": "5m",  "tag": "做多"},
+    {"strategy": "cci_short",           "interval": "5m",  "tag": "做空"},
+    {"strategy": "cci_long",            "interval": "5m",  "tag": "做多"},
+]
+
+# 回测参数
+DAYS = 1095          # 3年
+INITIAL_CAPITAL = 500
+LEVERAGE = 10.0
+STOP_LOSS_PCT = 0.1  # 10%
+ENABLE_TTP = True
+
+# 生成全部组合
+RECOMMENDED = []
+for strat in STRATEGIES:
+    for coin in COINS:
+        RECOMMENDED.append({
+            "coin": coin,
+            "strategy": strat["strategy"],
+            "interval": strat["interval"],
+            "tag": strat["tag"],
+        })
+
+
+def run_all():
+    """运行所有推荐回测"""
+    print("=" * 70)
+    print("  推荐策略回测（扩展版）")
+    print(f"  {len(STRATEGIES)} 策略 × {len(COINS)} 币种 = {len(RECOMMENDED)} 组")
+    print(f"  参数：{DAYS}天 · ${INITIAL_CAPITAL} · {LEVERAGE}x杠杆 · 止损{STOP_LOSS_PCT*100:.0f}% · TTP{'开' if ENABLE_TTP else '关'}")
+    print("=" * 70)
+    print()
+
+    results = []
+    total = len(RECOMMENDED)
+
+    for i, cfg in enumerate(RECOMMENDED, 1):
+        coin = cfg["coin"]
+        strategy = cfg["strategy"]
+        interval = cfg["interval"]
+        tag = cfg["tag"]
+
+        print(f"\n{'─' * 70}")
+        print(f"  [{i}/{total}] [{tag}] {coin} · {strategy} · {interval}")
+        print(f"{'─' * 70}")
+
+        start = time.time()
+
+        try:
+            engine = BacktestEngine(
+                coin=coin,
+                interval=interval,
+                days=DAYS,
+                initial_capital=INITIAL_CAPITAL,
+                enable_ttp=ENABLE_TTP,
+                stop_loss_pct=STOP_LOSS_PCT,
+                leverage=LEVERAGE,
+                enable_withdraw=False,
+            )
+            result = engine.run_backtest(strategy)
+
+            if result is None:
+                print(f"  ✗ 回测返回 None（数据不足或策略异常）")
+                results.append({**cfg, "status": "FAIL", "return": 0, "sharpe": 0, "win_rate": 0, "trades": 0})
+                continue
+
+            engine.save_report(strategy, prefix="推荐")
+
+            elapsed = time.time() - start
+
+            results.append({
+                **cfg,
+                "status": "OK",
+                "return": result.total_return,
+                "sharpe": result.sharpe_ratio,
+                "win_rate": result.win_rate,
+                "max_dd": result.max_drawdown,
+                "trades": result.total_trades,
+                "final": result.final_balance,
+                "time": elapsed,
+            })
+
+            print(f"\n  ⏱ 耗时 {elapsed:.1f}s")
+
+        except Exception as e:
+            import traceback
+            print(f"  ✗ 错误: {e}")
+            traceback.print_exc()
+            results.append({**cfg, "status": "ERROR", "return": 0, "sharpe": 0, "win_rate": 0, "trades": 0, "error": str(e)})
+
+    # 汇总
+    print(f"\n\n{'=' * 70}")
+    print("  回测汇总")
+    print(f"{'=' * 70}")
+    print(f"  {'标签':<6} {'币种':<5} {'策略':<20} {'周期':<5} {'状态':<4} {'收益%':>8} {'Sharpe':>8} {'胜率%':>8} {'回撤%':>8} {'交易数':>6} {'终值$':>8}")
+    print(f"  {'─'*6} {'─'*5} {'─'*20} {'─'*5} {'─'*4} {'─'*8} {'─'*8} {'─'*8} {'─'*8} {'─'*6} {'─'*8}")
+
+    for r in results:
+        status = r.get("status", "?")
+        if status == "OK":
+            print(f"  {r['tag']:<6} {r['coin']:<5} {r['strategy']:<20} {r['interval']:<5} {'✓':>4} "
+                  f"{r['return']:>7.1f}% {r['sharpe']:>8.2f} {r['win_rate']:>7.1f}% {r.get('max_dd',0):>7.1f}% {r['trades']:>6} {r.get('final',0):>8.1f}")
+        else:
+            print(f"  {r['tag']:<6} {r['coin']:<5} {r['strategy']:<20} {r['interval']:<5} {'✗':>4}")
+
+    # 按策略分组统计
+    print(f"\n\n{'=' * 70}")
+    print("  按策略统计")
+    print(f"{'=' * 70}")
+
+    for strat in STRATEGIES:
+        s_name = strat["strategy"]
+        s_tag = strat["tag"]
+        s_results = [r for r in results if r["strategy"] == s_name and r.get("status") == "OK"]
+
+        if not s_results:
+            print(f"\n  [{s_tag}] {s_name}: 无成功回测")
+            continue
+
+        returns = [r["return"] for r in s_results]
+        sharpes = [r["sharpe"] for r in s_results]
+        win_rates = [r["win_rate"] for r in s_results]
+        profits = [r for r in s_results if r["return"] > 0]
+
+        print(f"\n  [{s_tag}] {s_name} ({strat['interval']})")
+        print(f"    盈利/总数: {len(profits)}/{len(s_results)}")
+        print(f"    收益: 平均{sum(returns)/len(returns):.1f}% | 最高{max(returns):.1f}% | 最低{min(returns):.1f}%")
+        print(f"    Sharpe: 平均{sum(sharpes)/len(sharpes):.2f} | 最高{max(sharpes):.2f} | 最低{min(sharpes):.2f}")
+        print(f"    胜率: 平均{sum(win_rates)/len(win_rates):.1f}%")
+
+        # 按收益排序列出每个币种
+        sorted_r = sorted(s_results, key=lambda x: x["return"], reverse=True)
+        for r in sorted_r:
+            emoji = "+" if r["return"] > 0 else "-"
+            print(f"      {emoji} {r['coin']:<5} {r['return']:>+8.1f}% | Sharpe {r['sharpe']:>6.2f} | 胜率 {r['win_rate']:.1f}% | {r['trades']}笔")
+
+    # 保存汇总 JSON
+    report_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'reports', 'backtest')
+    os.makedirs(report_dir, exist_ok=True)
+    summary_file = os.path.join(report_dir, 'summary_50_backtests.json')
+
+    summary = {
+        "config": {
+            "days": DAYS,
+            "initial_capital": INITIAL_CAPITAL,
+            "leverage": LEVERAGE,
+            "stop_loss_pct": STOP_LOSS_PCT,
+            "enable_ttp": ENABLE_TTP,
+            "coins": COINS,
+            "strategies": [s["strategy"] for s in STRATEGIES],
+        },
+        "results": [
+            {
+                "coin": r["coin"],
+                "strategy": r["strategy"],
+                "interval": r["interval"],
+                "tag": r["tag"],
+                "status": r.get("status", "?"),
+                "total_return": r.get("return", 0),
+                "sharpe_ratio": r.get("sharpe", 0),
+                "win_rate": r.get("win_rate", 0),
+                "max_drawdown": r.get("max_dd", 0),
+                "total_trades": r.get("trades", 0),
+                "final_balance": r.get("final", 0),
+            }
+            for r in results
+        ],
+    }
+
+    with open(summary_file, 'w', encoding='utf-8') as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+
+    print(f"\n  汇总报告已保存: {summary_file}")
+    print(f"  报告已保存到 reports/backtest/")
+    print()
+
+
+if __name__ == "__main__":
+    run_all()

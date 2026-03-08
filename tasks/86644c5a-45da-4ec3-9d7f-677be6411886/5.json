@@ -1,0 +1,9 @@
+{
+  "id": "5",
+  "subject": "阶段五：验证系统",
+  "description": "运行回测对比重构前后结果，确保一致",
+  "activeForm": "验证重构结果",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

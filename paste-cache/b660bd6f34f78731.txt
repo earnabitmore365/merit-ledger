@@ -1,0 +1,17 @@
+Last login: Tue Feb 24 00:11:23 on ttys001
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3685: command not found: compdef
+/Users/allenbot/project/auto-trading/user_interface/backtest.command ; exit;    
+allenbot@Echo ~ % /Users/allenbot/project/auto-trading/user_interface/backtest.command ; exit;
+Traceback (most recent call last):
+  File "<string>", line 6, in <module>
+  File "/opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python3.11/curses/__init__.py", line 94, in wrapper
+    return func(stdscr, *args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 541, in main
+    restart = menu.show_results(menu._all_results)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 330, in show_results
+    self.stdscr.addstr(y, 0, "=" * 40, curses.color_pair(2))
+_curses.error: addwstr() returned ERR
+按回车键退出...
+一切正常，不过在我回测2个币种和2个策略时，最后的界面是这样的

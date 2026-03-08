@@ -1,0 +1,383 @@
+# 会话摘要全集
+
+> 最新的在最上面。读完此文件等同于读完全部对话记录。
+> 小型会话（< 10 条消息、纯配置/调试）标注为 [小型]，只有一行摘要。
+
+---
+
+## S20: 57922408 (02-27 — 种子报告 + 数据补充 + 恢复协议)
+
+**讨论了什么：**
+- Phase A 文档更新（CHECKPOINT/CLAUDE.md/README）+ GitHub 推送 v1.7
+- Phase B 种子报告 v1 实现（SQLite, 1720 combos, 12.4M paired_trades, 2.17GB）— 完成
+- 前 AI 压缩后误删 v1 种子数据库（`rm seed_report.db`，2.17GB，不可恢复）
+- v2 代码升级：fees/MFE/MAE/$1 固定注码/精确时间戳，backtest.py + generate_seed.py 更新
+- 恢复协议重新设计：5步→4步，CHECKPOINT 改为交接用不在恢复流程中
+- session_summaries 维护机制确立（最新在最上面，每次会话后必须更新）
+- K 线数据补充计划确定并启动下载（5m 4年/15m 4年/1h 8年）
+- 1m 数据"通常只保留 1-2 年"— 未实测验证，存疑
+
+**改了什么代码：**
+- `CHECKPOINT.md`：大改（任务 9-12，v2 schema，数据覆盖方案，执行顺序）
+- `~/.claude/CLAUDE.md`：恢复协议从 5 步改为 4 步，CHECKPOINT 改为交接文档
+- `MEMORY.md`：版本号 v1.6→v1.7，新增种子进展/用户原话章节
+- `download_latest_coins.py`：DOWNLOAD_CONFIG 改为 5m:420K / 15m:140K / 1h:70K
+
+**关键决策：**
+- CHECKPOINT 是衍生品不是源头，不在恢复流程中，仅用于交接
+- session_summaries 是核心记忆载体，每次会话后必须更新，最新在最上面
+- Van Tharp R-Multiple $1 固定注码（PnL = R 值，可缩放到任意本金）
+- 数据源限制存疑（1m"通常"1-2 年 — 没试过不知道）
+
+**用户原话：**
+- "4年是一个周期，但是跨周期应该是2个4年。所以搞个8年的数据库吗？"
+- "趁我睡觉的时候再补，连同5m 15m 1h的都补好"
+- "checkpoint不废弃，这是对接工作用的。保留"
+- "多余，你说的情况是要checkpoint也有更新才可以呀，checkpoint是你刚刚压缩完，回来看了完整上下文才更新的是不是？是的话，完整上下文不就可以补充你压缩回来第一件要做的事了吗？"
+- "给我完整的回顾所有的session然后逐个逐个索引和session-summaries给我更新完整"
+- "按照我要的顺序帮我排好就行，错位的放回对的地方"
+
+---
+
+## S19: e30cab2f (02-27, 163 条消息 — 指标库实现 + Regime v2 + 全矩阵回测 + 种子概念)
+
+**讨论了什么：**
+- 指标库 `src/indicators/` 实现：12 个市场指标（AHR999、Pi Cycle、Funding Rate、OI、Fear&Greed、Stablecoin Supply、BTC.D、MVRV、NUPL、Puell、Netflow、MarketScore），9 个文件，12/12 验证通过
+- BGeometrics API 调试（URL 修正、驼峰字段、429 限速）
+- CHECKPOINT.md 交接机制建立（三个问题：跨会话丢任务线、跨模型丢信息、跨项目无规范）
+- CHECKPOINT 完整性用 Sonnet 三轮评审（40%→65%→93%→~100%）
+- Regime Detection v2 实现：Opus+Sonnet 各出方案，取 Sonnet 架构 + Opus Wilder ADX 算法
+- 切换频率调优：950→273 次/年（ADX 周期 14→28 是最有效杠杆）
+- 固定注码 vs 复利注码讨论，实现 `fixed_bet` 模式
+- 翻倍时长指标（fastest_double_days、avg_double_days、double_count）
+- 全矩阵回测 1720 组（43策略×10币×4周期），固定注码，93.6 分钟完成
+- 种子报告概念提出：一次跑完含汇总+明细+regime标签，之后所有分析直接从种子读
+
+**改了什么代码：**
+- 新建 `src/indicators/` 9 个文件（base/local/hyperliquid/sentiment/market/onchain/composite/verify/__init__）
+- 重写 `src/trading/regime/` 3 个文件（config→ADX28+dwell48+confirm6，detector→Wilder ADX 三层，strategy→hysteresis+no-direct-flip）
+- 修改 `src/backtest/backtest.py`（fixed_bet 模式 + 翻倍时长）
+- 重写 `src/backtest/run_full_matrix.py`（43策略自动发现、固定注码、翻倍字段）
+- 新建 `~/.claude/CLAUDE.md` 全局规则 + `CHECKPOINT.md` + `/checkpoint` command
+
+**关键决策：**
+- Regime Detection 当过滤器不是切换器（QuantConnect 研究结论）
+- ADX(28) 最有效，比调 threshold/dwell/confirm 都好
+- regime_map 的 3 个策略必须数据验证（proc/demandindex_short/mean_reversion 都是猜的）
+- 固定注码做策略评估，复利注码看实际收益
+- 种子报告用 SQLite（零依赖、可查询、单文件、可恢复）
+- Opus 执行 + Sonnet 出方案的协作模式确立
+
+**用户原话：**
+- "虽然我不太明白，不过我还是偏向于得到完整的种子以后，在进行，下一步...反正我始终都是追求完整性，真实性，准确性。"
+- "等一下，我有一个最初的问题，3个策略是怎么选出来的？"
+- "之前有听别人分析过一点，就是做回测时，有一个方法，就是每次下注都是1，这样才能真正的返回策略的有效性，是这样吗？"
+- "多一个sonnet一起讨论就是好，质的飞升"
+- "我自己本身也是个bug" — 关于忘了前置任务的目的
+
+**全矩阵回测结果（固定注码）：**
+- 1720/1720 完成，1190 盈利(69%)
+- 收益 TOP：bbsqueeze(+88%), vpt(+74%), smc(+65%)
+- Sharpe TOP：meanreversion(8.22), renko(2.15), roc(1.64), proc(1.44)
+
+---
+
+## S18: 9d13c65d (02-27, 21 条消息 — Regime v1 实现 + 指标库规划)
+
+**讨论了什么：**
+- Regime Detection v1 实现（RegimeStrategy 元策略架构，4 新文件 + 2 修改文件）
+- 回测验证：ETH/15m 收益 166%/Sharpe 2.77，但切换 1680 次/年；10 币种对比中只在 XRP 上赢过纯 proc
+- 研究更好的 Regime Detection 方法（ADX、SMA 斜率、布林带、HMM、Hurst）
+- 结论：ADX 是"缺失的关键拼图"，regime 当过滤器而非切换器
+- 链上/宏观指标研究：12 个指标分三档（本地计算/单 API/链上数据）
+- 指标库 `src/indicators/` 规划（统一接口 fetch/score/signal）
+
+**改了什么代码：**
+- 新建 `src/trading/regime/`（__init__/config/detector/strategy 4 文件）
+- 修改 `backtest.py`（run_backtest 加 strategy 参数）
+- 修改 `trade_menu.py`（Step 3 加"★ 自动识别"选项）
+- 新建记忆文件 `regime_detection_research.md`、`onchain_indicators_research.md`
+
+**关键决策：**
+- Regime v1 核心问题：cooldown_bars=3 太短，切换 1680 次/年
+- ADX 是改进方向：< 20 → ranging，> 25 → 趋势，配合滞后阈值
+- AHR999 用 1h 聚合日线即可，不需要额外日线数据
+- BGeometrics 免费 API 用于链上数据
+
+**用户原话：**
+- "市面上其实还有一些指标是直指目前整个币圈市场的，比如有一个叫什么arh999？...还有交易所的流入流出...这类型的有没有？会难做吗？"
+
+---
+
+## S17: 02ad7f4a (02-26~02-27, 74 条消息 — Sonnet: checkpoint测试 + Regime v2方案 + OpenClaw skills审查)
+
+**讨论了什么：**
+- /checkpoint 技能多轮测试，评估新 Sonnet 接收 CHECKPOINT.md 后理解度（约 40%→补全后提升）
+- 用户贴入 Opus 完整交接文档，Sonnet 基于此设计 Regime v2 详细实施方案（ADX 三层复合）
+- OpenClaw skills 全面审查：research-strategy 的 `research_workflow.py` 重写适配 v1.7
+- abby-autonomy skill 评估后删除（executor 未实现、路径失效、队列过期）
+- 会话结束于用户想让 Abby 自动跑策略研究，到达 rate limit
+
+**改了什么代码：**
+- `~/.openclaw/skills/research-strategy/research_workflow.py`：完全重写（路径修正、BacktestEngine、Sharpe≥1.0 评估、3币种测试、翻转保护）
+- `~/.openclaw/skills/research-strategy/SKILL.md`：更新为 v1.7 版本
+- 删除 `~/.openclaw/skills/abby-autonomy/` 整个目录
+
+**关键决策：**
+- CHECKPOINT.md 只有"战略层"信息（40%），缺"执行层"细节 → 需要补关键文件路径和验证标准
+- Opus 完整交接文档比用户摘要好得多（信息不丢失）
+- research_workflow 评估标准从 total_return>0 升级为 Sharpe≥1.0 + 收益≥50%
+- abby-autonomy 无用直接删除
+
+---
+
+## S16: 86342176 (02-26, 20 条消息 — Sonnet: 交接机制设计 + CHECKPOINT概念)
+
+**讨论了什么：**
+- 用户将 Opus 讨论内容贴给 Sonnet，测试跨模型交接的信息完整度
+- 发现用户摘要遗漏了关键范式转变："regime 当过滤器而非切换器"
+- 讨论三种交接方案：slash command → 交接文档模板 → 两个 slash command 配套
+- 最终演化为 CHECKPOINT.md "活文档"方案（固定维度不固定格式）
+- 用户询问 MAX 5x→20x 升级是否增加配额（无确定答案）
+- 讨论了 token 消耗问题（贴长对话很费额度，结构化文档可省 50%+）
+
+**改了什么代码：**
+- 无代码修改，纯讨论和方案设计
+
+**关键决策：**
+- CHECKPOINT.md 固定维度（目标/已完成/关键决策/约束/当前状态/下一步）但不固定格式
+- `/checkpoint` slash command 作为触发器
+- 交接核心：Opus 完整输出 → 用户原封不动贴给 Sonnet → Sonnet 先验证理解再执行
+
+**用户原话：**
+- "我追求的是绝对完整，不遗漏"
+- "我现在正在测试对接工作的功能的对接工作完整度"
+
+---
+
+## S15: d8fec100 (02-26, 5 条消息 — README v1.5 + Regime 规划启动)
+
+**讨论了什么：**
+- README.md 从 v1.4 更新到 v1.5（策略 41→44、UI 组件库、7 步流程、10 币种数据）
+- CLAUDE.md 同步更新版本号和策略数
+- 用户提出启动"自动识别当下市场走势"功能（Regime Detection + 策略切换）
+- 设计 meta-strategy 模式（`RegimeStrategy(Strategy)` 检测 regime 委托子策略）
+
+**改了什么代码：**
+- `README.md` 完全重写为 v1.5
+- `CLAUDE.md` 版本号 v1.4→v1.5
+- `.claude/plans/fluffy-zooming-whisper.md` 写入 Regime Detection 实现方案
+
+**关键决策：**
+- meta-strategy 模式：零改动 TradingSystem，一行改动 BacktestEngine
+- Regime 类型用字符串映射，策略映射由回测结果推荐做默认值
+
+---
+
+## S14: d80431a0 (02-26, 14 条消息 — OpenClaw 审查 + 免费模型 fallback)
+
+**讨论了什么：**
+- OpenClaw 系统全面适配完整性审查（核心配置、模型、Telegram、WhatsApp 等）
+- 诊断 Abby 胡乱执行原因：模型能力不足 + 指令过载（2450+ 行系统提示）
+- Claude Code Max 包月认证不能导出给第三方，需独立 API key
+- 免费替代模型研究：Gemini 2.5 Flash、Mistral Large、Groq
+- Grok 建议的 Groq Llama 405B 实际已下线，最大只有 70B
+- 多免费模型 fallback 方案：5 层链 Gemini→Mistral→Groq Kimi K2→Groq Llama 70B→OpenRouter
+
+**改了什么代码：**
+- 无代码修改，纯审查和讨论
+
+**关键决策：**
+- 放弃 MiniMax M2.5，改用免费模型 fallback 链
+- 核心改善：精简 workspace 文件从 2450+ 行到 200 行
+- Claude Code Max 不能给第三方用
+
+**用户原话：**
+- "哪还有类似的吗？从高到低，或者挑3-5个？可以拿来做fallback，超额了自动换去下一个，那就一直免费了。。。对吗？"
+
+---
+
+## S13: d6fc9d16 (02-26, 54 条消息 — trade_menu 改造 + 回测分析 + GitHub 搭建)
+
+**讨论了什么：**
+- trade_menu 6 项 UI 改动实施 + 3 轮日志泄漏修复
+- 策略 if/if bug 发现与修复（8 个策略 BUY 被 HOLD 覆盖）
+- 历史数据扩容（10 币种 × 3 周期，5m=20万条、15m=10万条）
+- 150 组全矩阵回测（5策略 × 10币种 × 3周期，DAYS=694 公平对比）
+- 1920 个回测报告深度分析 + 投资三阶段规划
+- GitHub 仓库搭建（auto-trading + trading-analysis）
+- 对话记录保存（JSONL → Markdown 转换脚本）
+
+**改了什么代码：**
+- `trade_menu.py`：交易模式选择页、步骤重编号、账号灰色禁用、show_loading 动画、日志闪烁修复
+- 8 个策略 if/if → if/elif 修复（demandindex、cci、adaptive、ichimoku 等）
+- 新建 4 个单向策略（demandindex_long/short、cci_long/short）
+- `download_latest_coins.py`：扩展到 10 币种
+- `.gitignore` 完善、`accounts.py` 私钥移到 `.env`
+- 新建 `run_full_matrix.py`、trading-analysis 仓库 + convert_conversation.py
+
+**关键决策：**
+- demandindex/cci 之前表现好完全是 if/if bug（只做空+碰上熊市），修复双向后崩盘 → 保留单向版本
+- proc 是唯一真正靠谱的双向策略（修复前后表现一致）
+- 跨周期回测必须用相同日期范围（DAYS=694），否则 1h 数据虚高
+- 实盘收益按回测 70% 估算
+- TOP 组合：TRX+cci_long+1h（Sharpe 3.97）、ETH+proc+15m（Sharpe 3.55）
+- ADA 适合做空不适合做多；XRP/BNB/TRX 做空全军覆没
+
+---
+
+## S12: e955d763 (02-25, 107 条消息 — 数据修复 + 16 bug 深度审查 + TTP 重写)
+
+**讨论了什么：**
+- 历史数据格式转换与质量问题（字段名不兼容、1m/5m/15m 数据有 29 个大缺口）
+- backtest.py + batch_backtest.py 深度审查与修复（16+ 个 bug）
+- TTP 完全重写为状态机（原设计 4 个根本性缺陷）
+- system.py + trade_menu.py 深度审查（11 个 bug）
+
+**改了什么代码：**
+- `backtest.py`：8 修复（开仓记录、O(n²)、bars_per_day、profit_factor、除零保护等）
+- `batch_backtest.py`：5 修复（百分比显示、屏幕溢出、全选功能、Ctrl+C 退出）
+- `src/core/risk/ttp.py`：完全重写为状态机（TTPState 追踪 highest/lowest/pullback/swing_count）
+- `download_latest_coins.py`：since 从写死 1h 改为动态 `1000 * ms_per_bar`
+- `system.py`：6 修复（import、_sync_position、反手逻辑、Action 加 LIQUIDATION）
+- `trade_menu.py`：6 修复（连盈连亏算法、风险管理器配置逻辑反了）
+- 新建 CLAUDE.md、MEMORY.md
+
+**关键决策：**
+- 数据适配代码（写转换脚本），不改回测系统
+- O(n²) 用 MAX_WINDOW=200 固定窗口解决
+- TTP 采用状态机重写（原设计补丁修不了）
+- 风险管理器纠正：TTP 开启 = CombinedRiskManager，TTP 关闭 = StopLossManager
+
+---
+
+## S11: 9871bf55 (02-25, 6 条消息 — 记忆机制搭建)
+
+**讨论了什么：**
+- 项目级别记忆机制讨论
+- 如何通过 `--project` 指定 Claude Code 工作目录
+
+**改了什么代码：**
+- 创建 `/Users/allenbot/project/MEMORY.md`（基础版）
+- 创建 `/Users/allenbot/project/.claude.json`（项目配置）
+
+**关键决策：**
+- 进入项目目录后运行 `claude` 即可自动加载记忆
+
+---
+
+## S10: 86644c5a (02-25, 1200 条消息 — 最大会话：回测重构 + adapter 重写 + 架构清理)
+
+**讨论了什么：**
+- MCP 配置检查（filesystem/zapier/google-drive）
+- 回测系统全面重构
+- HyperLiquid 交易所适配器完全重写
+- 批量回测 UI（batch_backtest.py）从零开发
+- 架构大清理
+
+**改了什么代码：**
+- `backtest.py`：8 个 bug 修复
+- `batch_backtest.py`：新建，curses 交互式菜单
+- HyperLiquid adapter 完全重写：市价单 IOC + price offset、反手、WebSocket
+- 新增 `accounts.py` 账号管理
+- 架构清理：删除 `src/config/`、`src/interface/`、`executor.py`、`arbitrage.py`
+- 所有 `__init__.py` 改为 pkgutil 自动扫描
+- 重写 README.md、新建 STRATEGY_GUIDE.md
+- 实测通过：开多/开空/多转空/空转多/平仓
+
+**关键决策：**
+- 提款功能默认关闭
+- 报告路径统一到 `reports/backtest/`
+- 策略返回类型统一为 TradingSignal
+- 数据 13 币种 × 4 周期，每周期 30000 条
+
+---
+
+## S9: 4f07fe15 (02-24, 14 条消息 — OpenClaw 换模型)
+
+**讨论了什么：**
+- OpenClaw 换模型（MiniMax-M2.5 → MiniMax-M2.5-highspeed）
+
+**改了什么代码：**
+- `~/.openclaw/openclaw.json`：删除 Lightning 模型，默认改为 highspeed，MiniMax-M2.5 作为 fallback
+
+**关键决策：**
+- Primary: MiniMax-M2.5-highspeed，Fallback: MiniMax-M2.5
+
+---
+
+## S8: f95f5086 (02-23, 12 条消息 — GitHub MCP + gh auth)
+
+**讨论了什么：**
+- 检查 Claude Code 可用技能（13 个 skill）
+- 安装 GitHub Copilot MCP，配置 gh auth login
+
+**改了什么代码：**
+- 无代码修改，只配置了 GitHub CLI 认证
+
+**关键决策：**
+- 使用 Personal Access Token 登录 gh CLI（账号: earnabitmore365）
+
+---
+
+## S7: 1c332b68 [小型] (02-23, 9 条消息)
+GitHub MCP 安装配置。
+
+## S6: ee936cb7 [小型] (02-23, 1 条消息)
+API Key 格式错误排查。
+
+## S5: 2e689a10 [小型] (02-23, 3 条消息)
+登录问题调试。
+
+## S4: e78a5b34 [小型] (02-22, 4 条消息)
+Claude Code Skills 教学。
+
+---
+
+## S3: ad323fa2 (02-22, 156 条消息 — 策略统一 + TTP 修复 + adapter 初步适配)
+
+**讨论了什么：**
+- OpenClaw 崩溃修复（agents 把 providers 配置放到错误的根级别位置）
+- 40+ 个策略文件统一性审查（继承基类、`candles` → `klines`、导入路径统一）
+- TTP（移动止盈）逻辑修复与 `risk/ttp.py` 集成
+- HyperLiquid Testnet 实盘测试尝试（未完成，adapter 兼容性问题）
+
+**改了什么代码：**
+- 41 个 `strategy_*.py` 文件：参数统一为 `klines`，导入路径改为 `core.strategy`
+- `src/core/risk/ttp.py`：重写 TTP，添加两次确认机制
+- `src/interface/run_bot.py` + `src/backtest/backtest.py`：集成 TTPManager
+- `src/core/strategy/__init__.py`：改为自动扫描 `strategy_*.py` 注册策略
+- `src/exchange/hyperliquid/adapter.py`：多次修改尝试修复 SDK 兼容性（未完全完成）
+
+**关键决策：**
+- 统一用 `klines` 而非 `candles`
+- TTP 必须调用统一的 `risk/ttp.py`，不允许各模块自己实现
+- 绝对不允许手动模拟，必须用 testnet 实盘测试
+- 策略自动发现（`__init__.py` 自动扫描注册）
+
+---
+
+## S2: e5cd5291 (02-21, 134 条消息 — OpenClaw 大修)
+
+**讨论了什么：**
+- OpenClaw agents "越来越笨"排查：会话 token 超限（235k/200k = 117%）
+- compaction 配置排查：safeguard vs memoryFlush，OpenClaw 不认 memoryFlush
+- `/compact` 命令报错：错误地使用嵌入模型（nomic-embed-text）而非对话模型
+- ollama vs node-llama-cpp vs 本地 GGUF 关系梳理
+- 最终从 OpenClaw 删除 ollama provider，只保留 MiniMax-M2.5，改 API Key 直连
+
+**改了什么代码：**
+- `~/.openclaw/openclaw.json`：多次修改（compaction mode、primary 模型、删 ollama、OAuth→API Key）
+- `~/.openclaw/credentials/` 权限 755→700
+- 超限会话文件（3.1MB）由用户手动移走
+
+**关键决策：**
+- 根因未完全解决（/compact 用了嵌入模型而非对话模型）
+- 保留 ollama 本体（`ollama launch claude` 需要），只删 OpenClaw 配置中的 provider
+- 从 OAuth 改为 API Key 直连
+- 配置文件最终选择重新生成（删旧 + `openclaw configure`）
+
+---
+
+## S1: 9de60301 [小型] (02-21, 3 条消息)
+初始测试，模型不兼容。

@@ -1,0 +1,39 @@
+⏺ Bash(python3 -c "                                                          
+      import json…)                                                             
+  ⎿  sol_cmo_1h_solo.json                | trades:    7 | d2d:   N/A | fina  
+     l: $        0.00 | dd: 100.0% | sharpe: -21.015 | eq_points: 7             
+       首笔: 2020-08-12 23:00  字段: ['open_time', 'close_time', 'direction
+     … +18 lines (ctrl+o to expand)                                             
+                                                                                
+⏺ 4 份报告全部生成完毕：                              
+                                                                                
+  ┌───────────────────────────┬─────┬───────┬─────┬────────┬───────┬───────┐ 
+  │           文件            │ 大  │ 交易  │ d2d │ 最终余 │ 最大D │ Sharp │    
+  │                           │ 小  │  数   │     │   额   │   D   │   e   │ 
+  ├───────────────────────────┼─────┼───────┼─────┼────────┼───────┼───────┤    
+  │ sol_cmo_1h_solo.json      │ 4.1 │ 7     │ N/A │ $0     │ 100%  │ -21.0 │
+  │                           │  KB │       │     │        │       │       │    
+  ├───────────────────────────┼─────┼───────┼─────┼────────┼───────┼───────┤    
+  │ sol_bbsqueeze_1h_solo.jso │ 146 │ 342   │ 24d │ $0     │ 100%  │ -0.27 │
+  │ n                         │  KB │       │     │        │       │       │    
+  ├───────────────────────────┼─────┼───────┼─────┼────────┼───────┼───────┤ 
+  │ sol_meanreversion_1h_solo │ 208 │ 494   │ 27d │ $0     │ 100%  │ -0.14 │
+  │ .json                     │  KB │       │     │        │       │       │
+  ├───────────────────────────┼─────┼───────┼─────┼────────┼───────┼───────┤
+  │ sol_regime_switch_1h.json │ 197 │ 419   │ 12d │ $114,3 │ 55.6% │ +2.13 │
+  │                           │  KB │       │     │ 74     │       │       │
+  └───────────────────────────┴─────┴───────┴─────┴────────┴───────┴───────┘
+
+  报告内容包含：
+  - config: 参数设定（coin/interval/leverage/bet_formula 等）
+  - summary: 19 个指标（trades/win_rate/d2d/final_balance/max_dd/sharpe/cagr
+  等）
+  - equity_curve: 按日期的余额曲线（371 个数据点）
+  - trades: 每笔交易明细（含 open_time/close_time/direction/bet_size/actual_pnl/
+  r_value/balance_after/regime_at_open）
+  - 自动切换版额外有 source_strategy 字段和 trades_by_strategy 统计
+
+  注意 cmo 独跑只活了 7 笔就归零 —— 开局就遇到非 bull 市况，连亏 7
+  笔后余额不足以承受 $100 最低注码，直接清零。这恰好说明了 regime 过滤的必要性。
+
+✻ Brewed for 1m 59s

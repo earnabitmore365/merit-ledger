@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""
+ATR Pullback Strategy (Route A)
+
+Trend pullback entry: detect uptrend/downtrend via VWAP slope,
+then enter on RSI oversold/overbought pullback.
+
+Logic:
+- VWAP slope up + RSI < 35 = BUY (dip in uptrend)
+- VWAP slope down + RSI > 65 = SELL (bounce in downtrend)
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+from core.indicator_cache import get_indicator
+
+
+@dataclass
+class ATRPullbackConfig:
+    atr_period: int = 14
+    vwap_period: int = 20
+    rsi_period: int = 14
+    vwap_slope_lookback: int = 5
+    rsi_oversold: float = 35.0
+    rsi_overbought: float = 65.0
+
+
+class ATRPullback(Strategy):
+
+    REQUIRES = ['rsi', 'atr', 'vwap']
+
+    def __init__(self, exchange=None, config: Optional[ATRPullbackConfig] = None):
+        self.exchange = exchange
+        self.config = config or ATRPullbackConfig()
+
+    @property
+    def name(self) -> str:
+        return "atr_pullback"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = max(self.config.atr_period, self.config.vwap_period,
+                          self.config.rsi_period) + self.config.vwap_slope_lookback + 5
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        idx = self.current_idx
+
+        # 从 indicator_cache 获取完整序列
+        vwap_series = get_indicator('vwap', period=self.config.vwap_period)
+        rsi_series = get_indicator('rsi', period=self.config.rsi_period)
+        atr_series = get_indicator('atr', period=self.config.atr_period)
+
+        vwap_now = vwap_series[idx]
+        vwap_prev = vwap_series[idx - self.config.vwap_slope_lookback]
+
+        if vwap_prev == 0:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"],
+                metadata={"reason": "VWAP calculation failed"},
+            )
+
+        vwap_slope = (vwap_now - vwap_prev) / vwap_prev
+        rsi = rsi_series[idx]
+        atr = atr_series[idx]
+        current = klines[-1]["close"]
+
+        # Signal logic: trend + pullback
+        signal = Signal.HOLD
+        trend = "neutral"
+
+        if vwap_slope > 0 and rsi < self.config.rsi_oversold:
+            signal = Signal.BUY
+            confidence = (self.config.rsi_oversold - rsi) / self.config.rsi_oversold
+            trend = "uptrend_pullback"
+        elif vwap_slope < 0 and rsi > self.config.rsi_overbought:
+            signal = Signal.SELL
+            confidence = (rsi - self.config.rsi_overbought) / (100 - self.config.rsi_overbought)
+            trend = "downtrend_bounce"
+        else:
+            confidence = 0.0
+
+        return TradingSignal(
+            signal=signal,
+            confidence=min(confidence, 1.0),
+            coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={
+                "atr": atr, "vwap": vwap_now, "vwap_slope": vwap_slope,
+                "rsi": rsi, "price": current, "trend": trend,
+            },
+        )

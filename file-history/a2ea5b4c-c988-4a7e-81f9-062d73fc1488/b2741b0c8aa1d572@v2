@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""
+专考（成绩单）— 给初考通过的组合出4维度成绩单，按10个周期分开
+输入: seed_v3.db + gate1.json
+输出: gate2_{interval}.json ×10 + gate2_summary.json
+
+优化：批量SQL查询，不逐条查
+"""
+import json
+import sqlite3
+import os
+
+DB_PATH = os.path.join(os.path.dirname(__file__), 'reports', 'seed_v3.db')
+GATE1_PATH = os.path.join(os.path.dirname(__file__), 'results', 'gate1.json')
+OUT_DIR = os.path.join(os.path.dirname(__file__), 'results')
+
+INTERVALS = ['1m', '5m', '15m', '30m', '1h', '2h', '4h', '8h', '12h', '1d']
+REGIMES = ['bull', 'bear', 'ranging']
+MIN_TRADES_FOR_RANK = 10
+
+
+def batch_score(conn, combo_ids):
+    """批量查所有combo的4维度成绩，返回 {combo_id: {all: {...}, bull: {...}, ...}}"""
+    if not combo_ids:
+        return {}
+
+    placeholders = ','.join('?' * len(combo_ids))
+
+    # 全程统计
+    all_rows = conn.execute(f'''
+        SELECT combo_id,
+               SUM(r_value) as total_pnl,
+               COUNT(*) as trade_count,
+               AVG(CASE WHEN r_value > 0 THEN 1.0 ELSE 0.0 END) as win_rate,
+               AVG(r_value) as avg_r
+        FROM paired_trades
+        WHERE combo_id IN ({placeholders})
+        GROUP BY combo_id
+    ''', combo_ids).fetchall()
+
+    scores = {}
+    for r in all_rows:
+        scores[r['combo_id']] = {
+            'all': {
+                'pnl': round(r['total_pnl'] or 0, 4),
+                'trades': r['trade_count'] or 0,
+                'win_rate': round(r['win_rate'] or 0, 4),
+                'avg_r': round(r['avg_r'] or 0, 6),
+            }
+        }
+
+    # 各regime统计
+    for regime in REGIMES:
+        regime_rows = conn.execute(f'''
+            SELECT combo_id,
+                   SUM(r_value) as total_pnl,
+                   COUNT(*) as trade_count,
+                   AVG(CASE WHEN r_value > 0 THEN 1.0 ELSE 0.0 END) as win_rate,
+                   AVG(r_value) as avg_r
+            FROM paired_trades
+            WHERE combo_id IN ({placeholders}) AND regime_at_open = ?
+            GROUP BY combo_id
+        ''', combo_ids + [regime]).fetchall()
+
+        regime_map = {}
+        for r in regime_rows:
+            regime_map[r['combo_id']] = r
+
+        for cid in combo_ids:
+            if cid not in scores:
+                continue
+            r = regime_map.get(cid)
+            if r:
+                trades = r['trade_count'] or 0
+                scores[cid][regime] = {
+                    'pnl': round(r['total_pnl'] or 0, 4),
+                    'trades': trades,
+                    'win_rate': round(r['win_rate'] or 0, 4),
+                    'avg_r': round(r['avg_r'] or 0, 6),
+                    'insufficient_data': trades < MIN_TRADES_FOR_RANK,
+                }
+            else:
+                scores[cid][regime] = {
+                    'pnl': 0, 'trades': 0, 'win_rate': 0, 'avg_r': 0,
+                    'insufficient_data': True,
+                }
+
+    return scores
+
+
+def main():
+    # 读gate1通过名单
+    with open(GATE1_PATH) as f:
+        gate1 = json.load(f)
+    passed_ids = set(gate1['passed_ids'])
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    # 查combo基本信息
+    combos = conn.execute('''
+        SELECT id, strategy, coin, interval
+        FROM combo_summary
+        WHERE coin NOT LIKE '%_COIN%'
+    ''').fetchall()
+
+    # 按周期分组
+    by_interval = {iv: [] for iv in INTERVALS}
+    for c in combos:
+        if c['id'] in passed_ids and c['interval'] in by_interval:
+            by_interval[c['interval']].append({
+                'combo_id': c['id'],
+                'strategy': c['strategy'],
+                'coin': c['coin'],
+                'interval': c['interval'],
+            })
+
+    summary_data = {}
+
+    for interval in INTERVALS:
+        entries = by_interval[interval]
+        print(f"专考 {interval}: {len(entries)} 组...", end=' ', flush=True)
+
+        # 批量查分数
+        combo_ids = [e['combo_id'] for e in entries]
+        scores = batch_score(conn, combo_ids)
+
+        # 组装记录
+        scored = []
+        for e in entries:
+            cid = e['combo_id']
+            if cid not in scores:
+                continue
+            record = {
+                'combo_id': cid,
+                'strategy': e['strategy'],
+                'coin': e['coin'],
+                'interval': e['interval'],
+            }
+            record['all'] = scores[cid]['all']
+            for regime in REGIMES:
+                record[regime] = scores[cid][regime]
+            scored.append(record)
+
+        # 全程排名（by pnl降序）
+        scored.sort(key=lambda x: x['all']['pnl'], reverse=True)
+        for i, s in enumerate(scored):
+            s['rank_all'] = i + 1
+
+        # 各regime排名
+        for regime in REGIMES:
+            eligible = [s for s in scored if not s[regime].get('insufficient_data')]
+            eligible.sort(key=lambda x: x[regime]['pnl'], reverse=True)
+            for i, s in enumerate(eligible):
+                s[regime]['rank'] = i + 1
+            for s in scored:
+                if s[regime].get('insufficient_data') and 'rank' not in s[regime]:
+                    s[regime]['rank'] = None
+
+        # 输出该周期文件
+        out_path = os.path.join(OUT_DIR, f'gate2_{interval}.json')
+        with open(out_path, 'w') as f:
+            json.dump(scored, f, indent=2, ensure_ascii=False)
+
+        # 汇总：各维度TOP10
+        top_all = scored[:10]
+        top_regimes = {}
+        for regime in REGIMES:
+            eligible = [s for s in scored if not s[regime].get('insufficient_data')]
+            eligible.sort(key=lambda x: x[regime]['pnl'], reverse=True)
+            top_regimes[regime] = eligible[:10]
+
+        summary_data[interval] = {
+            'total_scored': len(scored),
+            'top10_all': [{
+                'combo_id': s['combo_id'], 'strategy': s['strategy'],
+                'coin': s['coin'], 'pnl': s['all']['pnl'],
+                'trades': s['all']['trades'], 'win_rate': s['all']['win_rate'],
+            } for s in top_all],
+        }
+        for regime in REGIMES:
+            summary_data[interval][f'top10_{regime}'] = [{
+                'combo_id': s['combo_id'], 'strategy': s['strategy'],
+                'coin': s['coin'], 'pnl': s[regime]['pnl'],
+                'trades': s[regime]['trades'], 'win_rate': s[regime]['win_rate'],
+            } for s in top_regimes[regime]]
+
+        print(f"完成 → gate2_{interval}.json")
+
+    # 输出汇总
+    summary_path = os.path.join(OUT_DIR, 'gate2_summary.json')
+    with open(summary_path, 'w') as f:
+        json.dump(summary_data, f, indent=2, ensure_ascii=False)
+
+    conn.close()
+
+    print(f"\n专考完成: 10份成绩单 + gate2_summary.json")
+    print(f"总计 {sum(d['total_scored'] for d in summary_data.values())} 组评分")
+    return summary_data
+
+
+if __name__ == '__main__':
+    main()

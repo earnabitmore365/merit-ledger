@@ -1,0 +1,1033 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→HyperLiquid Adapter
+     4→
+     5→HyperLiquid 交易所适配器
+     6→实现交易所适配器基类的所有方法
+     7→集成 REST API + WebSocket
+     8→"""
+     9→
+    10→import time
+    11→import logging
+    12→from typing import Dict, List, Optional
+    13→
+    14→from exchange.base import (
+    15→    ExchangeAdapter,
+    16→    OrderRequest,
+    17→    OrderResult,
+    18→    OrderSide,
+    19→    OrderType,
+    20→    Position,
+    21→)
+    22→
+    23→from .websocket import create_websocket
+    24→
+    25→
+    26→# ==================== 配置 ====================
+    27→
+    28→HYPERLIQUID_MAINNET = "https://api.hyperliquid.xyz"
+    29→HYPERLIQUID_TESTNET = "https://api.hyperliquid-testnet.xyz"
+    30→
+    31→
+    32→# ==================== HyperLiquid 适配器 ====================
+    33→
+    34→class HyperLiquidAdapter(ExchangeAdapter):
+    35→    """HyperLiquid 交易所适配器
+    36→
+    37→    实现所有交易所适配器接口
+    38→    封装 HyperLiquid API 调用
+    39→
+    40→    Usage:
+    41→        from config import config_manager
+    42→
+    43→        config = config_manager.load()
+    44→        adapter = HyperLiquidAdapter(config['hyperliquid'])
+    45→        adapter.connect()
+    46→    """
+    47→
+    48→    def __init__(self, config: Dict):
+    49→        """初始化
+    50→
+    51→        Args:
+    52→            config: HyperLiquid 配置
+    53→                # 方式一：直接传入配置
+    54→                {
+    55→                    'wallet_address': '0x...',
+    56→                    'private_key': '0x...',
+    57→                    'endpoint': 'https://...',
+    58→                    'testnet': True/False,
+    59→                }
+    60→                # 方式二：使用账号管理（传入账号名称和网络）
+    61→                {
+    62→                    'account_name': 'default',  # 账号名称
+    63→                    'network': 'testnet',       # 网络类型
+    64→                }
+    65→        """
+    66→        super().__init__(config)
+    67→
+    68→        # 支持从账号管理获取配置
+    69→        account_name = config.get('account_name')
+    70→        network = config.get('network', 'testnet')
+    71→
+    72→        if account_name:
+    73→            # 从账号管理获取配置
+    74→            from .accounts import get_adapter_config
+    75→            account_config = get_adapter_config(account_name, network)
+    76→            self.wallet_address = account_config.get('wallet_address', '')
+    77→            self.private_key = account_config.get('private_key', '')
+    78→            self.testnet = account_config.get('testnet', True)
+    79→        else:
+    80→            # 直接使用配置
+    81→            self.wallet_address = config.get('wallet_address', '')
+    82→            self.private_key = config.get('private_key', '')
+    83→            self.testnet = config.get('testnet', True)
+    84→
+    85→        # 设置 endpoint
+    86→        if self.testnet:
+    87→            self.endpoint = config.get('endpoint', HYPERLIQUID_TESTNET)
+    88→        else:
+    89→            self.endpoint = config.get('endpoint', HYPERLIQUID_MAINNET)
+    90→
+    91→        # SDK 实例
+    92→        self._info = None
+    93→        self._exchange = None
+    94→
+    95→        # WebSocket 实例
+    96→        self._ws = None
+    97→
+    98→        # 日志
+    99→        self.logger = logging.getLogger("HyperLiquidAdapter")
+   100→
+   101→    # ==================== 连接管理 ====================
+   102→
+   103→    def connect(self) -> bool:
+   104→        """连接 HyperLiquid
+   105→
+   106→        Returns:
+   107→            bool: 是否连接成功
+   108→        """
+   109→        try:
+   110→            from hyperliquid.info import Info
+   111→            from hyperliquid.exchange import Exchange
+   112→            from eth_account import Account
+   113→
+   114→            # 创建 Info 实例
+   115→            self._info = Info(self.endpoint, skip_ws=True)
+   116→
+   117→            if self.private_key:
+   118→                # 创建钱包账户
+   119→                wallet = Account.from_key(self.private_key)
+   120→                # 传入 account_address（API 地址）来授权交易
+   121→                self._exchange = Exchange(
+   122→                    wallet,
+   123→                    self.endpoint,
+   124→                    account_address=self.config.get('api_address') or None
+   125→                )
+   126→
+   127→            self._connected = True
+   128→
+   129→            self.logger.info(f"连接 HyperLiquid: {self.endpoint}")
+   130→
+   131→            # 启用 WebSocket
+   132→            self._init_websocket()
+   133→
+   134→            return True
+   135→
+   136→        except Exception as e:
+   137→            self.logger.error(f"连接失败: {e}")
+   138→            return False
+   139→
+   140→            self._connected = True
+   141→
+   142→            self.logger.info(f"连接 HyperLiquid: {self.endpoint}")
+   143→
+   144→            # 启用 WebSocket
+   145→            self._init_websocket()
+   146→
+   147→            return True
+   148→
+   149→        except Exception as e:
+   150→            self.logger.error(f"连接失败: {e}")
+   151→            return False
+   152→
+   153→    def disconnect(self) -> None:
+   154→        """断开连接"""
+   155→        # 关闭 WebSocket
+   156→        self._close_websocket()
+   157→
+   158→        self._info = None
+   159→        self._exchange = None
+   160→        self._connected = False
+   161→        self.logger.info("已断开 HyperLiquid 连接")
+   162→
+   163→
+   164→# ==================== WebSocket ====================
+   165→
+   166→    def _init_websocket(self):
+   167→        """初始化 WebSocket（防止重复初始化）"""
+   168→        # 防止重复初始化
+   169→        if hasattr(self, '_ws') and self._ws is not None:
+   170→            return
+   171→
+   172→        from .websocket import create_websocket
+   173→
+   174→        def on_message(data):
+   175→            self.logger.debug(f"WebSocket 消息: {data}")
+   176→
+   177→        self._ws = create_websocket(
+   178→            testnet=self.testnet,
+   179→            on_message=on_message,
+   180→        )
+   181→
+   182→        if self._ws.connect():
+   183→            self.logger.info(f"WebSocket 已连接: {'测试网' if self.testnet else '主网'}")
+   184→        else:
+   185→            self.logger.warning("WebSocket 连接失败，将使用 REST API")
+   186→
+   187→    def _close_websocket(self):
+   188→        """关闭 WebSocket"""
+   189→        if self._ws:
+   190→            self._ws.disconnect()
+   191→            self._ws = None
+   192→            self.logger.info("WebSocket 已断开")
+   193→
+   194→    def health_check(self) -> bool:
+   195→        """健康检查
+   196→
+   197→        Returns:
+   198→            bool: 交易所是否健康
+   199→        """
+   200→        try:
+   201→            if not self._connected:
+   202→                return False
+   203→
+   204→            # 尝试获取余额
+   205→            balance = self.get_balance()
+   206→            return 'usdc' in balance
+   207→
+   208→        except Exception as e:
+   209→            self.logger.error(f"健康检查失败: {e}")
+   210→            return False
+   211→
+   212→
+   213→# ==================== 行情数据 ====================
+   214→
+   215→    def get_price(self, coin: str) -> float:
+   216→        """获取当前价格
+   217→
+   218→        Args:
+   219→            coin: 币种名称（如 "ETH"）
+   220→
+   221→        Returns:
+   222→            float: 当前价格
+   223→        """
+   224→        try:
+   225→            if not self._info:
+   226→                return 0.0
+   227→
+   228→            meta = self._info.meta_and_asset_ctxs()
+   229→            if isinstance(meta, list) and len(meta) >= 2:
+   230→                universe = meta[0].get('universe', []) if isinstance(meta[0], dict) else []
+   231→                asset_ctxs = meta[1] if isinstance(meta[1], list) else []
+   232→
+   233→                # 找到币种的索引
+   234→                coin_idx = None
+   235→                for i, item in enumerate(universe):
+   236→                    if isinstance(item, dict) and item.get('name') == coin:
+   237→                        coin_idx = i
+   238→                        break
+   239→
+   240→                # 获取价格（优先用 markPx，比 midPx 更适合下单）
+   241→                if coin_idx is not None and coin_idx < len(asset_ctxs):
+   242→                    ctx = asset_ctxs[coin_idx]
+   243→                    # markPx 是市场价格，更适合下单
+   244→                    if ctx.get('markPx'):
+   245→                        return float(ctx['markPx'])
+   246→                    elif ctx.get('midPx'):
+   247→                        return float(ctx['midPx'])
+   248→
+   249→            return 0.0
+   250→
+   251→        except Exception as e:
+   252→            self.logger.error(f"获取价格失败: {e}")
+   253→            return 0.0
+   254→
+   255→    def get_klines(
+   256→        self,
+   257→        coin: str,
+   258→        interval: str = "1h",
+   259→        limit: int = 100
+   260→    ) -> List[Dict]:
+   261→        """获取 K 线数据
+   262→
+   263→        Args:
+   264→            coin: 币种名称
+   265→            interval: K 线周期（1m, 5m, 15m, 1h, 4h）
+   266→            limit: 获取数量
+   267→
+   268→        Returns:
+   269→            List[Dict]: K 线数据列表
+   270→        """
+   271→        try:
+   272→            if not self._info:
+   273→                return []
+   274→
+   275→            end_time = int(time.time() * 1000)
+   276→
+   277→            # 时间间隔映射
+   278→            interval_map = {
+   279→                '1m': 60,
+   280→                '5m': 5 * 60,
+   281→                '15m': 15 * 60,
+   282→                '1h': 60 * 60,
+   283→                '4h': 4 * 60 * 60,
+   284→            }
+   285→
+   286→            seconds_per_candle = interval_map.get(interval, 60 * 60)
+   287→            start_time = end_time - (limit * seconds_per_candle * 1000)
+   288→
+   289→            # 获取 K 线
+   290→            candles = self._info.candles_snapshot(
+   291→                coin,
+   292→                interval,
+   293→                start_time,
+   294→                end_time
+   295→            )
+   296→
+   297→            # 转换为标准格式
+   298→            result = []
+   299→            for c in candles:
+   300→                result.append({
+   301→                    'timestamp': c['t'],
+   302→                    'time': c['t'],
+   303→                    'open': float(c['o']),
+   304→                    'high': float(c['h']),
+   305→                    'low': float(c['l']),
+   306→                    'close': float(c['c']),
+   307→                    'volume': float(c['v']),
+   308→                })
+   309→
+   310→            return result[-limit:] if limit else result
+   311→
+   312→        except Exception as e:
+   313→            self.logger.error(f"获取 K 线失败: {e}")
+   314→            return []
+   315→
+   316→    def get_available_coins(self) -> List[Dict]:
+   317→        """获取所有可交易的币种
+   318→
+   319→        Returns:
+   320→            List[Dict]: 币种信息列表
+   321→        """
+   322→        try:
+   323→            if not self._info:
+   324→                return []
+   325→
+   326→            meta = self._info.meta_and_asset_ctxs()
+   327→            if isinstance(meta, list) and len(meta) > 0:
+   328→                universe = meta[0].get('universe', [])
+   329→                return [
+   330→                    {
+   331→                        'name': u.get('name', ''),
+   332→                        'max_leverage': u.get('maxLeverage', 10),
+   333→                        'sz_decimals': u.get('szDecimals', 2),
+   334→                    }
+   335→                    for u in universe if u.get('name')
+   336→                ]
+   337→
+   338→            return []
+   339→
+   340→        except Exception as e:
+   341→            self.logger.error(f"获取币种列表失败: {e}")
+   342→            return []
+   343→
+   344→    def get_coin_names(self) -> List[str]:
+   345→        """获取所有可交易的币种名称
+   346→
+   347→        Returns:
+   348→            List[str]: 币种名称列表
+   349→        """
+   350→        coins = self.get_available_coins()
+   351→        return [c['name'] for c in coins]
+   352→
+   353→
+   354→# ==================== 账户管理 ====================
+   355→
+   356→    def get_balance(self) -> Dict:
+   357→        """获取账户余额（统一账户，现货+合约合并）
+   358→
+   359→        HyperLiquid 是统一账户，现货和合约共享资金。
+   360→        查询余额时自动合并，返回总余额。
+   361→
+   362→        Returns:
+   363→            Dict: 余额信息
+   364→        """
+   365→        try:
+   366→            if not self._info:
+   367→                return {'usdc': 0.0, 'available': 0.0}
+   368→
+   369→            # ===== 1. 现货余额 =====
+   370→            spot_state = self._info.spot_user_state(self.wallet_address)
+   371→            balances = spot_state.get("balances", [])
+   372→
+   373→            spot_usdc = 0.0
+   374→            token_to_available = spot_state.get("tokenToAvailableAfterMaintenance", [])
+   375→
+   376→            for balance in balances:
+   377→                if balance.get("coin") == "USDC":
+   378→                    spot_usdc = float(balance.get("total", 0))
+   379→                    break
+   380→
+   381→            # ===== 2. 合约余额 =====
+   382→            perp_state = self._info.user_state(self.wallet_address)
+   383→            margin = perp_state.get("marginSummary", {})
+   384→            perp_usdc = float(margin.get("accountValue", 0))
+   385→
+   386→            # ===== 3. 统一账户：总余额 = 现货余额 = 合约保证金 + 可用 =====
+   387→            # HyperLiquid 是统一账户，现货和合约共享资金
+   388→            # 现货余额 = 总余额（含所有可用资金）
+   389→            # 合约余额 = 保证金（开仓后显示）
+   390→            # 总余额始终用现货余额
+   391→            total_usdc = spot_usdc
+   392→            total_available = spot_usdc  # 可用等于现货余额
+   393→
+   394→            return {
+   395→                'usdc': total_usdc,         # 总余额
+   396→                'available': total_available,  # 可用余额
+   397→            }
+   398→
+   399→        except Exception as e:
+   400→            self.logger.error(f"获取余额失败: {e}")
+   401→            return {'usdc': 0.0, 'available': 0.0}
+   402→
+   403→
+   404→# ==================== 工具方法 ====================
+   405→
+   406→    def get_exchange_name(self) -> str:
+   407→        """获取交易所名称"""
+   408→        if self.testnet:
+   409→            return "HyperLiquid (Testnet)"
+   410→        return "HyperLiquid (Mainnet)"
+   411→
+   412→    def __repr__(self) -> str:
+   413→        """字符串表示"""
+   414→        return f"<HyperLiquidAdapter: {self.get_exchange_name()}>"
+   415→
+   416→
+   417→# ==================== 价格获取 ====================
+   418→
+   419→    def get_price(self, coin: str) -> float:
+   420→        """获取当前价格
+   421→
+   422→        优先用 WebSocket，如果没有就用 REST API
+   423→
+   424→        Args:
+   425→            coin: 币种名称（如 "ETH"）
+   426→
+   427→        Returns:
+   428→            float: 当前价格
+   429→        """
+   430→        # 1. 尝试用 WebSocket
+   431→        if self._ws and self._ws.is_connected:
+   432→            price = self._ws.get_price(coin)
+   433→            if price:
+   434→                return price
+   435→
+   436→        # 2. 回退到 REST API
+   437→        return self._get_price_rest(coin)
+   438→
+   439→    def _get_price_rest(self, coin: str) -> float:
+   440→        """REST API 获取价格"""
+   441→        try:
+   442→            if not self._info:
+   443→                return 0.0
+   444→
+   445→            meta = self._info.meta_and_asset_ctxs()
+   446→            if isinstance(meta, list) and len(meta) >= 2:
+   447→                universe = meta[0].get('universe', []) if isinstance(meta[0], dict) else []
+   448→                asset_ctxs = meta[1] if isinstance(meta[1], list) else []
+   449→
+   450→                # 找到币种的索引
+   451→                coin_idx = None
+   452→                for i, item in enumerate(universe):
+   453→                    if isinstance(item, dict) and item.get('name') == coin:
+   454→                        coin_idx = i
+   455→                        break
+   456→
+   457→                # 获取价格（优先用 markPx，比 midPx 更适合下单）
+   458→                if coin_idx is not None and coin_idx < len(asset_ctxs):
+   459→                    ctx = asset_ctxs[coin_idx]
+   460→                    # markPx 是市场价格，更适合下单
+   461→                    if ctx.get('markPx'):
+   462→                        return float(ctx['markPx'])
+   463→                    elif ctx.get('midPx'):
+   464→                        return float(ctx['midPx'])
+   465→
+   466→            return 0.0
+   467→
+   468→        except Exception as e:
+   469→            self.logger.error(f"获取价格失败: {e}")
+   470→            return 0.0
+   471→
+   472→    def _get_oracle_price(self, coin: str) -> float:
+   473→        """获取 oracle 价格
+   474→
+   475→        Args:
+   476→            coin: 币种名称
+   477→
+   478→        Returns:
+   479→            float: oracle 价格
+   480→        """
+   481→        try:
+   482→            if not self._info:
+   483→                return 0.0
+   484→
+   485→            meta = self._info.meta_and_asset_ctxs()
+   486→            if isinstance(meta, list) and len(meta) >= 2:
+   487→                universe = meta[0].get('universe', []) if isinstance(meta[0], dict) else []
+   488→                asset_ctxs = meta[1] if isinstance(meta[1], list) else []
+   489→
+   490→                # 找到币种的索引
+   491→                coin_idx = None
+   492→                for i, item in enumerate(universe):
+   493→                    if isinstance(item, dict) and item.get('name') == coin:
+   494→                        coin_idx = i
+   495→                        break
+   496→
+   497→                # 获取 oracle 价格
+   498→                if coin_idx is not None and coin_idx < len(asset_ctxs):
+   499→                    ctx = asset_ctxs[coin_idx]
+   500→                    if ctx.get('oraclePx'):
+   501→                        return float(ctx['oraclePx'])
+   502→
+   503→            return 0.0
+   504→
+   505→        except Exception as e:
+   506→            self.logger.error(f"获取 oracle 价格失败: {e}")
+   507→            return 0.0
+   508→
+   509→
+   510→# ==================== 持仓管理 ====================
+   511→
+   512→    def get_positions(self) -> List[Position]:
+   513→        """获取所有持仓
+   514→
+   515→        Returns:
+   516→            List[Position]: 持仓列表
+   517→        """
+   518→        try:
+   519→            if not self._info:
+   520→                return []
+   521→
+   522→            user_state = self._info.user_state(self.wallet_address)
+   523→            positions = []
+   524→
+   525→            asset_positions = user_state.get("assetPositions", [])
+   526→
+   527→            for pos in asset_positions:
+   528→                p = pos.get("position", {})
+   529→                coin = p.get("coin", "")
+   530→                size = float(p.get("szi", 0))
+   531→
+   532→                if size != 0:
+   533→                    side = "LONG" if size > 0 else "SHORT"
+   534→
+   535→                    positions.append(Position(
+   536→                        coin=coin,
+   537→                        side=side,
+   538→                        size=abs(size),
+   539→                        entry_price=float(p.get("entryPx", 0)),
+   540→                        unrealized_pnl=float(p.get("unrealizedPnl", 0)),
+   541→                    ))
+   542→
+   543→            return positions
+   544→
+   545→        except Exception as e:
+   546→            self.logger.error(f"获取持仓失败: {e}")
+   547→            return []
+   548→
+   549→    def get_position(self, coin: str) -> Optional[Position]:
+   550→        """获取指定币种持仓
+   551→
+   552→        Args:
+   553→            coin: 币种名称
+   554→
+   555→        Returns:
+   556→            Optional[Position]: 持仓信息，不存在返回 None
+   557→        """
+   558→        positions = self.get_positions()
+   559→        for pos in positions:
+   560→            if pos.coin == coin:
+   561→                return pos
+   562→        return None
+   563→
+   564→
+   565→# ==================== 开仓 ====================
+   566→
+   567→    def place_order(self, order: OrderRequest) -> OrderResult:
+   568→        """下单
+   569→
+   570→        Args:
+   571→            order: 订单请求
+   572→
+   573→        Returns:
+   574→            OrderResult: 订单结果
+   575→
+   576→        Note:
+   577→            HyperLiquid 没有真正的市价单。
+   578→            市价单使用 IOC + 价格偏移实现：
+   579→            - 买单：当前价格 * (1 + offset)，offset 默认 1-3%
+   580→            - 卖单：当前价格 * (1 - offset)
+   581→        """
+   582→        try:
+   583→            if not self._exchange:
+   584→                return OrderResult(
+   585→                    success=False,
+   586→                    message="未配置私钥，无法下单",
+   587→                )
+   588→
+   589→            # 构建订单参数
+   590→            is_buy = order.side == OrderSide.BUY
+   591→
+   592→            # 导入 HyperLiquid 的 OrderType（使用别名避免冲突）
+   593→            from hyperliquid.utils.signing import OrderType as HLOrderType
+   594→            from hyperliquid.utils.signing import LimitOrderType, Order
+   595→
+   596→            # 数量四舍五入到有效位数（HyperLiquid 要求）
+   597→            order.size = round(order.size, 4)
+   598→
+   599→            # 计算价格
+   600→            current_price = self.get_price(order.coin)
+   601→            order_price = order.price or 0
+   602→
+   603→            # 价格四舍五入到整数（HyperLiquid 要求 tick size）
+   604→            if order_price:
+   605→                order_price = int(round(order_price))
+   606→
+   607→            # 如果是市价单，使用 IOC + 价格偏移
+   608→            if order.order_type == OrderType.MARKET:
+   609→                # 测试网使用更大的偏移（10%）确保成交
+   610→                # 主网可以用更小的偏移（2-3%）
+   611→                if self.testnet:
+   612→                    offset = getattr(order, 'ioc_offset', None) or 0.10
+   613→                else:
+   614→                    offset = getattr(order, 'ioc_offset', None) or 0.02
+   615→
+   616→                if is_buy:
+   617→                    # 买单：当前价格 * (1 + offset)
+   618→                    order_price = current_price * (1 + offset)
+   619→                else:
+   620→                    # 卖单：当前价格 * (1 - offset)
+   621→                    order_price = current_price * (1 - offset)
+   622→
+   623→                # 四舍五入到整数（HyperLiquid 要求 tick size）
+   624→                order_price = int(round(order_price))
+   625→
+   626→                # 使用 IOC 立即成交或取消
+   627→                order_type = Order(
+   628→                    limit=LimitOrderType(tif='Ioc')
+   629→                )
+   630→                reduce_only = getattr(order, 'reduce_only', False)
+   631→            else:
+   632→                # 限价单使用 GTC
+   633→                order_type = Order(
+   634→                    limit=LimitOrderType(tif='Gtc')
+   635→                )
+   636→                reduce_only = getattr(order, 'reduce_only', False)
+   637→
+   638→            if order.order_type == OrderType.MARKET:
+   639→                # IOC 市价单
+   640→                order_result = self._exchange.order(
+   641→                    name=order.coin,
+   642→                    is_buy=is_buy,
+   643→                    sz=order.size,
+   644→                    limit_px=order_price,
+   645→                    order_type=order_type,
+   646→                    reduce_only=reduce_only,
+   647→                )
+   648→            else:
+   649→                # 限价单
+   650→                order_result = self._exchange.order(
+   651→                    name=order.coin,
+   652→                    is_buy=is_buy,
+   653→                    sz=order.size,
+   654→                    limit_px=order_price or 0,
+   655→                    order_type=order_type,
+   656→                    reduce_only=reduce_only,
+   657→                )
+   658→
+   659→            # 处理返回结果
+   660→            # IOC 订单可能立即成交，返回格式可能不同
+   661→            if isinstance(order_result, dict):
+   662→                # 检查是否有错误
+   663→                response = order_result.get('response', {})
+   664→                if isinstance(response, dict):
+   665→                    statuses = response.get('data', {}).get('statuses', [])
+   666→                    for status in statuses:
+   667→                        if 'error' in status:
+   668→                            # IOC 订单的 "error" 可能是 "could not immediately match"
+   669→                            # 这实际上意味着订单已部分或全部成交
+   670→                            error_msg = status['error']
+   671→                            if 'could not immediately match' in error_msg:
+   672→                                # IOC 成交了
+   673→                                filled = status.get('filled', {})
+   674→                                if filled:
+   675→                                    order_id = str(filled.get('oid', ''))
+   676→                                    message = f"IOC 成交: {filled.get('totalSz', '')} @ {filled.get('avgPx', '')}"
+   677→                                else:
+   678→                                    order_id = ''
+   679→                                    message = error_msg
+   680→                            else:
+   681→                                # 真正的错误
+   682→                                return OrderResult(
+   683→                                    success=False,
+   684→                                    message=error_msg,
+   685→                                )
+   686→                        elif 'filled' in status:
+   687→                            # 订单已成交
+   688→                            filled = status['filled']
+   689→                            order_id = str(filled.get('oid', ''))
+   690→                            message = f"成交: {filled.get('totalSz', '')} @ {filled.get('avgPx', '')}"
+   691→                        elif 'resting' in status:
+   692→                            # 订单已挂起
+   693→                            resting = status['resting']
+   694→                            order_id = str(resting.get('oid', ''))
+   695→                            message = "订单已挂起"
+   696→                        else:
+   697→                            order_id = ''
+   698→                            message = str(status)
+   699→
+   700→                elif 'id' in order_result:
+   701→                    order_id = str(order_result['id'])
+   702→                    message = "下单成功"
+   703→                else:
+   704→                    order_id = str(order_result.get('response', {}).get('type', ''))
+   705→                    message = f"订单响应: {order_result}"
+   706→            else:
+   707→                order_id = str(order_result)
+   708→                message = "下单成功"
+   709→
+   710→            return OrderResult(
+   711→                success=True,
+   712→                order_id=order_id,
+   713→                message=message,
+   714→                filled_price=order_price,
+   715→            )
+   716→
+   717→        except Exception as e:
+   718→            self.logger.error(f"下单失败: {e}")
+   719→            return OrderResult(
+   720→                success=False,
+   721→                message=str(e),
+   722→            )
+   723→
+   724→    def cancel_order(self, order_id: str) -> bool:
+   725→        """取消订单
+   726→
+   727→        Args:
+   728→            order_id: 订单 ID
+   729→
+   730→        Returns:
+   731→            bool: 是否成功
+   732→        """
+   733→        try:
+   734→            if not self._exchange:
+   735→                return False
+   736→
+   737→            self._exchange.cancel(order_id)
+   738→            return True
+   739→
+   740→        except Exception as e:
+   741→            self.logger.error(f"取消订单失败: {e}")
+   742→            return False
+   743→
+   744→    def get_order_status(self, order_id: str) -> Dict:
+   745→        """查询订单状态
+   746→
+   747→        Args:
+   748→            order_id: 订单 ID
+   749→
+   750→        Returns:
+   751→            Dict: 订单状态
+   752→        """
+   753→        try:
+   754→            if not self._info:
+   755→                return {}
+   756→
+   757→            status = self._exchange.order_status(order_id)
+   758→            return status
+   759→
+   760→        except Exception as e:
+   761→            self.logger.error(f"查询订单状态失败: {e}")
+   762→            return {}
+   763→
+   764→
+   765→# ==================== 平仓 ====================
+   766→
+   767→    def close_position(self, coin: str) -> OrderResult:
+   768→        """平仓
+   769→
+   770→        Args:
+   771→            coin: 币种名称
+   772→
+   773→        Returns:
+   774→            OrderResult: 平仓结果
+   775→        """
+   776→        try:
+   777→            if not self._exchange:
+   778→                return OrderResult(
+   779→                    success=False,
+   780→                    message="未配置私钥，无法平仓",
+   781→                )
+   782→
+   783→            # 先获取当前持仓
+   784→            position = self.get_position(coin)
+   785→            if not position:
+   786→                return OrderResult(
+   787→                    success=False,
+   788→                    message="无持仓",
+   789→                )
+   790→
+   791→            # 下反向订单平仓
+   792→            is_buy = position.side == "SHORT"  # 空头需要买入平仓
+   793→
+   794→            # 使用市价单方式平仓
+   795→            from hyperliquid.utils.signing import OrderType, LimitOrderType
+   796→
+   797→            # 获取 oracle 价格（更稳定，更容易成交）
+   798→            oracle_price = self._get_oracle_price(coin)
+   799→
+   800→            # 使用 oracle 价格 + 偏移，确保成交
+   801→            # 平空仓（买入）→ 价格要高一点
+   802→            # 平多仓（卖出）→ 价格要低一点
+   803→            # 测试网用 10%，主网用 2%
+   804→            offset = 0.10 if self.testnet else 0.02
+   805→            if is_buy:
+   806→                # 平空仓（买入），用 oracle price * (1 + offset)
+   807→                limit_px = int(oracle_price * (1 + offset))
+   808→            else:
+   809→                # 平多仓（卖出），用 oracle price * (1 - offset)
+   810→                limit_px = int(oracle_price * (1 - offset))
+   811→
+   812→            self.logger.info(f"平仓: {'买入' if is_buy else '卖出'} {position.size} {coin} @ ${limit_px}")
+   813→
+   814→            # 使用 IOC + reduceOnly
+   815→            order_result = self._exchange.order(
+   816→                name=coin,
+   817→                is_buy=is_buy,
+   818→                sz=position.size,
+   819→                limit_px=limit_px,
+   820→                order_type=OrderType(limit=LimitOrderType(tif='Ioc')),
+   821→                reduce_only=True,
+   822→            )
+   823→
+   824→            # 检查结果
+   825→            response = order_result.get('response', {})
+   826→            if isinstance(response, dict):
+   827→                statuses = response.get('data', {}).get('statuses', [])
+   828→                for status in statuses:
+   829→                    if 'error' in status:
+   830→                        error_msg = status['error']
+   831→                        if 'could not immediately match' in error_msg:
+   832→                            # IOC 成交了
+   833→                            filled = status.get('filled', {})
+   834→                            return OrderResult(
+   835→                                success=True,
+   836→                                order_id=str(filled.get('oid', '')),
+   837→                                message=f"平仓成交: {filled.get('totalSz', '')}",
+   838→                                filled_price=float(filled.get('avgPx', 0)),
+   839→                                filled_size=float(filled.get('totalSz', 0)),
+   840→                            )
+   841→                        else:
+   842→                            return OrderResult(success=False, message=error_msg)
+   843→                    elif 'filled' in status:
+   844→                        filled = status['filled']
+   845→                        return OrderResult(
+   846→                            success=True,
+   847→                            order_id=str(filled.get('oid', '')),
+   848→                            message="平仓成交",
+   849→                            filled_price=float(filled.get('avgPx', 0)),
+   850→                            filled_size=float(filled.get('totalSz', 0)),
+   851→                        )
+   852→
+   853→            return OrderResult(success=True, message="平仓完成")
+   854→
+   855→        except Exception as e:
+   856→            self.logger.error(f"平仓失败: {e}")
+   857→            return OrderResult(
+   858→                success=False,
+   859→                message=str(e),
+   860→            )
+   861→
+   862→
+   863→# ==================== 反手 ====================
+   864→
+   865→    def reverse_position(self, coin: str) -> OrderResult:
+   866→        """反手：平掉当前持仓并反向开仓
+   867→
+   868→        HyperLiquid 没有真正的市价单，反手逻辑：
+   869→        1. 使用 reduceOnly 平仓
+   870→        2. 等待确认平仓
+   871→        3. 使用 IOC + 价格偏移开新仓
+   872→
+   873→        Args:
+   874→            coin: 币种名称
+   875→
+   876→        Returns:
+   877→            OrderResult: 反手结果
+   878→
+   879→        Note:
+   880→            IOC 价格偏移比例默认 2%，即：
+   881→            - 买单：当前价格 * 1.02
+   882→            - 卖单：当前价格 * 0.98
+   883→        """
+   884→        try:
+   885→            # 1. 获取当前持仓
+   886→            position = self.get_position(coin)
+   887→            if not position:
+   888→                return OrderResult(
+   889→                    success=False,
+   890→                    message="无持仓，无法反手",
+   891→                )
+   892→
+   893→            # 2. 平仓（使用 reduceOnly）
+   894→            self.logger.info(f"反手：平仓 {coin} {position.side} {position.size}")
+   895→            close_result = self.close_position(coin)
+   896→
+   897→            if not close_result.success:
+   898→                return OrderResult(
+   899→                    success=False,
+   900→                    message=f"平仓失败: {close_result.message}",
+   901→                )
+   902→
+   903→            # 等待平仓确认
+   904→            time.sleep(1)
+   905→
+   906→            # 3. 充值到合约账户（平仓后资金回到现货，需要转回合约）
+   907→            balance = self.get_balance()
+   908→            spot_balance = balance.get('usdc', 0)
+   909→
+   910→            if spot_balance > 10:
+   911→                # 充值 10 USDC 到合约账户
+   912→                self.deposit_to_perp(10)
+   913→                time.sleep(1)
+   914→
+   915→            # 4. 获取余额计算新仓位
+   916→            balance = self.get_balance().get('usdc', 0)
+   917→            if balance <= 0:
+   918→                return OrderResult(
+   919→                    success=False,
+   920→                    message="余额不足，无法开仓",
+   921→                )
+   922→
+   923→            # 4. 计算新仓位
+   924→            current_price = self.get_price(coin)
+   925→            if current_price <= 0:
+   926→                return OrderResult(
+   927→                    success=False,
+   928→                    message="无法获取当前价格",
+   929→                )
+   930→
+   931→            # 使用配置的比例和杠杆
+   932→            position_pct = self.config.get('position_pct', 0.1)
+   933→            leverage = self.config.get('leverage', 10.0)
+   934→            trade_capital = balance * position_pct
+   935→            size = (trade_capital * leverage) / current_price
+   936→
+   937→            # 5. 反向开仓
+   938→            new_side = OrderSide.SELL if position.side == "LONG" else OrderSide.BUY
+   939→            is_buy = new_side == OrderSide.BUY
+   940→
+   941→            self.logger.info(
+   942→                f"反手：开仓 {'买入' if is_buy else '卖出'} {coin} "
+   943→                f"数量: {size:.4f} @ ${current_price:.2f}"
+   944→            )
+   945→
+   946→            # 使用 IOC + 价格偏移下单
+   947→            order = OrderRequest(
+   948→                coin=coin,
+   949→                side=new_side,
+   950→                order_type=OrderType.MARKET,
+   951→                size=size,
+   952→            )
+   953→            # 设置 IOC 偏移比例
+   954→            order.ioc_offset = 0.02  # 2%
+   955→
+   956→            open_result = self.place_order(order)
+   957→
+   958→            if open_result.success:
+   959→                self.logger.info(f"反手成功: {coin}")
+   960→                return OrderResult(
+   961→                    success=True,
+   962→                    order_id=open_result.order_id,
+   963→                    message="反手成功",
+   964→                    filled_price=open_result.filled_price,
+   965→                    filled_size=size,
+   966→                )
+   967→            else:
+   968→                return OrderResult(
+   969→                    success=False,
+   970→                    message=f"开仓失败: {open_result.message}",
+   971→                )
+   972→
+   973→        except Exception as e:
+   974→            self.logger.error(f"反手失败: {e}")
+   975→            return OrderResult(
+   976→                success=False,
+   977→                message=str(e),
+   978→            )
+   979→
+   980→    def deposit_to_perp(self, amount: float) -> bool:
+   981→        """充值 USDC 到合约账户
+   982→
+   983→        HyperLiquid 是统一账户，但资金需要在合约账户才能交易。
+   984→        使用此方法将现货账户的 USDC 转账到合约账户。
+   985→
+   986→        Args:
+   987→            amount: 充值金额（USDC）
+   988→
+   989→        Returns:
+   990→            bool: 是否成功
+   991→        """
+   992→        try:
+   993→            if not self._exchange:
+   994→                return False
+   995→
+   996→            self.logger.info(f"开始充值 {amount} USDC 到合约账户...")
+   997→
+   998→            # 转账到合约账户
+   999→            result = self._exchange.usd_transfer(amount, "perp")
+  1000→
+  1001→            self.logger.info(f"充值响应: {result}")
+  1002→            return True
+  1003→
+  1004→        except Exception as e:
+  1005→            self.logger.error(f"充值失败: {e}")
+  1006→            return False
+  1007→
+  1008→    def set_leverage(self, coin: str, leverage: int = 10) -> bool:
+  1009→        """设置杠杆
+  1010→
+  1011→        Args:
+  1012→            coin: 币种名称
+  1013→            leverage: 杠杆倍数
+  1014→
+  1015→        Returns:
+  1016→            bool: 是否成功
+  1017→        """
+  1018→        try:
+  1019→            if not self._exchange:
+  1020→                return False
+  1021→
+  1022→            self._exchange.update_leverage(leverage, coin)
+  1023→            return True
+  1024→
+  1025→        except Exception as e:
+  1026→            self.logger.error(f"设置杠杆失败: {e}")
+  1027→            return False
+  1028→
+  1029→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

@@ -1,0 +1,18 @@
+     1→{
+     2→  "env": {
+     3→    "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
+     4→    "ANTHROPIC_AUTH_TOKEN": "sk-cp-Vr_vjoiAjHenLFXdSINTSXPgjmU14t7BR6zXLPXyUn3KyeQRqzSKczIdNA7uyw-TkKuvlDMzJ-uhSWSJITdxT3iVWDyi2ktW1QBHGZI9vCPTyAiQJaVevDA",
+     5→    "ANTHROPIC_MODEL": "MiniMax-M2.5",
+     6→    "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2.5",
+     7→    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2.5",
+     8→    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2.5",
+     9→    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M2.5",
+    10→    "API_TIMEOUT_MS": "3000000",
+    11→    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+    12→  }
+    13→}
+    14→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

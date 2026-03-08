@@ -1,0 +1,59 @@
+# 回测工具
+
+## generate_seed.py — 种子报告生成器
+
+全量回测所有策略，结果存入 SQLite（seed_v3.db）。支持断点续传。
+
+### 用法
+
+```bash
+cd lab
+
+# 跑全部（91策略 × 13币 × 10周期）
+python3 src/backtest/generate_seed.py
+
+# 只跑指定策略（新增/改过的策略用这个，不用等全部遍历）
+python3 src/backtest/generate_seed.py --strategy atr_pullback atr_squeeze atr_combo
+
+# 只跑指定币种
+python3 src/backtest/generate_seed.py --coins BTC ETH SOL
+
+# 只跑指定周期
+python3 src/backtest/generate_seed.py --intervals 1h 4h 1d
+
+# 组合使用
+python3 src/backtest/generate_seed.py --strategy atr_pullback --coins BTC --intervals 1d
+```
+
+### 参数
+
+| 参数 | 说明 | 默认 |
+|------|------|------|
+| `--strategy` | 指定策略名（空格分隔多个） | 全部策略 |
+| `--coins` | 指定币种（空格分隔多个） | 自动检测全部 |
+| `--intervals` | 指定周期（空格分隔多个） | 自动检测全部 |
+
+### 回测参数（代码内固定）
+
+| 参数 | 值 |
+|------|----|
+| 初始本金 | $500 |
+| 杠杆 | 10x |
+| 止损 | 10% |
+| TTP | 关 |
+| 注码 | 固定 $1（Van Tharp R-Multiple） |
+| 手续费 | 0.035%/侧 |
+| 滑点 | 0.02%/侧 |
+| 资金费 | 0.01%/8h |
+
+### 输出
+
+`lab/reports/seed_v3.db`（SQLite），4张表：
+- `combo_summary` — 每个策略/币种/周期组合的汇总指标（35字段）
+- `paired_trades` — 配对交易明细（24字段）
+- `regime_timeline` — 每根K线的 regime 标签
+- `run_metadata` — 运行参数
+
+### 断点续传
+
+自动跳过已有数据（按 strategy+coin+interval 唯一索引判断）。中断后重跑同一命令即可继续。

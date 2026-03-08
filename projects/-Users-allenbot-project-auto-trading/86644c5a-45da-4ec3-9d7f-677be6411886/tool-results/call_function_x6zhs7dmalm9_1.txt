@@ -1,0 +1,3 @@
+/Users/allenbot/project/auto-trading/src/core/strategy/REGISTRY.md
+/Users/allenbot/project/auto-trading/README.md
+/Users/allenbot/project/auto-trading/CLAUDEmd.md

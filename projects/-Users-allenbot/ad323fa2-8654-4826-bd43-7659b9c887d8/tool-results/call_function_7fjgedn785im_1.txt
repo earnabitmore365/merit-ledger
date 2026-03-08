@@ -1,0 +1,17 @@
+Found 16 files
+.openclaw/logs/gateway.err.log
+.openclaw/logs/gateway.log
+.openclaw/openclaw.json
+.openclaw/agents/main/sessions/e625788c-b9db-4d9e-bfde-3453217cf22b-topic-5548.jsonl
+.openclaw/openclaw.json.bak
+.openclaw/openclaw.json.bak.1
+.openclaw/completions/openclaw.fish
+.openclaw/completions/openclaw.ps1
+.openclaw/completions/openclaw.bash
+.openclaw/completions/openclaw.zsh
+.openclaw/agents/main/sessions/24bae7c5-c3b3-4c3d-bae0-39bc55373bd4.jsonl
+.openclaw/agents/main/sessions/4c803e4e-a776-4ce7-95f0-4582397f3423.jsonl
+.openclaw/agents/main/sessions/b5de8a19-75db-499e-8ad8-b5117b54e606.jsonl
+.openclaw/workspace/OpenClaw有用功能清单.md
+.openclaw/workspace/openclaw调试优化指南.md
+.openclaw/workspace/OpenClaw社区学习笔记.md

@@ -1,0 +1,180 @@
+"""
+download_funding_rate.py — Binance Funding Rate 历史下载（断点续传）
+
+数据源：Binance USDT-M 永续合约 + 币本位永续合约
+频率：每8小时一条（UTC 0:00/8:00/16:00）
+API：/fapi/v1/fundingRate（USDT-M）、/dapi/v1/fundingRate（币本位）
+限制：每次最多1000条，无需API Key
+
+存储：src/backtest/data/funding_rate/{COIN}/8h.json
+格式：[{"time": ms, "funding_rate": 0.0001, "mark_price": 56850.5}, ...]
+"""
+import json
+import time
+import os
+import urllib.request
+import urllib.parse
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'src', 'backtest', 'data', 'funding_rate')
+
+# USDT-M 永续合约
+USDT_SYMBOLS = {
+    'BTCUSDT': 'BTC',
+    'ETHUSDT': 'ETH',
+    'XRPUSDT': 'XRP',
+    'BNBUSDT': 'BNB',
+    'SOLUSDT': 'SOL',
+    'ADAUSDT': 'ADA',
+    'TRXUSDT': 'TRX',
+    'AVAXUSDT': 'AVAX',
+    'LINKUSDT': 'LINK',
+    'DOTUSDT': 'DOT',
+}
+
+# 币本位永续合约
+COIN_SYMBOLS = {
+    'BTCUSD_PERP': 'BTC_COIN',
+    'ETHUSD_PERP': 'ETH_COIN',
+    'BNBUSD_PERP': 'BNB_COIN',
+}
+
+FAPI_URL = 'https://fapi.binance.com/fapi/v1/fundingRate'
+DAPI_URL = 'https://dapi.binance.com/dapi/v1/fundingRate'
+
+
+def fetch_json(url, params):
+    """简单的 GET 请求"""
+    qs = urllib.parse.urlencode(params)
+    full_url = f"{url}?{qs}"
+    req = urllib.request.Request(full_url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode())
+
+
+def load_existing(file_path):
+    """加载已有数据"""
+    if not os.path.exists(file_path):
+        return [], set()
+    try:
+        with open(file_path) as f:
+            data = json.load(f)
+        if not data:
+            return [], set()
+        timestamps = {d['time'] for d in data}
+        data.sort(key=lambda d: d['time'])
+        return data, timestamps
+    except (json.JSONDecodeError, KeyError):
+        print(f"  ⚠ 文件损坏，重新下载")
+        return [], set()
+
+
+def download_funding(api_symbol, coin_name, base_url):
+    """下载单个币种的 funding rate 完整历史"""
+    coin_dir = os.path.join(DATA_DIR, coin_name)
+    os.makedirs(coin_dir, exist_ok=True)
+    out_file = os.path.join(coin_dir, '8h.json')
+
+    existing, existing_ts = load_existing(out_file)
+    print(f"\n--- {coin_name} ({api_symbol}) ---")
+    if existing:
+        print(f"  已有 {len(existing):,} 条")
+
+    # 从最新已有时间往后拉，或者从头开始
+    all_new = []
+
+    if existing:
+        start_time = existing[-1]['time'] + 1  # 从最新+1ms开始
+    else:
+        start_time = 1569888000000  # 2019-10-01 00:00:00 UTC（Binance永续上线大约时间）
+
+    now_ms = int(time.time() * 1000)
+    batch = 0
+
+    while start_time < now_ms:
+        try:
+            params = {
+                'symbol': api_symbol,
+                'startTime': start_time,
+                'limit': 1000,
+            }
+            data = fetch_json(base_url, params)
+
+            if not data:
+                break
+
+            for item in data:
+                ts = item['fundingTime']
+                if ts not in existing_ts:
+                    record = {
+                        'time': ts,
+                        'funding_rate': float(item['fundingRate']),
+                    }
+                    if 'markPrice' in item and item['markPrice']:
+                        record['mark_price'] = float(item['markPrice'])
+                    all_new.append(record)
+                    existing_ts.add(ts)
+
+            # 下一页起点
+            last_time = data[-1]['fundingTime']
+            if last_time <= start_time:
+                break
+            start_time = last_time + 1
+
+            batch += 1
+            if batch % 10 == 0:
+                total = len(existing) + len(all_new)
+                print(f"  已拉 {total:,} 条...")
+
+            time.sleep(0.3)
+
+        except Exception as e:
+            print(f"  出错: {e}")
+            time.sleep(5)
+            continue
+
+    if not all_new and not existing:
+        print(f"  没有数据")
+        return 0
+
+    # 合并、排序、保存
+    merged = existing + all_new
+    merged.sort(key=lambda d: d['time'])
+
+    with open(out_file, 'w') as f:
+        json.dump(merged, f, separators=(',', ':'))
+
+    first_date = time.strftime('%Y-%m-%d', time.gmtime(merged[0]['time'] / 1000))
+    last_date = time.strftime('%Y-%m-%d', time.gmtime(merged[-1]['time'] / 1000))
+    print(f"  ✓ {len(merged):,} 条 ({first_date} ~ {last_date}) [+{len(all_new):,} 新]")
+    return len(merged)
+
+
+def main():
+    print("=" * 60)
+    print("Funding Rate 历史下载 — Binance API")
+    print("=" * 60)
+    print(f"  USDT-M: {len(USDT_SYMBOLS)} 个")
+    print(f"  币本位: {len(COIN_SYMBOLS)} 个")
+    print(f"  保存: {DATA_DIR}")
+
+    start = time.time()
+    total = 0
+
+    # USDT-M
+    for api_sym, coin_name in USDT_SYMBOLS.items():
+        count = download_funding(api_sym, coin_name, FAPI_URL)
+        total += count
+
+    # 币本位
+    for api_sym, coin_name in COIN_SYMBOLS.items():
+        count = download_funding(api_sym, coin_name, DAPI_URL)
+        total += count
+
+    elapsed = time.time() - start
+    print(f"\n{'=' * 60}")
+    print(f"完成! {total:,} 条，耗时 {elapsed/60:.1f} 分钟")
+
+
+if __name__ == '__main__':
+    main()

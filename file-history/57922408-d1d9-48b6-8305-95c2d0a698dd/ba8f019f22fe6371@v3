@@ -1,0 +1,114 @@
+# CLAUDE.md
+
+本文件为 Claude Code (claude.ai/code) 提供项目级技术指引。
+
+## 项目概览
+
+Abby Auto-Trading (v1.7) — 加密货币自动交易系统，44 个策略、回测引擎、市场指标库、市场状态检测、HyperLiquid 交易所实盘交易。Python 3.11+，终端 curses 界面。
+
+## 运行系统
+
+```bash
+# 实盘交易（curses 界面）
+./user_interface/trade.command
+
+# 批量回测（curses 界面）
+./user_interface/backtest.command
+
+# 两个脚本都会把 src/ 加到 sys.path，然后调 curses.wrapper(main)
+# macOS 上用 python3（不是 python）
+```
+
+```bash
+# 安装依赖
+pip install -r requirements.txt
+pip install hyperliquid eth_account  # 没写在 requirements.txt 但必须装
+```
+
+目前没有测试套件，没有 Makefile — 直接跑 Python。
+
+## 架构
+
+三层设计：交易系统 → 交易所适配器接口 → 交易所实现
+
+**数据流**：K 线数据 → `Strategy.generate_signal(coin, klines)` → `TradingSignal`（BUY/SELL/HOLD + 置信度）→ 风控检查（止损 / TTP）→ `OrderRequest` → `ExchangeAdapter.place_order()` → `OrderResult`
+
+### 自动发现（不需要手动注册）
+
+| 模块 | 匹配规则 | 位置 |
+|------|----------|------|
+| 策略 | `strategy_*.py` 文件 | `src/core/strategy/` |
+| 风控管理器 | `*.py` 文件 | `src/core/risk/` |
+| 交易所 | `*/adapter.py` 子目录 | `src/exchange/` |
+
+通过 `pkgutil.iter_modules()` 在各模块的 `__init__.py` 中实现自动发现。
+
+### 核心基类
+
+- **`src/core/strategy/base.py`**：`Strategy` 抽象基类，`generate_signal(coin, klines) -> TradingSignal`。`Signal` 枚举（BUY/SELL/HOLD），`TradingSignal` 数据类（signal, confidence, coin, info, metadata）。
+- **`src/exchange/base.py`**：`ExchangeAdapter` 抽象基类，`OrderRequest`、`OrderResult`、`Position`、`OrderSide`、`OrderType`。
+- **`src/ui/base.py`**：`BaseMenu` curses 界面基类（Color、Box、CJK 宽度处理、navigate_options、show_form、show_confirm、show_loading），被 `trade_menu.py` 继承。
+- **`src/core/risk/base.py`**：`RiskManager` 抽象基类，`RiskCheckResult`（should_close, reason）。实现类：StopLossManager、TTPManager、CombinedRiskManager。
+
+### K 线数据格式
+
+```python
+{"time": 1667574000000, "open": 100.0, "high": 105.0, "low": 99.0, "close": 103.0, "volume": 1000.0}
+```
+
+历史数据存放在 `src/backtest/data/historical/{COIN}/{interval}.json`。转换脚本：`convert_historical_data.py`（ISO 时间戳 → 毫秒时间戳）。
+
+## 策略开发
+
+文件：`src/core/strategy/strategy_{name}.py`。类继承 `Strategy`。必须返回 `TradingSignal`（不是裸的 `Signal`）。
+
+```python
+from core.strategy import Strategy, Signal, TradingSignal
+
+class MyStrategy(Strategy):
+    def __init__(self):
+        super().__init__("my")
+
+    def generate_signal(self, coin: str, klines: List[Dict]) -> TradingSignal:
+        # klines: OHLCV 字典列表，最新的在最后
+        # 所有策略只需要最近 ~52 根 K 线
+        return TradingSignal(signal=Signal.BUY, confidence=0.7, coin=coin, info="reason")
+```
+
+完整模板见 `STRATEGY_GUIDE.md`，简单示例见 `strategy_vwap.py`。
+
+## 回测系统
+
+- **`src/backtest/backtest.py`**：单币种回测引擎。模拟交易（TTP、止损、爆仓检测）。输出 `BacktestResult`（Sharpe/Sortino/Calmar 比率）。支持 `fixed_bet=True`（固定注码，公平比较策略）和 `fixed_bet=False`（复利模式，模拟真实收益）。追踪翻倍里程碑（最快/平均翻倍时间、翻倍次数）。
+- **`src/backtest/batch_backtest.py`**：批量回测 curses 界面（币种 × 策略 × 周期）。报告保存为 JSON 到 `reports/backtest/`。
+- **`src/backtest/run_full_matrix.py`**：全矩阵回测脚本 — 43 策略 × 10 币种 × 4 周期 = 1720 组合。使用固定注码模式。输出 `reports/backtest/summary_full_matrix.json`（TOP 30、各策略汇总）。
+- 支持的周期：1m（1440 根/天）、5m（288）、15m（96）、1h（24）。回测引擎中的 `bars_per_day` 映射表处理换算。
+
+## 市场状态检测（v2 — ADX 三层复合）
+
+三层市场状态检测，位于 `src/trading/regime/`：
+
+- **`config.py`**：`RegimeConfig` — ADX 周期按时间帧缩放（1m→48, 5m→32, 15m→28, 1h→14），滞后阈值（进入趋势 ADX>25，退出趋势 ADX<18），最短驻留 48 根 K 线，确认 6 根 K 线。
+- **`detector.py`**：`MarketRegimeDetector` — 纯计算，无状态。第一层：ADX 判断趋势强度。第二层：SMA(50) 斜率判断方向。第三层：ATR% 波动率过滤。返回初始状态 + 细节（adx, sma_direction, atr_pct）。
+- **`strategy.py`**：`RegimeStrategy(Strategy)` — 元策略，包含滞后机制、驻留时间、确认 K 线数、禁止直接翻转（牛↔熊必须经过震荡）。根据市场状态委托子策略（默认：牛市→proc, 熊市→demandindex_short, 震荡→mean_reversion）。
+
+```python
+from trading.regime import RegimeStrategy, RegimeConfig
+strategy = RegimeStrategy()  # 使用默认配置 + 状态策略映射
+signal = strategy.generate_signal('ETH', klines)
+# signal.metadata['regime'] = 'bull' / 'bear' / 'ranging'
+```
+
+## HyperLiquid 交易所
+
+- **`src/exchange/hyperliquid/adapter.py`**：主适配器（市价单用 IOC + 价格偏移）。
+- **`src/exchange/hyperliquid/websocket.py`**：实时价格推送，失败回退到 REST。
+- **`src/exchange/hyperliquid/accounts.py`**：钱包/API 地址管理，测试网/主网。
+- K 线缓存：5 秒 TTL，防止触发限速。
+
+## 项目约定
+
+- 语言：全程中文注释和界面
+- `sys.path` 操作：入口脚本把 `src/` 插入路径
+- 报告/日志：`reports/{trading,backtest}/`、`logs/{trading,backtest}/`
+- Curses 界面：所有交互菜单使用 Python curses + 颜色对，必须处理屏幕边界

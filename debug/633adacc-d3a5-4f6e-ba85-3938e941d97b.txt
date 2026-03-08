@@ -1,0 +1,9 @@
+2026-02-21T13:44:36.880Z [DEBUG] Failed to check enabledPlatforms: TypeError: undefined is not an object (evaluating 'pK.join')
+2026-02-21T13:44:36.926Z [DEBUG] [init] configureGlobalMTLS starting
+2026-02-21T13:44:36.926Z [DEBUG] [init] configureGlobalMTLS complete
+2026-02-21T13:44:36.926Z [DEBUG] [init] configureGlobalAgents starting
+2026-02-21T13:44:36.926Z [DEBUG] [init] configureGlobalAgents complete
+2026-02-21T13:44:36.928Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+2026-02-21T13:44:36.928Z [DEBUG] [claudeai-mcp] Checking gate (cached)...
+2026-02-21T13:44:36.928Z [DEBUG] [claudeai-mcp] Gate returned: true
+2026-02-21T13:44:36.928Z [DEBUG] [claudeai-mcp] No access token

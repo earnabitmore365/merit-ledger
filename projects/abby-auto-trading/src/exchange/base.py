@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""
+Exchange Adapter Base
+
+交易所适配器基类
+所有交易所适配器都必须实现以下接口
+"""
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+from enum import Enum
+
+
+# ==================== 枚举定义 ====================
+
+class OrderSide(Enum):
+    """订单方向"""
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class OrderType(Enum):
+    """订单类型"""
+    MARKET = "MARKET"
+    LIMIT = "LIMIT"
+
+
+# ==================== 数据类定义 ====================
+
+@dataclass
+class OrderRequest:
+    """订单请求
+    
+    Attributes:
+        coin: 币种名称
+        side: 订单方向 (BUY/SELL)
+        order_type: 订单类型 (MARKET/LIMIT)
+        size: 订单数量
+        price: 订单价格（限价单必填）
+    """
+    coin: str
+    side: OrderSide
+    order_type: OrderType
+    size: float
+    price: Optional[float] = None
+
+
+@dataclass
+class OrderResult:
+    """订单结果
+    
+    Attributes:
+        success: 是否成功
+        order_id: 订单ID
+        message: 结果消息
+        filled_price: 成交价格
+        filled_size: 成交数量
+    """
+    success: bool
+    order_id: Optional[str] = None
+    message: str = ""
+    filled_price: Optional[float] = None
+    filled_size: Optional[float] = None
+
+
+@dataclass
+class Position:
+    """持仓信息
+    
+    Attributes:
+        coin: 币种名称
+        side: 持仓方向 (LONG/SHORT)
+        size: 持仓数量
+        entry_price: 开仓价格
+        unrealized_pnl: 未实现盈亏
+    """
+    coin: str
+    side: str  # "LONG" or "SHORT"
+    size: float
+    entry_price: float
+    unrealized_pnl: float = 0.0
+
+
+# ==================== 交易所适配器基类 ====================
+
+class ExchangeAdapter(ABC):
+    """交易所适配器基类
+    
+    所有交易所适配器都必须继承此类并实现所有抽象方法
+    负责封装交易所 API，提供统一的接口
+    
+    Usage:
+        class HyperLiquidAdapter(ExchangeAdapter):
+            def get_price(self, coin: str) -> float:
+                ...
+    """
+    
+    def __init__(self, config: Dict):
+        """初始化
+        
+        Args:
+            config: 交易所配置（API Key, Secret 等）
+        """
+        self.config = config
+        self._connected = False
+    
+    # ==================== 连接管理 ====================
+    
+    @abstractmethod
+    def connect(self) -> bool:
+        """连接交易所
+        
+        Returns:
+            bool: 是否连接成功
+        """
+        pass
+    
+    @abstractmethod
+    def disconnect(self) -> None:
+        """断开连接"""
+        pass
+    
+    @abstractmethod
+    def health_check(self) -> bool:
+        """健康检查
+        
+        Returns:
+            bool: 交易所是否健康
+        """
+        pass
+    
+    # ==================== 行情数据 ====================
+    
+    @abstractmethod
+    def get_price(self, coin: str) -> float:
+        """获取当前价格
+        
+        Args:
+            coin: 币种名称（如 "ETH"）
+        
+        Returns:
+            float: 当前价格
+        """
+        pass
+    
+    @abstractmethod
+    def get_klines(
+        self,
+        coin: str,
+        interval: str = "1h",
+        limit: int = 100
+    ) -> List[Dict]:
+        """获取 K 线数据
+        
+        Args:
+            coin: 币种名称
+            interval: K 线周期（1m, 5m, 15m, 1h, 4h）
+            limit: 获取数量
+        
+        Returns:
+            List[Dict]: K 线数据列表
+            [{
+                'timestamp': 1234567890,
+                'open': 100.0,
+                'high': 105.0,
+                'low': 99.0,
+                'close': 103.0,
+                'volume': 1000.0,
+            }]
+        """
+        pass
+    
+    # ==================== 订单操作 ====================
+    
+    @abstractmethod
+    def place_order(self, order: OrderRequest) -> OrderResult:
+        """下单
+        
+        Args:
+            order: 订单请求
+        
+        Returns:
+            OrderResult: 订单结果
+        """
+        pass
+    
+    @abstractmethod
+    def cancel_order(self, order_id: str) -> bool:
+        """取消订单
+        
+        Args:
+            order_id: 订单 ID
+        
+        Returns:
+            bool: 是否成功
+        """
+        pass
+    
+    @abstractmethod
+    def get_order_status(self, order_id: str) -> Dict:
+        """查询订单状态
+        
+        Args:
+            order_id: 订单 ID
+        
+        Returns:
+            Dict: 订单状态
+        """
+        pass
+    
+    # ==================== 持仓管理 ====================
+    
+    @abstractmethod
+    def get_positions(self) -> List[Position]:
+        """获取所有持仓
+        
+        Returns:
+            List[Position]: 持仓列表
+        """
+        pass
+    
+    @abstractmethod
+    def get_position(self, coin: str) -> Optional[Position]:
+        """获取指定币种持仓
+        
+        Args:
+            coin: 币种名称
+        
+        Returns:
+            Optional[Position]: 持仓信息，不存在返回 None
+        """
+        pass
+    
+    # ==================== 账户管理 ====================
+    
+    @abstractmethod
+    def get_balance(self) -> Dict:
+        """获取账户余额
+        
+        Returns:
+            Dict: 余额信息
+            {
+                'usdc': 1000.0,
+                'available': 900.0,
+            }
+        """
+        pass
+    
+    @abstractmethod
+    def close_position(self, coin: str) -> OrderResult:
+        """平仓
+        
+        Args:
+            coin: 币种名称
+        
+        Returns:
+            OrderResult: 平仓结果
+        """
+        pass
+    
+    # ==================== 工具方法 ====================
+    
+    def is_connected(self) -> bool:
+        """检查是否已连接"""
+        return self._connected
+    
+    def get_exchange_name(self) -> str:
+        """获取交易所名称（子类实现）"""
+        raise NotImplementedError
+    
+    def __repr__(self) -> str:
+        """字符串表示"""
+        name = self.get_exchange_name() if hasattr(self, 'get_exchange_name') else 'Unknown'
+        status = "已连接" if self._connected else "未连接"
+        return f"<{name} Exchange: {status}>"

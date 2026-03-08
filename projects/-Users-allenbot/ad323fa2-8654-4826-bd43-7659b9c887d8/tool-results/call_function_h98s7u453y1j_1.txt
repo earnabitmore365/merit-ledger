@@ -1,0 +1,30 @@
+      "allowFrom": [
+        "6506412244"
+      ],
+      "groupPolicy": "allowlist",
+      "streamMode": "partial"
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "aba5486e8f745aa24a757d4744816acbcc5b478505b1d297"
+    }
+  },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      },
+      "whatsapp": {
+        "enabled": true
+      }
+    }
+  },
+  "providers": {
+    "openrouter": {
+      "apiKey": "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"
+    }
+  }
+}

@@ -1,0 +1,920 @@
+#!/usr/bin/env python3
+"""
+Abby 交易系统 - 交互式菜单
+使用上下键选择，空格键多选，Enter确定，Esc返回/退出
+"""
+
+import sys
+import os
+import json
+import logging
+import time
+import io
+import curses
+from datetime import datetime
+
+# 添加项目路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+# 配置根日志（防止重复输出）
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+if not root_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(message)s'
+    ))
+    root_logger.addHandler(handler)
+    root_logger.propagate = False
+
+from core.strategy import list_strategies
+from exchange.hyperliquid.accounts import get_adapter_config
+
+
+class MenuSystem:
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.stdscr.nodelay(False)
+        self.stdscr.keypad(True)
+        self.selected_indices = []
+        self._saved_selections = {}
+        self._saved_configs = []
+        self._all_results = []
+        self._logs = []
+
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, 81, 236)
+        curses.init_pair(2, 46, 236)
+        curses.init_pair(3, 226, 236)
+        curses.init_pair(4, 251, 236)
+        curses.init_pair(5, 196, 236)
+        curses.init_pair(6, 171, 236)
+        curses.init_pair(7, 244, 236)
+        curses.init_pair(8, 40, 236)
+
+        self.height, self.width = stdscr.getmaxyx()
+        self.stdscr.bkgd(' ', curses.color_pair(4))
+
+    def clear_screen(self):
+        self.stdscr.clear()
+        self.stdscr.bkgd(' ', curses.color_pair(4))
+
+    def draw_header(self, selections):
+        self.stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
+        self.stdscr.addstr(0, 0, "╔" + "═" * (self.width - 2) + "╗")
+        title = " Abby 交易系统 "
+        self.stdscr.addstr(1, (self.width - len(title)) // 2, title)
+        self.stdscr.addstr(2, 0, "╚" + "═" * (self.width - 2) + "╝")
+        self.stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
+
+        y = 4
+        configs = self._saved_configs
+        if configs:
+            self.stdscr.addstr(y, 0, "已选定配置:", curses.color_pair(3))
+            y += 1
+            for i, config in enumerate(configs):
+                config_name = config['name'] if isinstance(config, dict) else config
+                line = f"  {i+1}. {config_name}"
+                if len(line) > self.width - 1:
+                    line = line[:self.width - 4] + "..."
+                self.stdscr.addstr(y, 0, line, curses.color_pair(6))
+                y += 1
+            y += 1
+
+        if selections:
+            self.stdscr.addstr(y, 0, "已选择:", curses.color_pair(3))
+            y += 1
+            for key, value in selections.items():
+                if key.startswith('__'):
+                    continue
+                line = f"  {key}: {value}"
+                if len(line) > self.width - 1:
+                    line = line[:self.width - 4] + "..."
+                self.stdscr.addstr(y, 0, line, curses.color_pair(6))
+                y += 1
+            y += 1
+
+        return y
+
+    def navigate_options(self, options, title, multi=False, selections=None, searchable=False):
+        if title in self._saved_selections:
+            saved = self._saved_selections[title]
+            if saved and len(saved) > 0 and max(saved) < len(options):
+                self.selected_indices = saved.copy()
+            else:
+                self.selected_indices = []
+        else:
+            self.selected_indices = []
+
+        search_query = ""
+        selected_idx = 0
+        max_visible = self.height - 15
+        offset = 0
+
+        while True:
+            if searchable and search_query:
+                filtered_options = [opt for opt in options if search_query.lower() in opt.lower()]
+            else:
+                filtered_options = options
+
+            if not filtered_options:
+                filtered_options = options
+
+            if selected_idx >= len(filtered_options):
+                selected_idx = max(0, len(filtered_options) - 1)
+
+            if selected_idx >= offset + max_visible:
+                offset = selected_idx - max_visible + 1
+            elif selected_idx < offset:
+                offset = selected_idx
+
+            visible_options = filtered_options[offset:offset + max_visible]
+            adjusted_idx = selected_idx - offset
+
+            self.clear_screen()
+            start_y = self.draw_header(selections)
+            self.stdscr.addstr(start_y, 0, "-" * (self.width - 1))
+            self.stdscr.addstr(start_y + 1, 0, title)
+
+            if searchable:
+                self.stdscr.addstr(start_y + 2, 0, "搜索: ", curses.color_pair(3))
+                search_display = search_query + "_" * (20 - len(search_query))
+                self.stdscr.addstr(start_y + 2, 8, search_display[:20], curses.color_pair(4))
+                hint_y = start_y + 3
+            else:
+                hint_y = start_y + 2
+
+            start_row = hint_y + 2
+
+            if multi:
+                hint = "[上下] 移动  [空格] 选择  [Enter] 确认  [Esc] 上一步"
+            else:
+                hint = "[上下] 移动  [Enter] 确认  [Esc] 上一步"
+            if searchable:
+                hint += "  [字母] 搜索"
+            self.stdscr.addstr(hint_y, 0, hint, curses.color_pair(5))
+
+            if multi and self.selected_indices:
+                self.stdscr.addstr(start_row - 1, 0, f"已选择: {len(self.selected_indices)} 项", curses.color_pair(3))
+
+            for i, option in enumerate(visible_options):
+                y = start_row + i
+                if y >= self.height - 1:
+                    break
+
+                max_len = self.width - 5
+                display_option = option[:max_len] if len(option) > max_len else option
+
+                real_idx = i + offset
+                orig_idx = options.index(option) if option in options else real_idx
+                if real_idx == selected_idx:
+                    if multi:
+                        mark = "◼" if orig_idx in self.selected_indices else "◻"
+                    else:
+                        mark = "►"
+                    self.stdscr.attron(curses.color_pair(2) | curses.A_REVERSE)
+                    self.stdscr.addstr(y, 2, f"{mark} {display_option}")
+                    self.stdscr.attroff(curses.color_pair(2) | curses.A_REVERSE)
+                else:
+                    if multi:
+                        mark = "◼" if orig_idx in self.selected_indices else "◻"
+                    else:
+                        mark = " "
+                    self.stdscr.addstr(y, 2, f"{mark} {display_option}", curses.color_pair(4))
+
+            self.stdscr.refresh()
+
+            key = self.stdscr.getch()
+
+            if key == curses.KEY_UP:
+                if selected_idx > 0:
+                    selected_idx -= 1
+                else:
+                    selected_idx = len(filtered_options) - 1
+            elif key == curses.KEY_DOWN:
+                if selected_idx < len(filtered_options) - 1:
+                    selected_idx += 1
+                else:
+                    selected_idx = 0
+            elif key == ord(' '):
+                if multi and filtered_options:
+                    real_idx = filtered_options[selected_idx]
+                    orig_idx = options.index(real_idx)
+                    if orig_idx in self.selected_indices:
+                        self.selected_indices.remove(orig_idx)
+                    else:
+                        self.selected_indices.append(orig_idx)
+            elif key in [10, 13]:
+                if filtered_options:
+                    if multi:
+                        if self.selected_indices:
+                            self._saved_selections[title] = self.selected_indices.copy()
+                            return [options[i] for i in self.selected_indices]
+                        return [options[0]]
+                    else:
+                        return filtered_options[selected_idx]
+            elif key == 27:
+                if multi and self.selected_indices:
+                    self._saved_selections[title] = self.selected_indices.copy()
+                return "BACK"
+            elif searchable:
+                if key in [curses.KEY_BACKSPACE, 127, 8]:
+                    search_query = search_query[:-1]
+                    selected_idx = 0
+                    offset = 0
+                elif 32 <= key <= 126:
+                    search_query += chr(key)
+                    selected_idx = 0
+                    offset = 0
+
+    def get_yes_no(self, title, default=True, selections=None):
+        options = ["YES", "NO"]
+        selected_idx = 0 if default else 1
+
+        while True:
+            self.clear_screen()
+            y = self.draw_header(selections)
+
+            self.stdscr.addstr(y, 0, "-" * (self.width - 1))
+            y += 1
+            self.stdscr.addstr(y, 0, title)
+            y += 1
+            self.stdscr.addstr(y, 0, "[左右] 选择  [Enter] 确认  [Esc] 上一步", curses.color_pair(5))
+            y += 1
+            self.stdscr.addstr(y, 0, "-" * (self.width - 1))
+            y += 1
+
+            x_pos = 2
+            for i, opt in enumerate(options):
+                mark = "●" if i == selected_idx else "○"
+                label = f" {mark} {opt} "
+                if i == selected_idx:
+                    self.stdscr.attron(curses.color_pair(2) | curses.A_REVERSE)
+                    self.stdscr.addstr(y, x_pos, label)
+                    self.stdscr.attroff(curses.color_pair(2) | curses.A_REVERSE)
+                else:
+                    self.stdscr.addstr(y, x_pos, label, curses.color_pair(4))
+                x_pos += len(label) + 4
+
+            self.stdscr.refresh()
+            key = self.stdscr.getch()
+
+            if key == curses.KEY_LEFT:
+                selected_idx = max(0, selected_idx - 1)
+            elif key == curses.KEY_RIGHT:
+                selected_idx = min(len(options) - 1, selected_idx + 1)
+            elif key in [10, 13]:
+                return selected_idx == 0
+            elif key == 27:
+                return "BACK"
+
+    def get_number(self, title, default, selections=None):
+        input_str = ""
+        selected_idx = 0
+
+        while True:
+            self.clear_screen()
+            start_y = self.draw_header(selections)
+
+            self.stdscr.addstr(start_y, 0, "-" * (self.width - 1))
+            start_y += 1
+            self.stdscr.addstr(start_y, 0, title)
+            start_y += 1
+            self.stdscr.addstr(start_y, 0, "[左右] 切换  [数字] 输入  [Enter] 确认  [Esc] 上一步", curses.color_pair(5))
+            start_y += 1
+            self.stdscr.addstr(start_y, 0, "-" * (self.width - 1))
+
+            display_str = input_str if input_str else str(default)
+            self.stdscr.addstr(start_y + 2, 0, f"当前值: {display_str}")
+            self.stdscr.addstr(start_y + 3, 0, f"默认值: {default} (留空使用默认值)")
+
+            input_y = start_y + 5
+            self.stdscr.addstr(input_y, 0, "输入: ")
+            curses.echo()
+            self.stdscr.addstr(input_y, 8, input_str + "_")
+            curses.noecho()
+
+            self.stdscr.refresh()
+
+            key = self.stdscr.getch()
+
+            if key == 27:
+                return "BACK"
+            elif key in [10, 13]:
+                if input_str.strip():
+                    try:
+                        return int(input_str)
+                    except:
+                        return default
+                return default
+            elif key in [curses.KEY_BACKSPACE, 127, 8]:
+                if input_str:
+                    input_str = input_str[:-1]
+            elif 48 <= key <= 57:
+                input_str += chr(key)
+
+    def show_status_with_logs(self, status, log_buffer, stop_event, adapter, coin, system):
+        self.height, self.width = self.stdscr.getmaxyx()
+
+        max_log_lines = 10
+        static_keys = ["网络", "账号", "币种", "周期", "策略", "杠杆"]
+        input_mode = False
+        input_text = ""
+
+        while not stop_event.is_set():
+            self.clear_screen()
+
+            self.stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
+            self.stdscr.addstr(0, 0, "╔" + "═" * (self.width - 2) + "╗")
+            title = " 交易运行中 "
+            self.stdscr.addstr(1, (self.width - len(title)) // 2, title)
+            self.stdscr.addstr(2, 0, "╚" + "═" * (self.width - 2) + "╝")
+            self.stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
+
+            y = 3
+            # 第一行：网络 + 账号
+            network = status.get('网络', '')
+            account = status.get('账号', '')
+            self.stdscr.addstr(y, 0, f"网络：{network}     账号：{account}")
+            y += 1
+
+            # 第二行：币种 + 周期 + 策略
+            coin = status.get('币种', '')
+            interval = status.get('周期', '')
+            strategy = status.get('策略', '')
+            self.stdscr.addstr(y, 0, f"币种：{coin}   周期：{interval}   策略：{strategy}")
+            y += 1
+
+            # 第三行：余额
+            balance = adapter.get_balance().get('usdc', 0)
+            self.stdscr.addstr(y, 0, f"余额：{balance:.2f}")
+            y += 1
+
+            # 第四行：持仓
+            positions = adapter.get_positions()
+            leverage = status.get('杠杆', '10x')
+            if positions:
+                pos = positions[0]
+                side_text = "多" if pos.side == "LONG" else "空"
+                pnl = pos.unrealized_pnl
+                pnl_text = f"+{pnl:.2f}" if pnl >= 0 else f"{pnl:.2f}"
+                self.stdscr.addstr(y, 0, f"持仓：{pos.coin} {leverage} {side_text}仓 {pos.size} 入场价：{pos.entry_price} PnL：{pnl_text}")
+            else:
+                self.stdscr.addstr(y, 0, "持仓：无")
+
+            # 统计行
+            trade_records = system.get_trade_records()
+            if system.start_time:
+                duration_days = (datetime.now() - system.start_time).total_seconds() / 86400
+            else:
+                duration_days = 1
+
+            # 统计
+            open_count = len([t for t in trade_records if t['type'] == 'OPEN'])
+            close_count = len([t for t in trade_records if t['type'] == 'CLOSE'])
+            reverse_count = len([t for t in trade_records if t['type'] == 'REVERSE'])
+            total_trades = len(trade_records)
+            daily_avg = total_trades / duration_days if duration_days > 0 else 0
+
+            # TTP次数从日志获取
+            log_content = log_buffer.getvalue()
+            ttp_count = len([l for l in log_content.split('\n') if 'TTP' in l])
+
+            # 盈亏统计
+            pnl_records = [t['pnl'] for t in trade_records if t['type'] in ['CLOSE', 'REVERSE'] and t['pnl'] != 0]
+            total_pnl = sum(pnl_records)
+            initial_balance = status.get('初始余额', balance)
+            pnl_pct = (total_pnl / initial_balance * 100) if initial_balance > 0 else 0
+
+            # 盈利/亏损
+            profits = [p for p in pnl_records if p > 0]
+            losses = [p for p in pnl_records if p < 0]
+            total_profit = sum(profits)
+            total_loss = sum(losses)
+
+            # 连盈/连亏
+            max_win_streak, max_win_amount = 0, 0
+            max_loss_streak, max_loss_amount = 0, 0
+            current_win_streak, current_win_amount = 0, 0
+            current_loss_streak, current_loss_amount = 0, 0
+            for pnl in pnl_records:
+                if pnl > 0:
+                    current_win_streak += 1
+                    current_win_amount += pnl
+                    if current_win_streak > max_win_streak:
+                        max_win_streak = current_win_streak
+                        max_win_amount = current_win_amount
+                else:
+                    current_win_streak = 0
+                    current_win_amount = 0
+            for pnl in pnl_records:
+                if pnl < 0:
+                    current_loss_streak += 1
+                    current_loss_amount += pnl
+                    if current_loss_streak > max_loss_streak:
+                        max_loss_streak = current_loss_streak
+                        max_loss_amount = current_loss_amount
+                else:
+                    current_loss_streak = 0
+                    current_loss_amount = 0
+
+            # 最大盈亏
+            max_profit = max(profits) if profits else 0
+            max_loss = min(losses) if losses else 0
+
+            # 前10平均（分开盈利和亏损）
+            sorted_profits = sorted(profits, reverse=True)
+            sorted_losses = sorted(losses)
+            top10_profit_avg = sum(sorted_profits[:10]) / len(sorted_profits[:10]) if sorted_profits else 0
+            top10_loss_avg = sum(sorted_losses[:10]) / len(sorted_losses[:10]) if sorted_losses else 0
+
+            # 显示统计
+            y += 1
+            self.stdscr.addstr(y, 0, f"交易总数：{total_trades}  日均：{daily_avg:.1f}  开仓：{open_count}  平仓：{close_count}  反手：{reverse_count}  TTP：{ttp_count}")
+            y += 1
+            pnl_sign = "+" if total_pnl >= 0 else ""
+            self.stdscr.addstr(y, 0, f"总盈亏：{pnl_sign}${total_pnl:.2f} {pnl_sign}{pnl_pct:.2f}%  盈利：${total_profit:.2f}  亏损：${total_loss:.2f}")
+            y += 1
+            self.stdscr.addstr(y, 0, f"连盈：{max_win_streak} ${max_win_amount:.2f}  连亏：{max_loss_streak} ${max_loss_amount:.2f}")
+            y += 1
+            self.stdscr.addstr(y, 0, f"最大盈利：${max_profit:.2f} 前十平均：${top10_profit_avg:.2f}  最大亏损：${max_loss:.2f} 前十平均：${top10_loss_avg:.2f}")
+
+            log_content = log_buffer.getvalue()
+            log_lines = [l for l in log_content.split('\n') if l.strip()]
+            display_logs = log_lines[-max_log_lines:] if len(log_lines) > max_log_lines else log_lines
+
+            bottom_y = self.height - 1
+            y += 1
+            self.stdscr.addstr(y, 0, "─" * (self.width - 1), curses.color_pair(7))
+            y += 1
+
+            for log_line in display_logs:
+                if y >= bottom_y - 1:
+                    break
+                if "-" in log_line:
+                    color = curses.color_pair(8)  # 绿色，日志行
+                elif "ERROR" in log_line or "错误" in log_line:
+                    color = curses.color_pair(5)  # 红色
+                elif "WARNING" in log_line or "警告" in log_line:
+                    color = curses.color_pair(3)  # 黄色
+                else:
+                    color = curses.color_pair(4)  # 灰色
+                display_line = log_line[:self.width - 2] if len(log_line) > self.width - 2 else log_line
+                self.stdscr.addstr(y, 0, display_line, color)
+                y += 1
+
+            self.stdscr.addstr(bottom_y - 1, 0, "─" * (self.width - 1), curses.color_pair(7))
+
+            # 底部输入框（非阻塞检测按键）
+            self.stdscr.attron(curses.color_pair(5))
+            self.stdscr.addstr(bottom_y, 0, " " * (self.width - 1))
+            if input_mode:
+                prompt = "输入命令 > " + input_text + "_"
+            else:
+                prompt = "[输入 close 平仓]    按 Esc 退出"
+            self.stdscr.addstr(bottom_y, 0, prompt)
+            self.stdscr.attroff(curses.color_pair(5))
+            self.stdscr.refresh()
+
+            # 非阻塞检测按键
+            self.stdscr.nodelay(True)
+            key = self.stdscr.getch()
+
+            if key != -1:
+                if input_mode:
+                    if key in [curses.KEY_ENTER, 10, 13]:
+                        # 执行命令
+                        if input_text.strip().lower() == "close":
+                            adapter.close_position(coin)
+                        input_text = ""
+                        input_mode = False
+                    elif key == 27:  # Esc 取消输入
+                        input_text = ""
+                        input_mode = False
+                    elif key == 127 or key == curses.KEY_BACKSPACE:  # 删除
+                        input_text = input_text[:-1]
+                    elif 32 <= key <= 126:  # 可打印字符
+                        input_text += chr(key)
+                else:
+                    if key == 27:  # Esc 退出
+                        self.stdscr.nodelay(False)
+                        stop_event.set()
+                        break
+                    elif key in [curses.KEY_ENTER, 10, 13]:
+                        input_mode = True
+
+            time.sleep(0.3)
+
+        return True
+
+    def show_status(self, status):
+        self.clear_screen()
+        self.stdscr.attron(curses.color_pair(1) | curses.A_BOLD)
+        self.stdscr.addstr(0, 0, " " + "=" * (self.width - 2) + " ")
+        title = " 交易状态 "
+        self.stdscr.addstr(1, (self.width - len(title)) // 2, title)
+        self.stdscr.addstr(2, 0, " " + "=" * (self.width - 2) + " ")
+        self.stdscr.attroff(curses.color_pair(1) | curses.A_BOLD)
+
+        y = 4
+        for key, value in status.items():
+            self.stdscr.addstr(y, 0, f"{key}: {value}")
+            y += 1
+
+        y += 1
+        self.stdscr.addstr(y, 0, "[Enter] 开始运行  [Esc] 停止并退出", curses.color_pair(5))
+        self.stdscr.refresh()
+
+        while True:
+            key = self.stdscr.getch()
+            if key in [curses.KEY_ENTER, 10, 13]:
+                return True
+            elif key == 27:
+                return False
+
+
+def get_networks():
+    return ["测试网 (Testnet)", "主网 (Mainnet)"]
+
+
+def get_accounts():
+    return ["default"]
+
+
+def main(stdscr):
+    menu = MenuSystem(stdscr)
+
+    while True:
+        menu._saved_selections = {}
+        menu._saved_configs = []
+        menu._all_results = []
+        selections = {}
+        step = 0
+        adapter = None
+
+        while True:
+            if step == 0:
+                networks = get_networks()
+                result = menu.navigate_options(networks, "选择网络", selections=selections)
+                if result == "BACK":
+                    break
+                if not result:
+                    continue
+                selections['网络'] = result[0] if isinstance(result, list) else result
+                step = 1
+
+            elif step == 1:
+                accounts = get_accounts()
+                result = menu.navigate_options(accounts, "选择账号", selections=selections)
+                if result == "BACK":
+                    continue
+                if not result:
+                    continue
+                selections['账号'] = result[0] if isinstance(result, list) else result
+                step = 2
+
+            elif step == 2:
+                try:
+                    from exchange.hyperliquid.adapter import HyperLiquidAdapter
+                    from exchange.hyperliquid.accounts import get_adapter_config
+
+                    network = 'testnet' if '测试网' in selections.get('网络', '') else 'mainnet'
+                    account = selections.get('账号', 'default')
+                    config = get_adapter_config(account, network)
+                    config['testnet'] = (network == 'testnet')
+
+                    adapter = HyperLiquidAdapter(config)
+                    adapter.connect()
+
+                    available_coins = adapter.get_available_coins()
+                    if available_coins:
+                        selections['可用币种'] = available_coins
+                except Exception as e:
+                    selections['可用币种'] = ['BTC', 'ETH', 'SOL']
+
+                step = 3
+
+            elif step == 3:
+                coins = selections.get('可用币种', ['ETH', 'BTC', 'SOL'])
+                result = menu.navigate_options(coins, "选择交易币种 [空格多选, 输入搜索]", multi=True, selections=selections, searchable=True)
+                if result == "BACK":
+                    step = 2
+                    continue
+                if not result:
+                    continue
+                selections['币种'] = ", ".join(result)
+                step = 4
+
+            elif step == 4:
+                strategies = list_strategies()
+                result = menu.navigate_options(strategies, "选择策略 [空格多选, 输入搜索]", multi=True, selections=selections, searchable=True)
+                if result == "BACK":
+                    step = 3
+                    continue
+                if not result:
+                    continue
+                selections['策略'] = ", ".join(result)
+                step = 5
+
+            elif step == 5:
+                intervals = ['1m', '5m', '15m', '1h', '4h', '1d']
+                result = menu.navigate_options(intervals, "选择K线周期", selections=selections)
+                if result == "BACK":
+                    step = 4
+                    continue
+                selections['周期'] = result[0] if isinstance(result, list) else result
+                step = 6
+
+            elif step == 6:
+                result = menu.get_number("杠杆倍数", 10, selections)
+                if result == "BACK":
+                    step = 5
+                    continue
+                if result is None:
+                    result = 10
+                selections['杠杆'] = f"{result}x"
+                step = 7
+
+            elif step == 7:
+                result = menu.get_number("仓位比例 (0.1 = 10%)", 10, selections)
+                if result == "BACK":
+                    step = 6
+                    continue
+                if result is None:
+                    result = 10
+                selections['仓位'] = f"{result}%"
+                step = 8
+
+            elif step == 8:
+                result = menu.get_number("止损比例 (0.1 = 10%)", 0, selections)
+                if result == "BACK":
+                    step = 7
+                    continue
+                if result is None:
+                    result = 10
+                selections['止损'] = f"{result}%"
+                step = 9
+
+            elif step == 9:
+                result = menu.get_yes_no("是否启用移动止盈 (TTP)", True, selections)
+                if result == "BACK":
+                    step = 8
+                    continue
+                if result is None:
+                    result = True
+                selections['TTP'] = "开启" if result else "关闭"
+                step = 10
+
+            elif step == 10:
+                stdscr.clear()
+                stdscr.bkgd(' ', curses.color_pair(4))
+                stdscr.addstr(0, 0, "正在启动交易系统...")
+                stdscr.refresh()
+
+                from trading.system import TradingSystem
+                from exchange.hyperliquid.adapter import HyperLiquidAdapter
+                from core.strategy import get_strategy
+                from core.risk import TTPManager
+
+                network = 'testnet' if '测试网' in selections.get('网络', '') else 'mainnet'
+                account = selections.get('账号', 'default')
+                coin = selections.get('币种', 'ETH').split(', ')[0]
+                strategy_name = selections.get('策略', 'vwap').split(', ')[0]
+                interval = selections.get('周期', '1h')
+                leverage = int(selections.get('杠杆', '10x').replace('x', ''))
+                position_pct = int(selections.get('仓位', '10%').replace('%', '')) / 100
+                stop_loss = int(selections.get('止损', '10%').replace('%', '')) / 100
+                enable_ttp = selections.get('TTP', '关闭') == '开启'
+
+                config = get_adapter_config(account, network)
+                config['testnet'] = (network == 'testnet')
+
+                adapter = HyperLiquidAdapter(config)
+                adapter.connect()
+
+                # 记录初始状态
+                initial_balance = adapter.get_balance().get('usdc', 0)
+                start_time = datetime.now()
+
+                strategy = get_strategy(strategy_name)
+
+                risk_mgr = None
+                if enable_ttp:
+                    from core.risk import TTPConfig
+                    risk_mgr = TTPManager(TTPConfig())
+
+                system = TradingSystem(
+                    exchange=adapter,
+                    strategy=strategy,
+                    risk_manager=risk_mgr,
+                    config={
+                        'coin': coin,
+                        'interval': interval,
+                        'leverage': leverage,
+                        'position_pct': position_pct,
+                        'stop_loss_pct': stop_loss,
+                    }
+                )
+
+                log_buffer = io.StringIO()
+                log_handler = logging.StreamHandler(log_buffer)
+                log_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s', datefmt='%b-%d %H:%M:%S'))
+
+                for logger_name in ['TradingSystem', 'trading', 'exchange', 'strategy']:
+                    logger = logging.getLogger(logger_name)
+                    logger.addHandler(log_handler)
+                    logger.setLevel(logging.INFO)
+
+                old_stdout = sys.stdout
+                old_stderr = sys.stderr
+                sys.stdout = log_buffer
+                sys.stderr = log_buffer
+
+                balance = adapter.get_balance().get('usdc', 0)
+
+                positions = adapter.get_positions()
+                if positions:
+                    pos = positions[0]
+                    side_text = "多" if pos.side == "LONG" else "空"
+                    pnl_text = f"+{pos.unrealized_pnl:.2f}" if pos.unrealized_pnl >= 0 else f"{pos.unrealized_pnl:.2f}"
+                    position_text = f"{pos.coin} {side_text}仓 {pos.size} 入场价：{pos.entry_price} PnL：{pnl_text}"
+                else:
+                    position_text = "无"
+
+                status = {
+                    "网络": network,
+                    "账号": account,
+                    "币种": coin,
+                    "周期": interval,
+                    "策略": strategy_name,
+                    "杠杆": f"{leverage}x",
+                    "余额": f"${balance:.2f}",
+                    "持仓": position_text,
+                    "初始余额": balance,
+                }
+
+                import threading
+                stop_event = threading.Event()
+                trade_thread = threading.Thread(target=lambda: system.run(interval_seconds=1), daemon=True)
+                trade_thread.start()
+
+                menu.show_status_with_logs(status, log_buffer, stop_event, adapter, coin, system)
+
+                system.running = False
+                trade_thread.join(timeout=2)
+
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+                print("DEBUG: 保存报告中...", flush=True)
+
+                # 获取最终余额
+                final_balance = adapter.get_balance().get('usdc', 0)
+
+                # 项目根目录（相对路径）
+                project_root = "."
+
+                # 获取交易记录
+                trade_records = system.get_trade_records()
+
+                # 统计交易
+                open_count = len([t for t in trade_records if t['type'] == 'OPEN'])
+                close_count = len([t for t in trade_records if t['type'] == 'CLOSE'])
+                reverse_count = len([t for t in trade_records if t['type'] == 'REVERSE'])
+
+                # 从日志获取 TTP 次数
+                log_content = log_buffer.getvalue()
+                lines = log_content.split('\n')
+                ttp_count = len([l for l in lines if 'TTP' in l])
+
+                # 计算详细统计
+                # 只统计有盈亏的记录（平仓和反手）
+                pnl_records = [t['pnl'] for t in trade_records if t['type'] in ['CLOSE', 'REVERSE'] and t['pnl'] != 0]
+
+                # 盈利/亏损
+                profits = [p for p in pnl_records if p > 0]
+                losses = [p for p in pnl_records if p < 0]
+
+                # 前10平均
+                sorted_profits = sorted(profits, reverse=True)
+                sorted_losses = sorted(losses)
+                top10_profit_avg = sum(sorted_profits[:10]) / len(sorted_profits[:10]) if sorted_profits else 0
+                top10_loss_avg = sum(sorted_losses[:10]) / len(sorted_losses[:10]) if sorted_losses else 0
+                top10_avg = (top10_profit_avg + top10_loss_avg) / 2
+
+                # 最大连赢/连亏
+                max_win_streak = 0
+                max_win_amount = 0
+                max_loss_streak = 0
+                max_loss_amount = 0
+                current_streak = 0
+                current_amount = 0
+                for pnl in pnl_records:
+                    if pnl > 0:
+                        current_streak += 1
+                        current_amount += pnl
+                        if current_streak > max_win_streak:
+                            max_win_streak = current_streak
+                            max_win_amount = current_amount
+                        if current_amount > max_win_amount:
+                            max_win_amount = current_amount
+                    else:
+                        current_streak = 0
+                        current_amount = 0
+
+                for pnl in pnl_records:
+                    if pnl < 0:
+                        current_streak += 1
+                        current_amount += pnl
+                        if current_streak > max_loss_streak:
+                            max_loss_streak = current_streak
+                            max_loss_amount = current_amount
+                        if current_amount < max_loss_amount:
+                            max_loss_amount = current_amount
+                    else:
+                        current_streak = 0
+                        current_amount = 0
+
+                # 单笔最大盈亏
+                max_profit = max(pnl_records) if pnl_records else 0
+                max_loss = min(pnl_records) if pnl_records else 0
+
+                # 日平均开仓量
+                duration = (datetime.now() - start_time).total_seconds()
+                days = duration / 86400
+                daily_open = (open_count + reverse_count) / days if days > 0 else 0
+
+                # 生成报告
+                report_data = {
+                    'config': {
+                        'network': network,
+                        'account': account,
+                        'coin': coin,
+                        'strategy': strategy_name,
+                        'interval': interval,
+                        'leverage': leverage,
+                    },
+                    'balance': {
+                        'initial': initial_balance,
+                        'final': final_balance,
+                        'total': final_balance,
+                    },
+                    'results': {
+                        'total_trades': len(trade_records),
+                        'open_count': open_count,
+                        'close_count': close_count,
+                        'reverse_count': reverse_count,
+                        'ttp_count': ttp_count,
+                        'total_pnl': final_balance - initial_balance,
+                        'total_return': f"{((final_balance - initial_balance) / initial_balance * 100):.2f}%" if initial_balance > 0 else "0%",
+                        'runtime_seconds': int(duration),
+                        'runtime_days': round(days, 2),
+                        'max_win_streak': max_win_streak,
+                        'max_win_amount': max_win_amount,
+                        'max_loss_streak': max_loss_streak,
+                        'max_loss_amount': max_loss_amount,
+                        'max_profit': max_profit,
+                        'max_loss': max_loss,
+                        'top10_avg': round(top10_avg, 2),
+                        'daily_open': round(daily_open, 2),
+                    },
+                    'trades': trade_records,
+                }
+
+                # 保存报告
+                report_dir = os.path.join(project_root, 'reports', 'trading')
+                os.makedirs(report_dir, exist_ok=True)
+                report_file = os.path.join(report_dir, f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+                with open(report_file, 'w', encoding='utf-8') as f:
+                    json.dump(report_data, f, indent=2, ensure_ascii=False)
+                print(f"报告已保存到: {report_file}", flush=True)
+
+                # 保存日志
+                if log_content.strip():
+                    log_dir = os.path.join(project_root, 'logs', 'trading')
+                    os.makedirs(log_dir, exist_ok=True)
+                    log_file = os.path.join(log_dir, f"trading_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                    with open(log_file, 'w', encoding='utf-8') as f:
+                        f.write(log_content)
+                    print(f"日志已保存到: {log_file}")
+
+                for logger_name in ['TradingSystem', 'trading', 'exchange', 'strategy']:
+                    logger = logging.getLogger(logger_name)
+                    logger.removeHandler(log_handler)
+
+                adapter.disconnect()
+                break
+
+
+if __name__ == "__main__":
+    try:
+        curses.wrapper(main)
+    except Exception as e:
+        import traceback
+        import os
+        error_file = "error.log"
+        with open(error_file, 'w') as f:
+            traceback.print_exc(file=f)
+        print(f"错误: {e}")
+        print(f"错误已保存到: {error_file}")
+        input("按回车键退出...")

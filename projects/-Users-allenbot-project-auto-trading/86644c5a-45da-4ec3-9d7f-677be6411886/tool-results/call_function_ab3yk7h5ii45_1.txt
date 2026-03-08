@@ -1,0 +1,34 @@
+2026-02-24 18:18:04,158 - HyperLiquidAdapter - INFO - 连接 HyperLiquid: https://api.hyperliquid-testnet.xyz
+2026-02-24 18:18:04,478 - HyperLiquidWebSocket - INFO - WebSocket 连接成功: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:18:04,664 - HyperLiquidWebSocket - INFO - WebSocket 已连接: wss://api.hyperliquid-testnet.xyz/ws
+2026-02-24 18:18:04,665 - HyperLiquidAdapter - INFO - WebSocket 已连接: 测试网
+2026-02-24 18:18:08,214 - TradingSystem - WARNING - 没有持仓，无法反手
+2026-02-24 18:18:08,987 - TradingSystem - WARNING - 没有持仓，无法反手
+2026-02-24 18:18:10,671 - HyperLiquidWebSocket - WARNING - WebSocket 连接关闭: sent 1000 (OK); no close frame received
+2026-02-24 18:18:10,671 - HyperLiquidWebSocket - INFO - WebSocket 已断开
+2026-02-24 18:18:10,671 - HyperLiquidAdapter - INFO - WebSocket 已断开
+2026-02-24 18:18:10,676 - HyperLiquidAdapter - INFO - 已断开 HyperLiquid 连接
+=== 初始余额: 877.72 ===
+
+当前持仓: None
+>>> 无持仓，开多单 <<<
+开多: True - 成交: 0.4813 @ 1824.0
+余额: 876.94
+--- 反手1 (多→空) ---
+余额: 876.94
+--- 反手2 (空→多) ---
+余额: 876.94
+--- 平仓 ---
+
+==================================================
+初始余额: 877.72
+最终余额: 876.94
+总盈亏: -0.78
+
+=== 各笔交易盈亏 ===
+反手1: -0.78 (失败)
+反手2: +0.00 (失败)
+平仓: +0.00 (平仓完成)
+
+最赚: 反手2 = +0.00
+最亏: 反手1 = -0.78

@@ -1,0 +1,21 @@
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3685: command not found: compdef
+/Users/allenbot/project/auto-trading/user_interface/backtest.command ; exit;    
+allenbot@Echo ~ % /Users/allenbot/project/auto-trading/user_interface/backtest.command ; exit;
+Traceback (most recent call last):
+  File "<string>", line 6, in <module>
+  File "/opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework/Versions/3.11/lib/python3.11/curses/__init__.py", line 94, in wrapper
+    return func(stdscr, *args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 689, in main
+    result = menu.get_yes_no(display_text, False)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 255, in get_yes_no
+    y = self.draw_header(selections)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/allenbot/project/auto-trading/src/backtest/batch_backtest.py", line 91, in draw_header
+    self.stdscr.addstr(y, 0, line, color)
+_curses.error: addwstr() returned ERR
+按回车键退出...
+
+这是我用user interface的backtest.command。跑出来的结果。。。。
+报错了。。。原本还能用的。

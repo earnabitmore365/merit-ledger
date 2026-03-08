@@ -1,0 +1,255 @@
+# Trade Menu 完整重构方案
+
+## 背景
+现有 `trade_menu.py` 存在三个核心问题：
+1. **视觉简陋** — 纯文本 + 横线分隔，没有卡片/边框感
+2. **代码混乱** — `main()` 436 行、统计逻辑重复两遍、颜色全是魔术数字
+3. **流程冗长** — 13 步配置，杠杆/仓位/止损/TTP 各占一整页
+
+## 修改范围
+
+| 文件 | 操作 |
+|------|------|
+| `src/ui/__init__.py` | 新建（空文件） |
+| `src/ui/base.py` | **新建** — 通用 curses UI 组件库 |
+| `src/trading/trade_menu.py` | **重写** — 继承 UI 库 + 新流程 + 新面板 |
+
+> `batch_backtest.py` 本次不改，以后再迁移到公共库。
+
+---
+
+## 一、公共 UI 库 `src/ui/base.py`
+
+### 1.1 常量
+
+```python
+class Color:
+    TITLE    = 1   # 81/236  标题（青蓝）
+    SELECTED = 2   # 46/236  高亮选中（亮绿）
+    HINT     = 3   # 226/236 提示（黄色）
+    TEXT     = 4   # 251/236 正文（白灰）
+    DANGER   = 5   # 196/236 错误/警告（红）
+    ACCENT   = 6   # 171/236 强调（紫）
+    DIM      = 7   # 244/236 禁用/灰色
+    SUCCESS  = 8   # 40/236  成功/日志（绿）
+    PNL_POS  = 9   # 46/236  盈利（绿）
+    PNL_NEG  = 10  # 196/236 亏损（红）
+    BORDER   = 11  # 240/236 边框线
+
+class Box:
+    TL, TR, BL, BR = '╭', '╮', '╰', '╯'
+    H, V = '─', '│'
+    LT, RT, TT, BT = '├', '┤', '┬', '┴'
+```
+
+### 1.2 BaseMenu 类
+
+提供所有通用 UI 方法，`trade_menu` 和 `batch_backtest` 都可以继承它。
+
+```
+class BaseMenu:
+    __init__(stdscr)           # 初始化颜色、尺寸
+    # ── 绘制基元 ──
+    _box_top(y, x, w, title)   # ╭─ title ───╮
+    _box_bottom(y, x, w)       # ╰────────────╯
+    _box_sep(y, x, w, title)   # ├─ title ───┤
+    _box_sep_split(y, x, w, t1, t2, split)  # ├─ t1 ──┬─ t2 ──┤
+    _box_line(y, x, w, text, color)          # │ text   │
+    _box_two_col(y, x, w, split, L, R)      # │ L   │ R      │
+    _safe_addstr(y, x, text, attr)           # 边界安全写入
+
+    # ── 输入组件 ──
+    navigate_options(options, title, multi, searchable, disabled_indices, selections)
+    get_yes_no(title, default, selections)
+    get_number(title, default, min_val, max_val, selections)
+    show_form(title, fields, selections)     # 新：多字段表单页
+    show_loading(title, task_fn)             # spinner + 后台线程
+    show_confirm(summary, selections)        # 新：确认页
+
+    # ── 辅助 ──
+    clear_screen()
+    draw_header(selections)
+```
+
+### 1.3 关键新组件：`show_form`
+
+把杠杆/仓位/止损/TTP 合并到一个页面：
+
+```
+╭─ 风险参数 ──────────────────────╮
+│                                  │
+│  ► 杠杆倍数    [  10x ]          │
+│    仓位比例    [  10% ]          │
+│    止损比例    [   0% ] (0=不设) │
+│    移动止盈    [ 开启 ]          │
+│                                  │
+├──────────────────────────────────┤
+│ [↑↓] 切换  [←→/数字] 调整       │
+│ [Enter] 确认  [Esc] 上一步      │
+╰──────────────────────────────────╯
+```
+
+- `fields` 参数定义每个字段的类型（number/yes_no）、范围、默认值
+- 上下键切换活跃字段，左右键 ±1，直接输入数字覆盖
+- Enter 提交整个表单，Esc 返回
+
+### 1.4 关键新组件：`show_confirm`
+
+启动前确认页面，显示所有已选配置：
+
+```
+╭─ 确认配置 ──────────────────────╮
+│  交易所    hyperliquid           │
+│  网络      测试网                │
+│  账号      default               │
+│  币种      ETH                   │
+│  策略      stddev                │
+│  周期      1m                    │
+│  杠杆      10x                   │
+│  仓位      10%                   │
+│  止损      0%                    │
+│  TTP       开启                  │
+├──────────────────────────────────┤
+│ [Enter] 开始运行  [Esc] 返回    │
+╰──────────────────────────────────╯
+```
+
+---
+
+## 二、统计计算去重 `StatsCalculator`
+
+放在 `trade_menu.py` 内（仅交易用）。
+
+### 现状
+- `show_status_with_logs()` 每帧实时计算统计（~70 行）
+- `main()` step 12 报告生成又算一遍（~80 行）
+- 两处逻辑一模一样
+
+### 方案
+```python
+class StatsCalculator:
+    def __init__(self, trade_records, start_time, initial_balance, log_content=""):
+        self._compute()  # 一次算完所有字段
+
+    # 属性: total_trades, open_count, close_count, reverse_count,
+    #       ttp_count, total_pnl, pnl_pct, max_win_streak, ...
+
+    def to_report_dict(self, final_balance) -> dict:
+        # 生成 JSON 报告用的 results 字典
+```
+
+交易面板和报告生成都用同一个 `StatsCalculator`，消除 ~80 行重复。
+
+---
+
+## 三、交易面板重新设计 `show_dashboard`
+
+替代旧的 `show_status_with_logs`。紧凑信息卡片布局：
+
+```
+╭─ Abby 交易系统 ─────────────────────────────────────╮
+│ ETH/USDC · 1m · stddev · 测试网                      │
+├─ 账户 ─────────────┬─ 持仓 ─────────────────────────┤
+│ $629.50             │ ETH 多 0.37                     │
+│ 杠杆 10x            │ 入场 $1937                      │
+│                     │ PnL +$2.50 (+0.4%)              │
+├─ 统计 ─────────────┴────────────────────────────────┤
+│ 交易 15 · 开 8 · 平 5 · 反 2 · TTP 3                │
+│ 盈亏 +$250.50 (+5.0%)  盈利 $750  亏损 -$500        │
+│ 连盈 3 +$200 · 连亏 2 -$150                          │
+├─ 日志 ──────────────────────────────────────────────┤
+│ 23:26:51 反手成功 ETH                                │
+│ 23:26:52 开仓 买入 0.37                              │
+│ 23:26:54 [记录] REVERSE pnl=-1.10                    │
+│ ...                                                   │
+├─────────────────────────────────────────────────────┤
+│ [close] 平仓  [Esc] 退出                             │
+╰─────────────────────────────────────────────────────╯
+```
+
+**设计要点：**
+- 用 `_box_*` 绘制基元画边框，宽度自适应终端
+- 账户和持仓分左右两栏（`_box_two_col`）
+- PnL 盈利绿色（`Color.PNL_POS`）、亏损红色（`Color.PNL_NEG`）
+- 日志区域高度 = 终端剩余行数，自动适配
+- 统计数据来自 `StatsCalculator`，不再内联计算
+- 操作方式不变：Esc 退出、输入 close 平仓
+
+---
+
+## 四、菜单流程简化（13 步 → 7 步）
+
+| 新 Step | 内容 | 说明 |
+|---------|------|------|
+| 0 | 连接设置 | 交易所（只有1个时自动跳过）→ 网络 → 账号（只有1个时自动跳过） |
+| 1 | 连接交易所 | show_loading spinner |
+| 2 | 选择币种 | 多选 + 搜索，不变 |
+| 3 | 选择策略 | 多选 + 搜索，不变 |
+| 4 | 选择周期 | 单选，不变 |
+| 5 | 风险参数 | **新表单页**：杠杆 + 仓位 + 止损 + TTP 一页搞定 |
+| 6 | 确认 + 启动 | 确认页 → Enter → show_loading → 进入交易面板 |
+
+### 删掉的步骤
+- **交易模式**（原 Step 0）— 只有"策略交易"一个选项，无意义
+- **杠杆/仓位/止损/TTP 四个独立页面** — 合并为一个表单页
+
+### Esc 返回逻辑
+
+| 从 | 返回到 |
+|----|--------|
+| Step 0 连接设置 | 退出程序 |
+| Step 1 连接中 | 不可中断（自动完成） |
+| Step 2 币种 | Step 0（跳过连接，不用重连） |
+| Step 3 策略 | Step 2 |
+| Step 4 周期 | Step 3 |
+| Step 5 风险参数 | Step 4 |
+| Step 6 确认 | Step 5 |
+
+### Step 0 自动跳过逻辑
+```
+交易所列表 = get_exchanges()
+  如果只有1个 → 自动选中，不显示页面
+  否则 → 显示选择页面
+
+网络 → 永远显示（重要选择）
+
+账号列表 = list_accounts(network)
+  如果只有1个 → 自动选中，不显示页面
+  如果没有 → 显示 "暂无账号" 灰色不可选，只能 Esc
+  否则 → 显示选择页面
+```
+
+---
+
+## 五、日志泄漏防护（保留现有方案）
+
+沿用已实现的 `_suppress_terminal_output()`：
+- `main()` 开头全局静默（stdout/stderr/根日志 handler → devnull）
+- 交易阶段临时切到 log_buffer
+- `__main__` finally 恢复到 `sys.__stdout__`
+
+---
+
+## 六、实施顺序
+
+| 序号 | 任务 | 文件 |
+|------|------|------|
+| 1 | 新建 `src/ui/__init__.py` + `src/ui/base.py`，实现 Color/Box/BaseMenu | ui/base.py |
+| 2 | BaseMenu 中实现 `_box_*` 绘制基元 + `_safe_addstr` | ui/base.py |
+| 3 | BaseMenu 中实现 `navigate_options`、`get_yes_no`、`get_number`（从现有代码迁移 + 加边框） | ui/base.py |
+| 4 | BaseMenu 中实现 `show_loading`、`show_form`、`show_confirm`（新组件） | ui/base.py |
+| 5 | 重写 `trade_menu.py`：继承 BaseMenu，实现 `StatsCalculator` | trade_menu.py |
+| 6 | 重写 `trade_menu.py`：实现 `show_dashboard`（紧凑卡片面板） | trade_menu.py |
+| 7 | 重写 `trade_menu.py`：实现 7 步 `main()` 流程 + 报告生成 | trade_menu.py |
+
+## 七、验证
+
+1. `python3 src/trading/trade_menu.py`
+2. 第一页：选网络（交易所和账号自动跳过），所有页面有卡片边框
+3. 选测试网 → spinner "连接交易所" → 成功
+4. 选币种 → 选策略 → 选周期 → 风险参数（一页四个字段，上下切换）
+5. 确认页显示所有配置 → Enter → spinner "启动交易系统"
+6. 进入交易面板：紧凑卡片布局，左右分栏，日志滚动，无乱码
+7. 选主网 → 账号页显示灰色"暂无账号"，只能 Esc
+8. 各页面 Esc 返回上一步正常
+9. 退出后 `reports/trading/` 有 JSON 报告

@@ -1,0 +1,209 @@
+---                                                                     
+                                                                            
+    任务：设计"指标库整合进交易系统"的详细实施方案                          
+                                                                            
+                                                                            
+    你的角色                                                                
+                                                                            
+                                                                            
+    你是方案设计师。请输出一份详细的实施方案（包含文件路径、代码结构、修改  
+  位置），我会把                                                            
+    方案交给 Opus 执行。                                                    
+                                                                            
+    项目背景                                                                
+                                                                            
+    Abby Auto-Trading v1.6，Python 3.11+ 加密货币自动交易系统，44           
+  个策略，HyperLiquid                                                       
+    交易所，curses 终端 UI。                                                
+                                                                            
+    已完成的工作                                                            
+                                                                            
+    1. 指标库 src/indicators/（已完成，12/12 验证通过）                     
+                                                                            
+    src/indicators/                                                         
+      __init__.py      — 自动发现 + 导出                                    
+      base.py          — BaseIndicator ABC + CacheMixin + 注册表 +          
+  IndicatorResult                                                           
+      local.py         — AHR999 + Pi Cycle Top（BTC 1h数据聚合日线计算）    
+      hyperliquid.py   — Funding Rate + Open Interest（HyperLiquid API）    
+      sentiment.py     — Fear & Greed Index（alternative.me）               
+      market.py        — Stablecoin Supply + BTC Dominance（DefiLlama +     
+  CoinGecko）                                                               
+      onchain.py       — MVRV + NUPL + Puell + Exchange                     
+  Netflow（BGeometrics）                                                    
+      composite.py     — MarketScore 综合打分                               
+      verify.py        — 一键验证脚本                                       
+      cache/           — JSON 缓存文件                                      
+                                                                            
+    统一接口：                                                              
+    class BaseIndicator(ABC):                                               
+        name: str                                                           
+        source: str                                                         
+        def fetch(**kwargs) → Any           # 获取原始值                    
+        def score(raw_value) → float        # 归一化 0-1（0=极看空,         
+  1=极看多）                                                                
+        def signal(score) → MarketSignal    #                               
+  strong_buy/buy/neutral/sell/strong_sell                                   
+        def evaluate(**kwargs) → IndicatorResult  # 一次性获取全部          
+                                                                            
+    # 使用方式                                                              
+    from indicators import get_indicator, list_indicators                   
+    result = get_indicator('market_score').evaluate()                       
+    print(result.score)   # 0.684                                           
+    print(result.signal)  # MarketSignal.BUY                                
+                                                                            
+    最新验证结果（12/12 正常）：                                            
+    funding_rate         -0.0000    0.510  neutral       hyperliquid        
+    open_interest        $1.47B     0.500  neutral       hyperliquid        
+    ahr999               0.3168     1.000  strong_buy    local              
+    pi_cycle_top         gap=56.8%  0.900  strong_buy    local              
+    stablecoin_supply    $309.88B   0.500  neutral       api                
+    btc_dominance        56.06%     0.379  sell          api                
+    mvrv                 0.3376     0.700  buy           onchain            
+    nupl                 0.1507     0.700  buy           onchain            
+    puell_multiple       0.7260     0.700  buy           onchain            
+    exchange_netflow     -4399.76   0.700  buy           onchain            
+    fear_greed           11         0.890  strong_buy    api                
+    market_score         11/11 ok   0.684  buy           composite          
+                                                                            
+    综合打分权重：链上40%(MVRV 12%+Netflow 10%+NUPL 10%+Puell 8%) +         
+  市场结构25%(AHR999                                                        
+    10%+PiCycle 8%+BTC.D 7%) + 衍生品20%(Funding 10%+OI 10%) +              
+  情绪15%(Fear&Greed                                                        
+    8%+稳定币7%)                                                            
+                                                                            
+    缓存：HyperLiquid 5分钟, CoinGecko/DefiLlama 1小时, alternative.me      
+  4小时,                                                                    
+    BGeometrics 6小时                                                       
+                                                                            
+    2. Regime Detection v1（已完成，但效果不好）                            
+                                                                            
+    src/trading/regime/                                                     
+      __init__.py                                                           
+      config.py      — RegimeDetectorConfig + RegimeConfig +                
+  DEFAULT_REGIME_MAP                                                        
+      detector.py    — MarketRegimeDetector（MA+RSI 三层判断）              
+      strategy.py    — RegimeStrategy（元策略，继承 Strategy）              
+                                                                            
+    RegimeStrategy 设计：继承 Strategy 基类，作为"元策略"——TradingSystem 和 
+    BacktestEngine 不需要改动，只要 self.strategy 是                        
+  RegimeStrategy，它内部自动处理                                            
+    regime 检测+委托给子策略。                                              
+                                                                            
+    class RegimeStrategy(Strategy):                                         
+        def generate_signal(self, coin, klines):                            
+            regime = self.detector.detect(klines)  #                        
+  "bull"/"bear"/"ranging"                                                   
+            # cooldown 检查                                                 
+            sub_strategy = self._strategies[regime]                         
+            return sub_strategy.generate_signal(coin, klines)               
+                                                                            
+    v1 的问题：                                                             
+    - MA(7) vs MA(25) + RSI(14) 太简单，没有判断趋势强度                    
+    - cooldown_bars=3（15m周期=45分钟）太短                                 
+    - 1680 次/年切换，大部分币种跑不过单独的 proc 策略                      
+    - 只有 XRP 上 Regime(207%) > proc(106%)                                 
+                                                                            
+    DEFAULT_REGIME_MAP：                                                    
+    {"bull": "proc", "bear": "demandindex_short", "ranging":                
+  "mean_reversion"}                                                         
+                                                                            
+    3. 研究结论                                                             
+                                                                            
+    Regime Detection 改进方向（来自 QuantConnect 社区+学术研究）：          
+                                                                            
+    ADX 是缺失的关键拼图：                                                  
+    - ADX < 20 → 没趋势 = ranging                                           
+    - ADX > 25 → 有趋势，再看方向                                           
+    - 滞后阈值（Hysteresis）：进入趋势 ADX>25，退出趋势                     
+    ADX<18，不同阈值进出比"连续N次相同"更稳定                               
+                                                                            
+    建议的三层复合方案：                                                    
+    第一层：ADX(14) 判断有没有趋势                                          
+      └─ ADX < 20 → ranging                                                 
+      └─ ADX > 25 → 有趋势，进第二层                                        
+                                                                            
+    第二层：SMA(50) 斜率判方向                                              
+      └─ 斜率 > 0 → bull                                                    
+      └─ 斜率 < 0 → bear                                                    
+                                                                            
+    第三层：ATR% vs 历史均值（防暴涨暴跌）                                  
+      └─ ATR% > 2倍均值 → 高波动，降低信心或暂停                            
+                                                                            
+    + 滞后阈值：进趋势25/退趋势18，最少停留12根K线                          
+                                                                            
+    颠覆性观点：regime detection                                            
+    最好当过滤器用（不利条件下停止交易/降低仓位），而不是当切换器用（在策略 
+  间来回跳）。                                                              
+                                                                            
+    现有系统关键架构                                                        
+                                                                            
+    策略基类 src/core/strategy/base.py                                      
+                                                                            
+    class Strategy:                                                         
+        def generate_signal(self, coin: str, klines: List[Dict]) ->         
+  TradingSignal                                                             
+        # TradingSignal(signal=Signal.BUY/SELL/HOLD, confidence=0-1, coin,  
+  info,                                                                     
+    metadata)                                                               
+                                                                            
+    交易系统 src/trading/system.py                                          
+                                                                            
+    class TradingSystem:                                                    
+        def run_once(self):                                                 
+            # 1. 同步持仓 → 2. 获取K线 → 3. 策略生成信号 → 4. 风险检查 → 5. 
+   执行                                                                     
+                                                                            
+    回测引擎 src/backtest/backtest.py                                       
+                                                                            
+    def run_backtest(coin, strategy_name, interval, days, strategy=None,    
+  ...):                                                                     
+        # strategy=None 时从名字创建，也可传入预配置的 RegimeStrategy       
+                                                                            
+    交易菜单 src/trading/trade_menu.py                                      
+                                                                            
+    - 7步流程：连接→选币→选策略→选周期→风险参数→确认→交易面板               
+    - Step 3 已有"★ 自动识别"选项（调用 RegimeStrategy）                    
+    - 交易面板：账户卡+持仓卡+统计行+日志区                                 
+                                                                            
+    批量回测 src/backtest/batch_backtest.py                                 
+                                                                            
+    - curses UI 批量选币种×策略×周期                                        
+    - 输出 JSON 报告到 reports/backtest/                                    
+                                                                            
+    K线数据                                                                 
+                                                                            
+    {"time": 1667574000000, "open": 100.0, "high": 105.0, "low": 99.0,      
+  "close": 103.0,                                                           
+    "volume": 1000.0}                                                       
+    10币种: BTC, ETH, XRP, BNB, SOL, ADA, TRX, AVAX, LINK, DOT              
+    周期: 1m(526K条), 5m(200K条), 15m(100K条), 1h(30K条)                    
+                                                                            
+    目标                                                                    
+                                                                            
+    用指标库的 MarketScore                                                  
+  综合打分（链上+衍生品+情绪+市场结构）整合进交易系统，让交易机             
+    器人和回测引擎能利用这些指标来：                                        
+                                                                            
+    1. 更准确地判断市场趋势（替代或增强 MA+RSI 的 Regime Detection）        
+    2. 回测时验证指标有效性（历史数据回验）                                 
+    3. 实盘时辅助决策（过滤信号、调整仓位、显示在面板上）                   
+                                                                            
+    约束                                                                    
+                                                                            
+    - Python 3.11+，macOS，python3 命令                                     
+    - 尽量少改现有文件，新增文件优先                                        
+    - 不引入新依赖（只用 stdlib + 已有的 hyperliquid/eth_account）          
+    - 中文注释和 UI                                                         
+    - 指标 API 有限速，回测时不能实时调 API（需要用本地数据或缓存）         
+                                                                            
+    请输出                                                                  
+                                                                            
+    1. 详细的文件结构（哪些新建、哪些修改、修改哪几行）                     
+    2. 每个文件的类/函数签名和核心逻辑（伪代码级别）                        
+    3. 整合方案（指标如何影响交易决策）                                     
+    4. 回测方案（历史数据怎么用）                                           
+    5. 实现顺序（先做什么后做什么）                                         
+    6. 验证方案（怎么确认有效）                                             
+                                                                            
+    ---                               

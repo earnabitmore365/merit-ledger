@@ -1,0 +1,44 @@
+   356→    def get_balance(self) -> Dict:
+   357→        """获取账户余额（统一账户，现货+合约合并）
+   358→
+   359→        HyperLiquid 是统一账户，现货和合约共享资金。
+   360→        查询余额时自动合并，返回总余额。
+   361→
+   362→        Returns:
+   363→            Dict: 余额信息
+   364→        """
+   365→        try:
+   366→            if not self._info:
+   367→                return {'usdc': 0.0, 'available': 0.0}
+   368→
+   369→            # ===== 1. 现货余额 =====
+   370→            spot_state = self._info.spot_user_state(self.wallet_address)
+   371→            balances = spot_state.get("balances", [])
+   372→
+   373→            spot_usdc = 0.0
+   374→            token_to_available = spot_state.get("tokenToAvailableAfterMaintenance", [])
+   375→
+   376→            for balance in balances:
+   377→                if balance.get("coin") == "USDC":
+   378→                    spot_usdc = float(balance.get("total", 0))
+   379→                    break
+   380→
+   381→            # ===== 2. 合约余额 =====
+   382→            perp_state = self._info.user_state(self.wallet_address)
+   383→            margin = perp_state.get("marginSummary", {})
+   384→            perp_usdc = float(margin.get("accountValue", 0))
+   385→
+   386→            # ===== 3. 统一账户：合并余额 =====
+   387→            # HyperLiquid 是统一账户，现货和合约共享资金
+   388→            total_usdc = spot_usdc + perp_usdc
+   389→            total_available = total_usdc  # 可用等于总额
+   390→
+   391→            return {
+   392→                'usdc': total_usdc,         # 总余额
+   393→                'available': total_available,  # 可用余额
+   394→            }
+   395→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>
