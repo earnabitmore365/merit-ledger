@@ -38,3 +38,10 @@ A chronological record of evolution decisions and outcomes.
   1. Extract structured signals from logs and user instructions
   2. Select an existing Gene by signals match (no improvisation)
   3. Estimate blast radius (files, lines) before editing and record it
+### [2026-03-08 15:51:18] REPAIR - failed
+- Gene: gene_gep_repair_from_errors | Score: 0.20 | Scope: 4 files, 204 lines
+- Signals: [log_error, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史]
+- Strategy:
+  1. Extract structured signals from logs and user instructions
+  2. Select an existing Gene by signals match (no improvisation)
+  3. Estimate blast radius (files, lines) before editing
