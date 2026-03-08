@@ -36,7 +36,7 @@ fi
 
 # ── Step 1: 生成 GEP Prompt → 保存到带时间戳的新文件 ──────────────────
 echo "🧬 生成 GEP Prompt..."
-TIMESTAMP=$(date '+%s%3N')
+TIMESTAMP=$(date +%s)000
 PROMPT_FILE="$EVOLVER_WORKSPACE/evolution/gep_prompt_run_${TIMESTAMP}.txt"
 
 MEMORY_DIR="$EVOLVER_WORKSPACE" \
