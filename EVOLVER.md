@@ -107,6 +107,7 @@ if ((data.type === 'message' || data.type === 'user' || data.type === 'assistant
 | `plugins/` 被修改 | 无实际影响，几个 OpenClaw JSON 文件 | 接受，不修 |
 | GEP prompt 含 feishu/skills 硬编码 | claude -p 有时创建 OpenClaw 风格内容 | 接受，skills/ 在我们这里有意义 |
 | submodule 修改不持久 | evolver 更新后 session 读取失效 | 见上方修改记录 |
+| `projects/-Users-allenbot--claude/` 目录 | claude -p 在 ~/.claude 下运行时产生，双横线是 Claude Code 对 .claude 路径的编码 | ✅ 已修：evolve.sh 改为在 `/tmp/claude-evolver` 下跑 claude -p，新产生的会话存到 `projects/-tmp-claude-evolver/` |
 
 ---
 

@@ -60,12 +60,17 @@ echo "GEP Prompt: $LATEST"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ── Step 3: Claude Code headless 执行 ────────────────────────────────
+# 在 /tmp/claude-evolver 下运行，避免 claude 把 ~/.claude 路径编码成 --claude（双横线）
 echo "🤖 Claude Code 执行中..."
-cat "$LATEST" | env -u CLAUDECODE claude -p \
-  --allowedTools "Read,Write,Edit,Bash" \
+mkdir -p /tmp/claude-evolver
+(cd /tmp/claude-evolver && cat "$LATEST" | env -u CLAUDECODE claude -p \
+  --allowedTools "Read,Write,Edit,Bash") \
   > "$RESPONSE_FILE"
 
 # ── Step 4: Solidify ─────────────────────────────────────────────────
+# 确保 validate-modules.js shim 存在（新项目自动补，已有的不覆盖）
+mkdir -p "$REPO_ROOT/scripts"
+cp -n "$HOME/.claude/scripts/validate-modules.js" "$REPO_ROOT/scripts/validate-modules.js" 2>/dev/null || true
 echo "💾 Solidify..."
 MEMORY_DIR="$EVOLVER_WORKSPACE" \
 OPENCLAW_WORKSPACE="$EVOLVER_WORKSPACE" \

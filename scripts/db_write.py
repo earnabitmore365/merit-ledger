@@ -8,9 +8,20 @@ import sys
 import json
 import sqlite3
 import os
+import time
 from datetime import datetime
 
 DB_PATH = os.path.expanduser('~/.claude/conversations.db')
+LOG_PATH = '/tmp/db_write.log'
+
+
+def log(msg):
+    """轻量调试日志，写入 /tmp/db_write.log"""
+    try:
+        with open(LOG_PATH, 'a') as f:
+            f.write(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
 
 # 标签词表（8类）
 TAG_WORDS = {
@@ -30,6 +41,19 @@ TAG_WORDS = {
 
 # 决策组（用于混沌特殊标签）
 DECISION_WORDS = TAG_WORDS['决策词']
+
+# session 目录 → project 名（路径编码：去掉开头/，所有/换-）
+KNOWN_PROJECTS = {
+    '-Users-allenbot-project-auto-trading': 'auto-trading',
+}
+
+# 这些目录的 session 不写入（太极、evolver headless 等）
+SKIP_DIRS = {
+    '-Users-allenbot',
+    '-Users-allenbot--claude',
+    '-private-tmp-claude-evolver',
+    '-Users-allenbot--openclaw-workspace',
+}
 
 
 def get_tags(speaker, content):
@@ -51,39 +75,67 @@ def get_tags(speaker, content):
     return ','.join(sorted(matched)) if matched else ''
 
 
-def get_project(cwd):
-    home = os.path.expanduser('~')
-    if cwd == home:
-        return 'home'
-    rel = cwd.replace(home + '/', '')
-    parts = rel.split('/')
-    return parts[-1] if parts else 'unknown'
+def get_project_from_session(session_id):
+    """通过 session_id 在 ~/.claude/projects/ 里找对应目录，返回 project 名或 None（None=不写入）"""
+    if not session_id:
+        return None
+    projects_dir = os.path.expanduser('~/.claude/projects')
+    try:
+        for proj_dir_name in os.listdir(projects_dir):
+            proj_dir = os.path.join(projects_dir, proj_dir_name)
+            if not os.path.isdir(proj_dir):
+                continue
+            try:
+                for fname in os.listdir(proj_dir):
+                    if fname.startswith(session_id) and fname.endswith('.jsonl'):
+                        if proj_dir_name in SKIP_DIRS:
+                            return None
+                        if proj_dir_name in KNOWN_PROJECTS:
+                            return KNOWN_PROJECTS[proj_dir_name]
+                        # 未知项目目录：用目录名本身（fallback）
+                        return proj_dir_name
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
 
 
-def parse_last_assistant(cwd, transcript_path):
-    """一次读取 JSONL，同时返回 (speaker, content)，跳过工具调用块"""
-    home = os.path.expanduser('~')
-    if cwd == home:
-        return '太极', ''
+def parse_last_assistant(transcript_path):
+    """读取 JSONL 末尾，收集最后一个 turn 的所有 assistant 文字块拼接返回"""
     try:
         with open(transcript_path, 'r') as f:
             lines = f.readlines()
-        tail = lines[-200:]  # 只读末尾200行，够用且快
+        tail = lines[-200:]
+
+        parts = []
+        speaker = None
+
         for line in reversed(tail):
             try:
                 d = json.loads(line.strip())
+                # 遇到用户消息 = 当前 turn 边界，停止收集
+                if d.get('type') == 'user':
+                    break
                 if d.get('type') != 'assistant':
                     continue
                 msg = d.get('message', {})
                 model = msg.get('model', '')
-                speaker = '黑丝' if 'opus' in model else ('白纱' if 'sonnet' in model else '未知')
+                if speaker is None:
+                    speaker = '黑丝' if 'opus' in model else ('白纱' if 'sonnet' in model else '未知')
                 blocks = msg.get('content', [])
-                parts = [b.get('text', '') for b in blocks if isinstance(b, dict) and b.get('type') == 'text']
-                text = '\n'.join(parts).strip()
+                text_parts = [b.get('text', '') for b in blocks
+                              if isinstance(b, dict) and b.get('type') == 'text']
+                text = '\n'.join(text_parts).strip()
                 if text:
-                    return speaker, text
+                    parts.append(text)
             except Exception:
                 continue
+
+        if parts:
+            # reversed 收集的，反转回正序拼接
+            full_text = '\n\n'.join(reversed(parts)).strip()
+            return speaker or '未知', full_text
     except Exception:
         pass
     return '未知', ''
@@ -121,22 +173,32 @@ def main():
 
     event = data.get('hook_event_name', '')
     session_id = data.get('session_id', '')
-    cwd = data.get('cwd', os.getcwd())
 
-    # 太极（home）频道不写入，上层对话不对两仪开放
-    if cwd == os.path.expanduser('~'):
+    # 通过 session_id 确定项目（精确，不依赖 cwd）
+    project = get_project_from_session(session_id)
+    if project is None:
+        log(f'SKIP event={event} session={session_id[:8]} project=None')
         sys.exit(0)
-
-    project = get_project(cwd)
 
     conn = sqlite3.connect(DB_PATH)
 
     if event == 'Stop':
         transcript_path = data.get('transcript_path', '')
-        speaker, content = parse_last_assistant(cwd, transcript_path)
+        log(f'Stop: session={session_id[:8]} project={project} transcript={transcript_path[-50:] if transcript_path else "EMPTY"}')
+        speaker, content = '未知', ''
+        for attempt in range(3):
+            speaker, content = parse_last_assistant(transcript_path)
+            if content:
+                break
+            if attempt < 2:
+                time.sleep(0.5)
+        log(f'Stop result: speaker={speaker} content_len={len(content)}')
         if content:
             last_id = write_message(conn, speaker, content, project, session_id)
             upsert_stop_point(conn, speaker, project, last_id)
+            log(f'Stop written: id={last_id}')
+        else:
+            log(f'Stop SKIP: content empty')
 
     elif event == 'UserPromptSubmit':
         content = data.get('prompt', '').strip()
@@ -144,22 +206,18 @@ def main():
             write_message(conn, '混沌', content, project, session_id)
 
     elif event == 'PreCompact':
-        # 写入压缩标记，记录压缩边界，同时确保 stop_points 是最新的
         transcript_path = data.get('transcript_path', '')
-        speaker, content = parse_last_assistant(cwd, transcript_path)
-        # 写压缩标记
+        speaker, content = parse_last_assistant(transcript_path)
         last_id = write_message(conn, '系统', f'[压缩点] {session_id[:8]}', project, session_id)
-        # 用最新 id 更新 stop_points（确保压缩后对方能精准接上）
-        if speaker and speaker not in ('未知', '太极'):
+        if speaker and speaker not in ('未知',):
             upsert_stop_point(conn, speaker, project, last_id)
 
     elif event == 'SessionEnd':
-        # 写入会话结束标记，确保 stop_points 最终落地
         transcript_path = data.get('transcript_path', '')
         reason = data.get('reason', 'other')
-        speaker, content = parse_last_assistant(cwd, transcript_path)
+        speaker, content = parse_last_assistant(transcript_path)
         last_id = write_message(conn, '系统', f'[会话结束:{reason}] {session_id[:8]}', project, session_id)
-        if speaker and speaker not in ('未知', '太极'):
+        if speaker and speaker not in ('未知',):
             upsert_stop_point(conn, speaker, project, last_id)
 
     conn.close()

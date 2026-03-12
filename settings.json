@@ -82,6 +82,7 @@
     ]
   },
   "language": "中文",
+  "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
   "mcpServers": {
     "sequential-thinking": {
@@ -91,6 +92,5 @@
         "@modelcontextprotocol/server-sequential-thinking"
       ]
     }
-  },
-  "effortLevel": "high"
+  }
 }

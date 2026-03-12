@@ -4,14 +4,46 @@
 
 # Auto-Trading 项目记忆
 
-> 白纱最后更新：2026-03-08 新会话(ad914ac7) — 恢复协议完整执行；indicator_cache完成等跑种子；GEP Cycle #0002待老板确认
-> 黑丝最后更新：2026-03-08 S39续×3(42c89a0d续) — Gate初考完成8479/9400通过，regime_fact_labels错位待修，基础6维度专考待跑
+> 白纱最后更新：2026-03-11 深夜 — GP v0.8专项冠军方案出炉，7文件改动，CHECKPOINT已更新
+> 黑丝最后更新：2026-03-12 49ffc343压缩×2 — Paper Trade 4文件实现完成(PaperAdapter+PaperTradeManager)+py_compile通过+README已更新+CHECKPOINT收尾中
+
+## 黑丝和白纱的铁律（老板明确要求，压缩后必须记得）
+
+### 白纱铁律
+
+1. **老板说什么做什么**：不管是出方案还是写代码，老板让做什么就做什么，让做肯定有让做的理由，不质疑，不多嘴。
+2. **老板是最终决定者**：白纱的工作范围是参考，不是边界。老板一句话可以改变任何事。
+
+老板原话（2026-03-09）："不管你是出方案还是写代码。我让你做什么你就做什么，让你做肯定有让你做的理由"
+
+### 黑丝铁律
+
+> 黑丝自行补充
+
+---
+
+## 老板待推进想法（白纱记录）
+
+- **Paper Trade 完整系统**（2026-03-12）：接入真实实盘行情做模拟交易。老板要求完整，不要半成品。
+  核心：regime切换 + 策略选择 + 模拟成交（用真实价格）+ 手续费/滑点 + 日志报告。
+  现有基础：live_runner.py已跑实时行情、L2 regime检测在线、89个Gate冠军策略可用。
+  待定：白纱趁黑丝忙GP时推进，还是等黑丝主导。
+
+---
 
 ## 上次会话要点（白纱）
 
 > 覆盖更新，不累积。
 
-（待白纱下次会话填写）
+**会话 压缩后续（2026-03-11 深夜）：GP v0.8 专项冠军方案**
+
+1. **战略大转向（老板拍板）**：不追全能王，改育专项冠军。目标填350格矩阵（10币×7周期×5regime）
+2. **弃权制**：0笔交易=弃权（不算失败）；有弃权→有效窗口100%通过+平均收益>5%门槛；MIN_VALID_WINDOWS=5
+3. **指标大扩**：indicator_cache.db（70组合/40+种类）全接进GP。BLOB=zlib压缩JSON数组
+4. **冷却+多样性惩罚删除**：小库时代补丁，大库不需要
+5. **清档重来**：8个旧毕业生删除，精英库(hall_of_fame)保留
+6. **完整方案已出**：7文件×4 Part，含verification steps，等黑丝执行
+7. **老板原话**："不可能有一个物种能同时爬树游泳和赛跑" / "运气也是实力的一部分" / "这样就有非常大量的指标给他们玩了"
 
 ---
 
@@ -19,7 +51,16 @@
 
 > 覆盖更新，不累积。
 
-（待黑丝下次会话填写）
+**会话 49ffc343 压缩×2（2026-03-12）：Paper Trade 实现完成**
+
+1. **Paper Trade 4文件全部实现**：老板确认后执行，代码全部写完+py_compile通过
+   - `lab/src/exchange/paper/__init__.py` — 包文件
+   - `lab/src/exchange/paper/adapter.py` (~350行) — PaperAdapter：真实行情(共享HyperLiquidAdapter)+虚拟账本(fee 0.035%/slippage 0.02%/funding 0.01%/8h)+原子持久化+JSONL交易日志
+   - `lab/paper_trade/__init__.py` — 包文件
+   - `lab/paper_trade/run.py` (~500行) — PaperTradeManager：26冠军(ADA 12+XRP 14)×$500独立资金+WebSocket tick级风控+K线对齐策略信号+regime切换(牛/初牛→long, 盘整→mid, 初熊/熊→short)
+2. **关键设计决策**：一个共享HyperLiquidAdapter避免26个WebSocket连接；$1固定注码(min_trade=1, position_pct=0.0001)匹配回测；intervals>4h在PaperAdapter覆写get_klines修复HyperLiquidAdapter的interval_map不全问题
+3. **reverse_position锁重入修复**：close+open两步各自需锁，reverse_position先获锁调_close_position_locked()内部方法，释放后再调place_order
+4. **之前会话要点**：indicator_cache.db 45.68GB全合法不动；Mac Mini扩展坞→Satechi+Crucial P310 2TB；并行种子跳过优化待TTP跑完再改
 
 ---
 
@@ -34,6 +75,11 @@
    - 2026-03-07 犯的错：审计 #44-#52 全部成绩从根目录旧版 v2 拉的，数据全错。老板原话："你已经很多次了哦"、"真的是被你气死了"
 5. **自动注册 = 自动**：策略放进去就能用，不要再报"加载问题"。
 6. **老板的时间极其宝贵**：老板一天只有几小时，每一次发癫绕弯都是在烧老板的时间和钱。帮忙不添乱。
+7. **改代码后必须走完整收尾流程**：每次改完代码，必须自动执行以下步骤，不需要老板提醒：
+   - ① `py_compile` 语法验证所有改动文件
+   - ② 更新 `lab/README.md`（目录结构 + 脚本表）
+   - ③ 更新 `CHECKPOINT.md`（动态区任务历程）
+   - 老板原话（2026-03-11）："以后改代码，必须要用这个步骤。不然我每次都要跟你讲一轮"
 
 老板原话（2026-03-05 01:15）："你们他么的今天一个两个全本人都在搞什么鬼？？？？你知道你们在浪费着我的时间吗？？？我现在一天只有那么几个小时的时间跟你们研究这些东西，你们乱我一下就2-3个小时没了"
 
@@ -178,12 +224,12 @@
 - **accounts.py:15** — `.parents[3]` 硬编码深度，若文件层级变动会断（低风险，当前稳定）
 - **backtest.py:27-28** — 变量命名 `_src_dir` / `_backtest_dir` 互换（功能正确，阅读易混淆）
 
-## 数据状态（S22 结束时实测）
-- 13币种: 10 合约（USDT本位）+ 3 币本位，全部在种子库（2236组）
+## 数据状态（2026-03-10 验证）
+- 13币种: 10 合约（USDT本位）+ 3 币本位
 - 10 合约: BTC, ETH, XRP, BNB, SOL, ADA, TRX, AVAX, LINK, DOT
 - 3 币本位: BTC_COIN, ETH_COIN, BNB_COIN
 - 已删除: DOGE(meme币)、ATOM、LTC（非市值前十）
-- **1m**: 全部 13 币种 × 1,052K 条 ✅
+- **1m**: 全部 13 币种 × 2,102K 条 ✅（4年，2022-03~2026-03）
 - **5m**: 全部 13 币种 × 420K 条 ✅ (4年)
 - **15m**: 全部 13 币种 × 140K 条 ✅ (4年)
 - **1h**: 全部 13 币种达目标 ✅ (BTC/BNB 70K, 币本位~48K, SOL 48K, DOT 48K, AVAX 47K 等)
@@ -212,7 +258,35 @@
 - `src/trading/trade_menu.py` (~670行，原1116行) — 继承 BaseMenu + StatsCalculator 去重 + 7步流程 + 紧凑卡片面板
 - 方案详见 `.claude/plans/fluffy-zooming-whisper.md`
 
-## Regime Detection v2（ADX 三层复合 — 已完成核心）
+## 三层 Regime 架构（老板定义，必须记住）
+
+| 层 | 名称 | 定位 | 状态 |
+|----|------|------|------|
+| L1 | 天气预报 | ~~宏观指标投票~~ | ❌ 已踢掉（2026-03-09照妖镜验证：全部滞后指标，无预测能力） |
+| L2 | 出门看天 | 价格涨跌判断当下regime（5类：牛/初牛/盘整/初熊/熊） | 回测版已有(regime_fact_labels)，实盘方案未实现 |
+| L3 | 最后一关 | 盘口(Order Book)深度确认入场 | 只能实盘用，无历史数据无法回测 |
+
+**L3 盘口三类用法（实盘）：**
+1. 挂单失衡（买多卖少→短期看涨）
+2. 流动性热力图（大单价位=支撑阻力）
+3. 虚假挂单识别（挂了又撤=操纵）
+
+**叠加周期（老板创意）：**
+- 强看多：牛 / 看多：牛+初牛 / 过渡偏多：初牛+盘整
+- 过渡偏空：盘整+初熊 / 看空：初熊+熊 / 强看空：熊
+
+**老板核心设计思路：**
+- "大周期看方向，中周期找时机，小周期找入场" — 三层从粗到细过滤
+  - 大周期 = L2 Regime（判断牛/熊/盘整，决定开哪队）
+  - 中周期 = 策略信号（各策略各自周期产生买卖信号）
+  - 小周期 = L3 盘口（实时深度确认入场）
+
+**老板关键原话：**
+- "Layer 1 = 天气预报, Layer 2 = 你出门看天"
+- "大周期看方向，中周期找时机，小周期找入场"
+- L1踢掉原因："当初把这个加进来是给L2参考的。原本参考价值也不大，最终还是L2自己定。多了一个参考不大的东西又滞后，那还需要维护多一个东西吗？"
+
+## Regime Detection v2（ADX 三层复合 — L2内部技术实现）
 - `src/trading/regime/config.py` — ADX28+SMA50+ATR14, 滞后阈值进25/退18, dwell48, confirm6
 - `src/trading/regime/detector.py` — Wilder标准ADX算法, 纯计算无状态, 已验证10币种
 - `src/trading/regime/strategy.py` — 滞后+确认+MarketScore+no-direct-flip
@@ -220,17 +294,20 @@
 - **问题**: regime_map的3个策略是猜的，从未数据验证 → 引出下面的分析计划
 
 ## 指标库（已完成 ✅）
-- `src/indicators/` — 12个指标，9个文件，统一 BaseIndicator 接口
-- 本地: AHR999(score=1.0 抄底区) + Pi Cycle Top(gap=56.8% 安全)
-- 衍生品: Funding Rate + OI (HyperLiquid API, 5min缓存)
-- 情绪: Fear & Greed (score=0.89 极度恐惧=买入)
-- 市场: Stablecoin Supply (DefiLlama) + BTC.D (CoinGecko)
-- 链上: MVRV + NUPL + Puell + Exchange Netflow (BGeometrics, 6h缓存)
-- 综合: MarketScore 加权(链上40%+市场25%+衍品20%+情绪15%) = 0.68 (buy)
-- BGeometrics API: `bitcoin-data.com/api/v1/{metric}/last`，8次/小时限制
-- 429 降级: 返回过期缓存数据
+- `src/indicators/` — **9个宏观指标**（原12个，踢掉OI和BTC.D — 历史数据不足）
+- 本地: AHR999 + Pi Cycle Top（BTC 1h K线计算）
+- 衍生品: Funding Rate（Binance，2019起，2357天）
+- 情绪: Fear & Greed（alternative.me，2018起，2947天）
+- 市场: Stablecoin Supply（DefiLlama，2017起，3015天）
+- 链上: MVRV + NUPL + Puell + Exchange Netflow（BGeometrics，5000+天）
+- ❌ 踢掉：OI（仅28天历史）、BTC.D（仅1天历史）
+- 综合: MarketScore 加权（权重待照妖镜后重定，现为主观拍）
+- 历史数据: `reports/seed_report_v2_ttp_true.db` → `indicator_daily` 表
+- 下载脚本: `lab/pull_indicators_history.py`
 - 验证: `python3 src/indicators/verify.py` (--local-only / --history)
-- 用户想法：**用真实数据验证指标有效性**，做成可复用的库
+- **Regime 叠加周期**（验证和实盘都用这个渐变谱）：
+  - 强看多：牛 / 看多：牛+初牛 / 过渡偏多：初牛+盘整
+  - 过渡偏空：盘整+初熊 / 看空：初熊+熊 / 强看空：熊
 
 ## 交接机制（S9 建立）
 - **全局规则** `~/.claude/CLAUDE.md` — CHECKPOINT 机制、压缩提醒、中文、恢复流程
@@ -316,6 +393,24 @@ champion_v3.json               ← 冠军队
 - **lab 里随便造，不用等用户确认任何东西**（用户原话："lab是专门做给你们随便造的，不用等我确认任何东西"）
 - 完成后由用户决定是否覆盖回原系统 src/
 
+## L2 实盘 Regime 检测方案讨论 → 详见 memory/l2_realtime_regime.md
+- 2026-03-10 混沌×白纱×黑丝三方讨论
+- 白纱出精简方案 → 黑丝提4个问题（过拟合/初牛vs牛/跳级/多币种）→ 白纱回应
+- **老板核心洞察**：子阶段决定regime转换。牛市里dip（回踩/牛旗/FVG补缺口）≠转regime，结构被破坏了才考虑转换
+- 老板原话："要这些东西有被破坏掉了，才考虑是不是有周期转换的可能性"
+- 下一步：白纱把子阶段+结构健康度融入L2完整方案
+
+## GP自进化改进路线图 → 详见 memory/gp_evolution_roadmap.md
+- 2026-03-10 混沌×黑丝讨论，4大改进方向
+- ① 抗过拟合（分段验证+精度下限+信号率约束）② 量能衍生指标 ③ 指标库对接（老板核心想法：算一次存库+指标晋升+越来越丰富）④ 参数自由调（暂缓）
+- 老板指示：先记录，等白纱主线任务定了再排期
+
+## 哨兵检测体系脑暴 → 详见 memory/sentinel_brainstorm.md
+- 2026-03-09 混沌×黑丝×白纱三方脑暴，老板说"这些时刻很难得的"
+- 核心创新：用自己策略当传感器检测regime，不依赖公开指标
+- 红绿灯比喻 → 策略止损=对面灯变黄 → 哨兵不下真单=手续费归零 → 纯信号选拔
+- 完整推导链、老板原话、四灯体系、执行方案全部保留在专题文件里
+
 ## 策略筛选流程 → 详见 memory/screening_pipeline.md
 - 关卡一：门槛（K线数÷X，按周期浮动）→ 关卡二：各自考场（regime内排名）→ 关卡三：组队 → 关卡四：整队照妖镜
 - 已确认：关卡一公式和X值（1m/5m/15m=500, 1h=350），实测淘汰332/2236（14.8%）
@@ -329,6 +424,12 @@ champion_v3.json               ← 冠军队
 ## 会话索引（最新在最上面，详见 memory/session_summaries.md）
 | # | ID | 日期 | 消息 | 核心内容 |
 |---|-----|------|------|----------|
+| S黑丝×18 | 42c89a0d(×18) | 03-11 | — | GP v0.7b精英去冷却+磁盘缓存+毕业考弃权制(待实现)+哨兵整合(待白纱) |
+| S黑丝×17 | 42c89a0d(×17) | 03-11 | — | GP v0.7参数化指标+冷却调优+文件重命名+哨兵营修复+指标多样性惩罚 |
+| S黑丝×16 | 42c89a0d(×16) | 03-11 | — | GP v0.6分池进化+镜像训练+精英库L/S分池+冷却过滤+路径隔离+文档全更新 |
+| S黑丝×15 | 42c89a0d(×15) | 03-11 | — | 10策略拆分+mirror种子+GP全链路排查(elite injection bug定位中) |
+| S黑丝×14 | 42c89a0d(×14) | 03-11 | — | momentum_slope拆分long/short+镜像测试+提款默认值$5000/$3000+TTP对比+种子248组 |
+| S白纱×3 | 79f9196e | 03-09 | — | 白纱：交易所API整理+并发/提款讨论+handoff→黑丝4测试完成等老板选方案 |
 | S39×4 | a2ea5b4c(×4) | 03-03 | — | Gate v4架构确立+三层框架+叠加边界+regime_fact_timeline.py创建+混沌确认开干 |
 | S39×3 | a2ea5b4c(续续续) | 03-03 | — | BTC历史时间表14段+混沌提5类regime(初牛/牛/盘整/初熊/熊)+百分比量化分类 |
 | S39续续 | a2ea5b4c(续续) | 03-03 | — | Gate v3完成36冠军+混沌三大洞察(已知事实分班/WF去掉/子阶段细分/Intrabar=放大镜)+handoff |

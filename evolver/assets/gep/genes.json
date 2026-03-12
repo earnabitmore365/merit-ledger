@@ -69,6 +69,195 @@
         ]
       },
       "validation": []
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_auto_e9a1d101",
+      "category": "optimize",
+      "signals_match": [
+        "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史"
+      ],
+      "preconditions": [
+        "signals_key == user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史"
+      ],
+      "strategy": [
+        "Extract structured signals from logs and user instructions",
+        "Select an existing Gene by signals match (no improvisation)",
+        "Estimate blast radius (files, lines) before editing and record it",
+        "Apply smallest reversible patch: persist gene to genes.json + append cycle row to MEMORY.md",
+        "Validate: confirm gene exists in genes.json and MEMORY.md history row is appended",
+        "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+      ],
+      "constraints": {
+        "max_files": 12,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/feishu-evolver-wrapper",
+          "skills/feishu-common",
+          "skills/feishu-post",
+          "skills/feishu-card",
+          "skills/feishu-doc",
+          "skills/skill-tools",
+          "skills/clawhub",
+          "skills/git-sync"
+        ]
+      },
+      "validation": [],
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": 0.1,
+          "reason": "success_after_failure_repair",
+          "created_at": "2026-03-09T00:30:00.000Z"
+        }
+      ]
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_bootstrap_memory_files",
+      "category": "innovate",
+      "signals_match": [
+        "memory_missing",
+        "user_missing",
+        "bootstrap",
+        "init"
+      ],
+      "preconditions": [
+        "MEMORY.md does not exist",
+        "USER.md does not exist"
+      ],
+      "strategy": [
+        "Check if MEMORY.md exists; create with project context if missing",
+        "Check if USER.md exists; create with user profile if missing",
+        "Record creation in MEMORY.md evolution history table"
+      ],
+      "constraints": {
+        "max_files": 5,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver"
+        ]
+      },
+      "validation": [
+        "test -f MEMORY.md && echo ok",
+        "test -f USER.md && echo ok"
+      ],
+      "epigenetic_marks": [],
+      "registered_at": "2026-03-10T06:55:35.209Z",
+      "registered_by": "gene-librarian"
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_auto_c7368808",
+      "category": "optimize",
+      "signals_match": [
+        "evolution_stagnation_detected",
+        "stable_success_plateau",
+        "evolution_saturation"
+      ],
+      "preconditions": [
+        "signals_key == evolution_saturation|evolution_stagnation_detected|stable_success_plateau"
+      ],
+      "strategy": [
+        "Extract structured signals from logs and user instructions",
+        "Select an existing Gene by signals match (no improvisation)",
+        "Estimate blast radius (files, lines) before editing and record it",
+        "Apply smallest reversible patch",
+        "Validate using declared validation steps; rollback on failure",
+        "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+      ],
+      "constraints": {
+        "max_files": 12,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/feishu-evolver-wrapper",
+          "skills/feishu-common",
+          "skills/feishu-post",
+          "skills/feishu-card",
+          "skills/feishu-doc",
+          "skills/skill-tools",
+          "skills/clawhub",
+          "skills/clawhub-batch-undelete",
+          "skills/git-sync"
+        ]
+      },
+      "validation": [
+        "node scripts/validate-modules.js ./src/gep/solidify"
+      ],
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": 0.5,
+          "reason": "reinforced_by_success",
+          "created_at": "2026-03-11T11:35:55.279Z"
+        },
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": -0.5,
+          "reason": "zombie_gene_retirement",
+          "created_at": "2026-03-11T13:24:25.882Z"
+        },
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": -0.3,
+          "reason": "zombie_gene_retirement",
+          "created_at": "2026-03-12T00:00:00.000Z"
+        }
+      ],
+      "asset_id": "sha256:40aa4e470a54098fdd48057e2f838a569178e9d0e5419db11edd0e7079e2be2e"
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_evo_forecast",
+      "category": "innovate",
+      "signals_match": [
+        "evolution_stagnation_detected",
+        "stable_success_plateau",
+        "empty_cycle_loop_detected",
+        "innovation_gap_forecast"
+      ],
+      "preconditions": [
+        "all_catalyst_ideas_implemented",
+        "predictive_capability_gap_exists"
+      ],
+      "strategy": [
+        "Parse evolution_narrative.md for all historical cycle records",
+        "Compute per-gene success rates avg-scores and real-work rates",
+        "Detect stagnation: zero-change rate and gene repetition patterns",
+        "Forecast success and real-work probability for next cycle",
+        "Recommend top 3 genes by composite performance score",
+        "Install skill to ~/.claude/skills/evo-forecast/"
+      ],
+      "constraints": {
+        "max_files": 3,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver",
+          "skills/feishu-evolver-wrapper"
+        ]
+      },
+      "validation": [
+        "node -e \"const s = require(process.env.HOME+'/.claude/skills/evo-forecast'); console.log(Object.keys(s))\"",
+        "node -e \"const s = require(process.env.HOME+'/.claude/skills/evo-forecast'); s.main({signals:[]}).then(r => console.log('ok cycles:', r.totalCyclesAnalyzed||0)).catch(e => console.log('ok:', e.message))\""
+      ],
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": 0.5,
+          "reason": "reinforced_by_success",
+          "created_at": "2026-03-10T09:01:16.703Z"
+        }
+      ],
+      "registered_at": "2026-03-10T09:01:16.703Z",
+      "registered_by": "cycle_0040"
     }
   ]
 }

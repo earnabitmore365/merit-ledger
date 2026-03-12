@@ -1,22 +1,14 @@
 #!/bin/bash
 # 自动进化 hook — PreCompact / SessionEnd 触发
-# 后台跑，不阻塞主会话
+# 只处理 taiji（auto-trading 由项目级 hook 独立处理）
 
 # 从 stdin 读取 hook JSON，提取 cwd
-CWD=$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('cwd',''))" 2>/dev/null)
+STDIN_DATA=$(cat)
+CWD=$(echo "$STDIN_DATA" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('cwd',''))" 2>/dev/null)
 
-HOME_DIR="$HOME"
-
-# 按 cwd 判断项目
-if [ "$CWD" = "$HOME_DIR/.claude" ]; then
-  PROJECT="taiji"
-elif [ "$CWD" = "$HOME_DIR/project/auto-trading" ]; then
-  PROJECT="auto-trading"
-else
-  exit 0
+# 只处理 taiji
+if [ "$CWD" = "$HOME/.claude" ]; then
+  LOG="/tmp/evolve_hook_taiji.log"
+  nohup bash "$HOME/.claude/evolve.sh" taiji > "$LOG" 2>&1 &
+  echo "🧬 evolver 已在后台启动（taiji），日志：$LOG"
 fi
-
-LOG="/tmp/evolve_hook_${PROJECT}.log"
-nohup bash "$HOME_DIR/.claude/evolve.sh" "$PROJECT" > "$LOG" 2>&1 &
-
-echo "🧬 evolver 已在后台启动（$PROJECT），日志：$LOG"

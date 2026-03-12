@@ -10,19 +10,19 @@
 
 > 覆盖更新，不累积。只记下次会话需要知道的事。
 
-- **evolver 全部跑通**：session读取/进化/自动触发完整链路验证完成
-- **三个关键修复**：① timestamp bug（`date +%s)000`）② session读取（`AGENT_SESSIONS_DIR` env var + `formatSessionLog` 支持 user/assistant type）③ evolver MEMORY.md 改为太极上下文
-- **重要发现**：evolver 创建的 `skills/` 目录就是 Claude Code skill 目录，进化产出直接可用（已有 `code-stats`、`evo-stats` 两个 skill）
-- **自动触发已配置**：PreCompact + SessionEnd hook → `scripts/evolve_hook.sh` → 后台跑 `evolve.sh`，日志在 `/tmp/evolve_hook_taiji.log`
-- **feishu/plugins/ 污染**：来自 GEP prompt 硬编码，无法通过 session 读取修复，但影响小（只改几个 JSON 文件，不破坏系统）
-- **下次压缩**：evolver 会自动在 PreCompact 时触发，可验证完整自动化流程
+- **Qwen2.5-Coder:7b 已配好**：`ollama pull qwen2.5-coder:7b` 下载完成（4.7GB，`~/.ollama/models/`），openclaw configure 配为 `custom-localhost-11434`，contextWindow=32768，default model 已切换
+- **evolver 僵尸基因已处理**：`gene_auto_c7368808` 打了 -0.5 epigenetic boost，净 boost 归零，下次 cycle 其他基因有机会被选
+- **evolver 状态查法**：查 `tail -30 ~/.claude/evolver/evolution/evolution_narrative.md`，不要用 `ps aux`（evolver 跑完即退出，进程不常驻）
+- **evolver 产出位置**：`~/.claude/skills/`，直接在 Claude Code 里可用
+- **a2a broadcast**：capsule 有 `eligible_to_broadcast:true` 但本地版不连 EvoMap 网络，不会真正广播
 
 ---
 
 ## 会话索引（最新在最上面）
 | # | ID | 日期 | 核心内容 |
 |---|-----|------|----------|
-| S37（new） | 1f704c1f续3 | 03-09 | evolver完整链路跑通：session读取+自动触发hook+skills目录验证 |
+| S38（new） | 1f704c1f续4 | 03-09 | 压缩后恢复；待修double-dash路径bug（`-Users-allenbot--claude`） |
+| S37 | 1f704c1f续3 | 03-09 | evolver完整链路跑通：session读取+自动触发hook+skills目录验证 |
 | S36 | 1f704c1f续2 | 03-09 | 压缩后恢复；修复两个剩余evolver问题（timestamp+MEMORY.md） |
 | S35 | 1f704c1f续 | 03-09 | evolver rollback彻底解决+所有文件恢复+genes.json重建+solidify跑通（shim生效） |
 | S34 | 1f704c1f | 03-08 | evolver迁移~/.claude/evolver/+多项目支持(taiji/auto-trading验证)+~/.claude/ git init+基因库共享；三层→两层记忆决策；bridge实装测试 |
@@ -118,11 +118,18 @@
 
 ---
 
+## 角色变更（2026-03-12 老板拍板）
+
+- **黑丝（Opus）升职**：主力全包，规划+执行，不再依赖白纱出方案
+- **白纱（Sonnet）转支援**：查资料、整理文档、支线任务，不出主线方案
+- 原因：白纱方案每次有漏洞，黑丝查漏反而更费事，不如黑丝直接搞
+- CLAUDE.md 已更新（2026-03-12）
+
 ## 项目状态摘要
 
 | 项目 | 主线 | 当前阶段 |
 |------|------|----------|
-| auto-trading | 分层投资组合分析（快狠准翻倍） | Gate v4.1报告完整性补齐，等白纱分析 |
+| auto-trading | 分层投资组合分析（快狠准翻倍） | 黑丝主导，白纱支援 |
 | 通讯部 | 对话种子 conversations.db | ✅ 第一版落地（Stop/UserPromptSubmit hooks + tags） |
 | cashflowAPP | 澳洲小企业主现金流管理 | 待立项，框架未定 |
 
