@@ -78,15 +78,17 @@ def main():
     source = data.get('source', '')
     cwd = data.get('cwd', os.getcwd())
 
-    # 只在压缩后触发
+    home = os.path.expanduser('~')
+
+    # 所有会话启动都检查 evolver 通知（不限 compact）
+    inject_evolver_notifications()
+
+    # 非压缩来源：只注入 evolver 通知，不做完整压缩注入
     if source != 'compact':
         sys.exit(0)
 
-    home = os.path.expanduser('~')
-
-    # home 目录：只注入 evolver 通知，不做完整压缩注入
+    # home 目录：evolver 通知已注入，不需要完整压缩注入
     if cwd == home:
-        inject_evolver_notifications()
         sys.exit(0)
 
     project = get_project(cwd)

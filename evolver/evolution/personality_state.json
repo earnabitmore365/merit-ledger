@@ -24,11 +24,11 @@
       "updated_at": "2026-03-08T15:23:34.548Z"
     },
     "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9": {
-      "success": 52,
-      "fail": 5,
-      "avg_score": 0.7929824561403506,
-      "n": 57,
-      "updated_at": "2026-03-15T00:09:53.139Z"
+      "success": 56,
+      "fail": 8,
+      "avg_score": 0.7687499999999997,
+      "n": 64,
+      "updated_at": "2026-03-15T12:57:42.002Z"
     }
   },
   "history": [
@@ -465,7 +465,56 @@
       "outcome": "success",
       "score": 0.85,
       "notes": "event:evt_1773533393115"
+    },
+    {
+      "at": "2026-03-15T02:04:00.241Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "success",
+      "score": 0.85,
+      "notes": "event:evt_1773540240189"
+    },
+    {
+      "at": "2026-03-15T08:18:00.913Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "failed",
+      "score": 0.2,
+      "notes": "event:evt_1773562680831"
+    },
+    {
+      "at": "2026-03-15T08:23:07.232Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "success",
+      "score": 0.85,
+      "notes": "event:evt_1773562987207"
+    },
+    {
+      "at": "2026-03-15T09:15:03.289Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "failed",
+      "score": 0.2,
+      "notes": "event:evt_1773566103214"
+    },
+    {
+      "at": "2026-03-15T09:33:25.910Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "success",
+      "score": 0.85,
+      "notes": "event:evt_1773567205881"
+    },
+    {
+      "at": "2026-03-15T10:27:05.535Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "failed",
+      "score": 0.2,
+      "notes": "event:evt_1773570425462"
+    },
+    {
+      "at": "2026-03-15T12:57:42.002Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "success",
+      "score": 0.85,
+      "notes": "event:evt_1773579461979"
     }
   ],
-  "updated_at": "2026-03-15T00:32:51.400Z"
+  "updated_at": "2026-03-15T12:57:42.002Z"
 }

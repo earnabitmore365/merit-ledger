@@ -92,6 +92,5 @@
         "@modelcontextprotocol/server-sequential-thinking"
       ]
     }
-  },
-  "model": "sonnet"
+  }
 }
