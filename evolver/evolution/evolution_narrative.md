@@ -78,14 +78,19 @@ A chronological record of evolution decisions and outcomes.
 - Gene: gene_auto_53538cc4 (retired) | Score: 0.85 | Scope: 6 files, 328 lines
 - Signals: [evolution_stagnation_detected, stable_success_plateau]
 - Result: 固化：gene_auto_53538cc4 命中信号，变更 6 文件 / 328 行。Note: gene_auto_53538cc4 is retired (since 2026-03-14), intent corrected INNOVATE→OPTIMIZE
-### [2026-03-21 07:30:43] INNOVATE - failed
+### [2026-03-21 07:30:43] OPTIMIZE - failed
 - Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines
-- Signals: [protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史]
+- Signals: [protocol_drift, user_feature_request:append_only_history]
+- Note: intent corrected INNOVATE→OPTIMIZE (gene category=optimize), signal cleaned
 ### [2026-03-21 07:52:45] INNOVATE - success
 - Gene: gene_innovate_narrative_compactor | Score: 0.90 | Scope: 4 files, 220 lines
 - Signals: [protocol_drift, force_innovation_after_repair_loop, high_failure_ratio]
 - Result: 创建 evo-narrative-compactor 技能（自动 narrative 压缩器），解析 narrative 为结构化块，识别3+相邻同基因条目自动合并为 CONSOLIDATED 块，支持 dry-run/apply 模式，注册 gene_innovate_narrative_compactor 到 genes.json（第10条活跃基因），安装到 ~/.claude/skills/，3 文件 ~220 行
-### [2026-03-21 07:58:38] INNOVATE - success
+### [2026-03-21 07:58:38] OPTIMIZE - success
 - Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 1 files, 5 lines
-- Signals: [protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop]
+- Signals: [protocol_drift, user_feature_request:append_only_history, high_failure_ratio, force_innovation_after_repair_loop]
+- Result: validate-modules.js 兼容垫片优化（1 文件 / 5 行）。Note: intent corrected INNOVATE→OPTIMIZE
+### [2026-03-21 09:32:55] INNOVATE - success
+- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 1 files, 10 lines
+- Signals: [protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史]
 - Result: 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop，变更 1 文件 / 5 行。

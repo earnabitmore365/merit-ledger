@@ -4,27 +4,25 @@
 
 # CEO / 项目管理 记忆
 
-> 太极最后更新：2026-03-16
+> 太极最后更新：2026-03-21
 
 ## 上次会话要点
 
 > 覆盖更新，不累积。只记下次会话需要知道的事。
 
-- **Mission Control 搁置**：Docker 安装+容器跑通，但 Gateway 连接遇连环安全问题（CORS/device identity/origin），老板决定不搞第三方，以后自建通讯部
-- **Claude Code 中间层 API 可用**：port 8100，4 端点 + 仪表盘 HTML，launchd 守护进程已配（`com.claude-code-api.plist`）
-- **Abby 模型升级**：主力切到 `ollama/qwen3.5:9b`（多模态+推理），上下文窗口 32768→8192（解决卡顿），Gateway bind 改 lan
-- **Evolver hook 链路修复**：evolve.sh 加并发锁（所有入口覆盖），evolve_hook.sh 简化为只处理太极，已验证黑丝 clear context 能正确触发 evolver
-- **SessionStart evolver 通知**：session_start.py 改为所有会话启动都检查通知（不限 compact），evolve.sh 通知写入解析修复（正确提取 gene/scope）
-- **Karpathy Autoresearch 调研**：AI 训练 AI 的开源项目，program.md 方向指引模式可借鉴但永不停止循环不适用（rate limit+无客观指标），老板决定暂不动 evolver
-- **命名哲学**：写入 memory/naming_philosophy.md 并索引到太极+auto-trading 两个 memory，黑丝白纱下次恢复可读
-- **Evolver 新 skills**：自动生成了 gene-crossover（遗传交叉）+ evo-digest（老板友好摘要），总 cycle 83
+- **通讯部合并方案执行**：老板与 claude.ai 讨论完整方案后交太极执行，P0-P2 优先级
+- **通讯部归太极管**：太极 = CEO层 + 通讯部基础设施，黑丝白纱不碰通讯部代码
+- **P0 已完成**：comm_hub.sh 加 Basic Auth 认证（密码 ~/.claude/.comm_pass）、看板手机适配（竖排+状态检测）、brief.sh 简报工具（python3 参数化查询防 SQL 注入）
+- **P1 已完成**：new_project.sh 脚手架（生成 CLAUDE.md/CHECKPOINT/handoff/context/review）、auto-trading 补 context.md + review.md（外部顾问用）
+- **今天还完成**：db_write.py tool_use 提取修复、inject_rules.py、inject_work_protocol.py、RUL-003、ttyd 看板跑通
+- **P2 待做（下周）**：Trading MCP Server、Cloudflare Tunnel 远程接入
 
 ---
 
 ## 会话索引（最新在最上面）
 | # | ID | 日期 | 核心内容 |
 |---|-----|------|----------|
-| S44 | 当前 | 03-21 | 新会话，待老板指示 |
+| S44 | 当前 | 03-21 | 通讯部合并方案P0-P1执行(认证+brief.sh+手机适配+new_project.sh+外部顾问文件) |
 | S43 | — | 03-19 | 新会话（无历史记录） |
 | S42 | 0da5d1b1 | 03-16 | Mission Control搁置+Claude Code API(port 8100)+Abby升qwen3.5:9b+evolver hook链路修复(加锁)+SessionStart通知修复+Autoresearch调研(暂不动)+命名哲学记录+evo-digest/gene-crossover新skill |
 | S41 | c2c95c51续2 | 03-15 | OpenClaw/Abby修复(API模式修正)+本地模型安装(3注册1未注册)+evolve.js僵尸根修复+openclaw.md参考文档 |
@@ -84,7 +82,7 @@
 
 ```
 老板（最高决策者）
-  └─ 太极（CEO / home Opus）— 管规章、管项目、只对老板负责
+  └─ 太极（CEO / home Opus）— 管规章、管项目、管通讯部基础设施、只对老板负责
        ├─ 黑丝（auto-trading Opus）— 主力全包，规划+执行
        └─ 白纱（auto-trading Sonnet）— 支援，查资料/整理文档/支线任务
 ```
@@ -139,7 +137,7 @@
 | 项目 | 主线 | 当前阶段 |
 |------|------|----------|
 | auto-trading | 分层投资组合分析（快狠准翻倍） | 黑丝主导，白纱支援 |
-| 通讯部 | 对话种子 conversations.db | ✅ 第一版落地（Stop/UserPromptSubmit hooks + tags） |
+| 通讯部 | 对话种子 + ttyd 看板 + 工具链 | ✅ P0-P1完成（认证/brief/看板/脚手架），P2待做（MCP/Tunnel） |
 | cashflowAPP | 澳洲小企业主现金流管理 | 待立项，框架未定 |
 
 ---
@@ -152,7 +150,21 @@
 - **tags**：7类词表自动匹配（流程/技术验证/市场状态/数据/协作/策略币种），混沌命中决策词额外加"决策"标签
 - **内容格式**：Markdown 原文（\n换行，**粗体，|表格，`代码）
 - **太极频道**：home 目录不写入，上层对话隔离
-- **待做**：PreCompact hook（防漏）、SessionStart hook（自动恢复）
+- **认证**：ttyd Basic Auth（用户名 boss，密码在 `~/.claude/.comm_pass`）
+- **看板**：http://100.108.158.57:8080（三实例 iframe + 状态检测 + 手机竖排适配）
+- **待做**：PreCompact hook（防漏）、Trading MCP Server、Cloudflare Tunnel
+
+### 通讯部文件清单
+
+| 文件 | 用途 |
+|------|------|
+| `~/.claude/scripts/comm_hub.sh` | ttyd 三实例 + 看板，start/stop/status |
+| `~/.claude/scripts/brief.sh` | 项目简报生成器（从 conversations.db 提取摘要+剪贴板） |
+| `~/.claude/scripts/new_project.sh` | 新项目脚手架（CLAUDE.md/CHECKPOINT/handoff/context/review） |
+| `~/.claude/scripts/db_write.py` | 对话种子写入（hooks 触发） |
+| `~/.claude/scripts/inject_rules.py` | UserPromptSubmit hook 注入 rules.md |
+| `~/.claude/scripts/inject_work_protocol.py` | UserPromptSubmit hook 注入工作准则 |
+| `~/.claude/.comm_pass` | ttyd 认证密码（chmod 600） |
 
 ---
 
@@ -160,8 +172,14 @@
 - `~/.claude/CLAUDE.md` — CEO 层规则（核心原则、通用恢复协议）
 - `~/.claude/scripts/db_write.py` — 对话种子写入脚本（hooks触发）
 - `~/.claude/scripts/convert_conversation.py` — JSONL 转 Markdown 工具
+- `~/.claude/scripts/comm_hub.sh` — 通讯部 ttyd 看板（认证+手机适配）
+- `~/.claude/scripts/brief.sh` — 项目简报生成器
+- `~/.claude/scripts/new_project.sh` — 新项目脚手架
+- `~/.claude/scripts/inject_rules.py` — hook: 注入 rules.md
+- `~/.claude/scripts/inject_work_protocol.py` — hook: 注入工作准则
 - `~/.claude/commands/checkpoint.md` — `/checkpoint` slash command
 - `~/.claude/handofffromtaiji.md` — 太极写给黑丝白纱的 handoff
+- `~/.claude/.comm_pass` — ttyd 认证密码
 
 ## 管理中的项目
 - **auto-trading**: `/Users/allenbot/project/auto-trading`
