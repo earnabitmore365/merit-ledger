@@ -1,44 +1,41 @@
 {
   "last_run": {
-    "run_id": "run_1773657770083",
-    "created_at": "2026-03-16T10:42:50.118Z",
-    "parent_event_id": "evt_1773652610050",
+    "run_id": "run_1774000043539",
+    "created_at": "2026-03-20T09:47:23.567Z",
+    "parent_event_id": "evt_1773912492662",
     "selected_gene_id": "gene_gep_optimize_prompt_and_assets",
-    "selected_capsule_id": "capsule_1773652610050",
+    "selected_capsule_id": null,
     "selector": {
       "selected": "gene_gep_optimize_prompt_and_assets",
       "reason": [
         "signals match gene.signals_match",
-        "capsule trigger matches signals",
-        "signals: protocol_drift, user_feature_request:**USER**: Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK. When reading HEARTB, user_improvement_suggestion:Browser Skill 封装 - Agent Autonomy Kit **其他待办：** - Mini AI Agent 技术研究 - Reddit MCP（已暂停，有替代方案） - 指标库重构等, capability_gap, repeated_tool_usage:exec",
-        "memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.952",
+        "signals: protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop",
+        "memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.848",
         "drift_intensity: 0.707"
       ],
       "alternatives": []
     },
     "signals": [
       "protocol_drift",
-      "user_feature_request:**USER**: Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK. When reading HEARTB",
-      "user_improvement_suggestion:Browser Skill 封装 - Agent Autonomy Kit **其他待办：** - Mini AI Agent 技术研究 - Reddit MCP（已暂停，有替代方案） - 指标库重构等",
-      "capability_gap",
-      "repeated_tool_usage:exec"
+      "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史",
+      "high_failure_ratio",
+      "force_innovation_after_repair_loop"
     ],
     "mutation": {
       "type": "Mutation",
-      "id": "mut_1773657770082",
+      "id": "mut_1774000043539",
       "category": "innovate",
       "trigger_signals": [
         "protocol_drift",
-        "user_feature_request:**USER**: Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK. When reading HEARTB",
-        "user_improvement_suggestion:Browser Skill 封装 - Agent Autonomy Kit **其他待办：** - Mini AI Agent 技术研究 - Reddit MCP（已暂停，有替代方案） - 指标库重构等",
-        "capability_gap",
-        "repeated_tool_usage:exec"
+        "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史",
+        "high_failure_ratio",
+        "force_innovation_after_repair_loop"
       ],
       "target": "gene:gene_gep_optimize_prompt_and_assets",
       "expected_effect": "explore new strategy combinations to escape local optimum",
       "risk_level": "medium"
     },
-    "mutation_id": "mut_1773657770082",
+    "mutation_id": "mut_1774000043539",
     "personality_state": {
       "type": "PersonalityState",
       "rigor": 0.7,
@@ -63,14 +60,13 @@
       "assets/gep/failed_capsules.json",
       "assets/gep/genes.json",
       "assets/gep/genes.jsonl",
-      "handoff.md",
-      "handoff_from_gemini.md",
-      "handoff_from_grok.md",
+      "handoff_to_abby.md",
       "handoff_to_gemini.md",
       "handoff_to_grok.md",
-      "scripts/validate-modules.js"
+      "handofftotaiji.md",
+      "monitor_bot.py"
     ],
-    "baseline_git_head": "a95316f8f615d04e694a561f9e403cbd6325c4f7",
+    "baseline_git_head": "f69c2e932ecdd4ee9c3bfbb552d5f5960e9c9e0d",
     "blast_radius_estimate": {
       "files": 20,
       "lines": 1600
@@ -83,13 +79,13 @@
     "hub_lessons": []
   },
   "last_solidify": {
-    "run_id": "run_1773657770083",
-    "at": "2026-03-16T10:46:13.940Z",
-    "event_id": "evt_1773657973940",
-    "capsule_id": null,
+    "run_id": "run_1774000043539",
+    "at": "2026-03-20T09:51:20.590Z",
+    "event_id": "evt_1774000280590",
+    "capsule_id": "capsule_1774000280590",
     "outcome": {
-      "status": "failed",
-      "score": 0.2
+      "status": "success",
+      "score": 0.85
     }
   }
 }

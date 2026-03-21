@@ -82,9 +82,15 @@
       "epigenetic_marks": [
         {
           "context": "darwin/arm64/v22.22.0",
-          "boost": 0.30,
+          "boost": 0.3,
           "reason": "consolidated_3_success_marks_cycle_0060_0065_0070: reinforced_by_success(+0.15) + signal_coverage_expanded(+0.10) + reinforced_by_success_cycle_0070(+0.05)",
           "created_at": "2026-03-15T08:19:58.000Z"
+        },
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": -0.15,
+          "reason": "suppressed_by_failure: cycle_0094_07:08(intent_mismatch_repair_on_optimize_gene, zero_change), net_boost=+0.15",
+          "created_at": "2026-03-19T02:26:00.000Z"
         }
       ],
       "schema_version": "1.6.0",
@@ -261,7 +267,12 @@
       ],
       "constraints": {
         "max_files": 4,
-        "forbidden_paths": [".git", "node_modules", "skills/evolver", "skills/feishu-evolver-wrapper"]
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver",
+          "skills/feishu-evolver-wrapper"
+        ]
       },
       "validation": [
         "node -e \"const s = require(process.env.HOME+'/.claude/skills/gene-crossover'); console.log(Object.keys(s))\"",
@@ -302,7 +313,12 @@
       ],
       "constraints": {
         "max_files": 4,
-        "forbidden_paths": [".git", "node_modules", "skills/evolver", "skills/feishu-evolver-wrapper"]
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver",
+          "skills/feishu-evolver-wrapper"
+        ]
       },
       "validation": [
         "node -e \"const s = require(process.env.HOME+'/.claude/skills/evo-digest'); console.log(Object.keys(s))\"",
@@ -318,34 +334,97 @@
       ],
       "registered_at": "2026-03-16T13:18:00.000Z",
       "registered_by": "cycle_0083"
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_innovate_evo_lint",
+      "category": "innovate",
+      "signals_match": [
+        "protocol_drift",
+        "force_innovation_after_repair_loop",
+        "narrative_integrity",
+        "data_validation",
+        "lint_request"
+      ],
+      "preconditions": [
+        "no evo-lint skill exists",
+        "recurring protocol_drift issues from data integrity problems"
+      ],
+      "strategy": [
+        "Parse evolution_narrative.md entries with line numbers",
+        "Validate chronological order, intent-gene consistency, signal cleanliness",
+        "Check gene reference integrity against genes.json",
+        "Detect duplicate entries",
+        "Output structured report with fix suggestions",
+        "Install skill to ~/.claude/skills/evo-lint/"
+      ],
+      "constraints": {
+        "max_files": 5,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver",
+          "skills/feishu-evolver-wrapper"
+        ]
+      },
+      "validation": [
+        "node -e \"const s = require(process.env.HOME+'/.claude/skills/evo-lint'); console.log(Object.keys(s))\"",
+        "node -e \"const s = require(process.env.HOME+'/.claude/skills/evo-lint'); s.main().then(r => console.log('issues:', r.totalIssues, 'clean:', r.clean))\""
+      ],
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": 0.5,
+          "reason": "new_innovation_skill_data_integrity_linter",
+          "created_at": "2026-03-16T21:52:00.000Z"
+        }
+      ],
+      "registered_at": "2026-03-16T21:52:00.000Z",
+      "registered_by": "cycle_0091"
     }
   ],
   "retired_genes": [
     {
       "id": "gene_auto_53538cc4",
       "category": "optimize",
-      "_retired_signals": ["evolution_stagnation_detected", "stable_success_plateau"],
+      "_retired_signals": [
+        "evolution_stagnation_detected",
+        "stable_success_plateau"
+      ],
       "_retired_reason": "zombie_gene_manual_2026-03-12: 0变更循环，退出候选池",
       "_retired_at": "2026-03-14T12:08:00.000Z"
     },
     {
       "id": "gene_auto_c7368808",
       "category": "optimize",
-      "_retired_signals": ["evolution_stagnation_detected", "stable_success_plateau", "evolution_saturation"],
+      "_retired_signals": [
+        "evolution_stagnation_detected",
+        "stable_success_plateau",
+        "evolution_saturation"
+      ],
       "_retired_reason": "zombie_gene_2026-03-13: 20+次零变更空循环，ensureGene自动复活根因已堵",
       "_retired_at": "2026-03-14T12:08:00.000Z"
     },
     {
       "id": "gene_bootstrap_memory_files",
       "category": "innovate",
-      "_retired_signals": ["memory_missing", "user_missing", "bootstrap", "init"],
+      "_retired_signals": [
+        "memory_missing",
+        "user_missing",
+        "bootstrap",
+        "init"
+      ],
       "_retired_reason": "preconditions_permanently_unmet: MEMORY.md and USER.md exist since 2026-03-08, gene can never fire again",
       "_retired_at": "2026-03-16T06:31:30.000Z"
     },
     {
       "id": "gene_auto_45f153bd",
       "category": "innovate",
-      "_retired_signals": ["mission_control", "gene_data_fix"],
+      "_retired_signals": [
+        "mission_control",
+        "gene_data_fix"
+      ],
       "_retired_reason": "single_use_gene: used once for validate-modules repair (2026-03-15 02:04, 6 files/209 lines), never persisted to genes.json",
       "_retired_at": "2026-03-16T20:13:00.000Z"
     }

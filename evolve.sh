@@ -33,8 +33,8 @@ if [ "$PROJECT" = "taiji" ]; then
   REPO_ROOT="$HOME/.claude"
   SESSIONS_DIR="$HOME/.claude/projects/-Users-allenbot"
 else
-  REPO_ROOT="$HOME/project/$PROJECT"
-  PROJECT_ENCODED=$(echo "$REPO_ROOT" | sed 's|/|-|g')
+  REPO_ROOT=$(readlink -f "$HOME/project/$PROJECT")
+  PROJECT_ENCODED=$(echo "$REPO_ROOT" | sed 's|[/ ]|-|g')
   SESSIONS_DIR="$HOME/.claude/projects/${PROJECT_ENCODED}"
 fi
 

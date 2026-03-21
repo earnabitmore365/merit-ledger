@@ -81,8 +81,17 @@
       }
     ]
   },
+  "extraKnownMarketplaces": {
+    "claude-code-workflows": {
+      "source": {
+        "source": "github",
+        "repo": "wshobson/agents"
+      }
+    }
+  },
   "language": "中文",
   "effortLevel": "high",
+  "voiceEnabled": true,
   "skipDangerousModePermissionPrompt": true,
   "mcpServers": {
     "sequential-thinking": {
@@ -90,6 +99,12 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "trading-monitor": {
+      "command": "python3",
+      "args": [
+        "/Volumes/BIWIN NV 7400 2TB/project/auto-trading/mcp_server.py"
       ]
     }
   }

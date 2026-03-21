@@ -5,7 +5,7 @@
       "repo": "anthropics/claude-plugins-official"
     },
     "installLocation": "/Users/allenbot/.claude/plugins/marketplaces/claude-plugins-official",
-    "lastUpdated": "2026-03-16T10:42:52.891Z"
+    "lastUpdated": "2026-03-20T10:13:58.227Z"
   },
   "ui-ux-pro-max-skill": {
     "source": {
@@ -14,5 +14,13 @@
     },
     "installLocation": "/Users/allenbot/.claude/plugins/marketplaces/ui-ux-pro-max-skill",
     "lastUpdated": "2026-02-24T10:01:17.004Z"
+  },
+  "claude-code-workflows": {
+    "source": {
+      "source": "github",
+      "repo": "wshobson/agents"
+    },
+    "installLocation": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows",
+    "lastUpdated": "2026-03-19T09:06:34.172Z"
   }
 }

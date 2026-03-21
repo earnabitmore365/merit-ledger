@@ -10,6 +10,746 @@
         "lastUpdated": "2026-02-24T10:01:37.569Z",
         "gitCommitSha": "6623f12b4058d09618c89cffb2de59a47c45f999"
       }
+    ],
+    "marketplaces/claude-code-workflows@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/marketplaces/claude-code-workflows",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:16.000Z",
+        "lastUpdated": "2026-03-19T09:08:16.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "accessibility-compliance@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/accessibility-compliance",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "agent-orchestration@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/agent-orchestration",
+        "version": "1.2.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "agent-teams@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/agent-teams",
+        "version": "1.0.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "api-scaffolding@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/api-scaffolding",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "api-testing-observability@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/api-testing-observability",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "application-performance@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/application-performance",
+        "version": "1.3.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "arm-cortex-microcontrollers@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/arm-cortex-microcontrollers",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "backend-api-security@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/backend-api-security",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "backend-development@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/backend-development",
+        "version": "1.3.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "blockchain-web3@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/blockchain-web3",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "business-analytics@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/business-analytics",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "c4-architecture@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/c4-architecture",
+        "version": "1.0.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "cicd-automation@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/cicd-automation",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "cloud-infrastructure@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/cloud-infrastructure",
+        "version": "1.3.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "code-documentation@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/code-documentation",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "code-refactoring@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/code-refactoring",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "codebase-cleanup@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/codebase-cleanup",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "comprehensive-review@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/comprehensive-review",
+        "version": "1.3.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "conductor@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/conductor",
+        "version": "1.2.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "content-marketing@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/content-marketing",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "context-management@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/context-management",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "customer-sales-automation@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/customer-sales-automation",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "data-engineering@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/data-engineering",
+        "version": "1.3.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "data-validation-suite@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/data-validation-suite",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "database-cloud-optimization@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/database-cloud-optimization",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "database-design@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/database-design",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "database-migrations@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/database-migrations",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "debugging-toolkit@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/debugging-toolkit",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "dependency-management@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/dependency-management",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "deployment-strategies@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/deployment-strategies",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "deployment-validation@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/deployment-validation",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "developer-essentials@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/developer-essentials",
+        "version": "1.0.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "distributed-debugging@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/distributed-debugging",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "documentation-generation@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/documentation-generation",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "dotnet-contribution@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/dotnet-contribution",
+        "version": "1.0.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "error-debugging@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/error-debugging",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "error-diagnostics@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/error-diagnostics",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "framework-migration@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/framework-migration",
+        "version": "1.3.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "frontend-mobile-development@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/frontend-mobile-development",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "frontend-mobile-security@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/frontend-mobile-security",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "full-stack-orchestration@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/full-stack-orchestration",
+        "version": "1.3.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "functional-programming@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/functional-programming",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "game-development@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/game-development",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "git-pr-workflows@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/git-pr-workflows",
+        "version": "1.3.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "hr-legal-compliance@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/hr-legal-compliance",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "incident-response@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/incident-response",
+        "version": "1.3.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "javascript-typescript@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/javascript-typescript",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "julia-development@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/julia-development",
+        "version": "1.0.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "jvm-languages@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/jvm-languages",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "kubernetes-operations@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/kubernetes-operations",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "llm-application-dev@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/llm-application-dev",
+        "version": "2.0.5",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "machine-learning-ops@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/machine-learning-ops",
+        "version": "1.2.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "meigen-ai-design@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/meigen-ai-design",
+        "version": "1.0.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "multi-platform-apps@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/multi-platform-apps",
+        "version": "1.3.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "observability-monitoring@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/observability-monitoring",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "payment-processing@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/payment-processing",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "performance-testing-review@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/performance-testing-review",
+        "version": "1.2.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "python-development@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/python-development",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "quantitative-trading@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/quantitative-trading",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "reverse-engineering@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/reverse-engineering",
+        "version": "1.0.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "security-compliance@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/security-compliance",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "security-scanning@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/security-scanning",
+        "version": "1.3.1",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "seo-analysis-monitoring@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/seo-analysis-monitoring",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "seo-content-creation@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/seo-content-creation",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "seo-technical-optimization@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/seo-technical-optimization",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "shell-scripting@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/shell-scripting",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "startup-business-analyst@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/startup-business-analyst",
+        "version": "1.0.5",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "systems-programming@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/systems-programming",
+        "version": "1.2.2",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "tdd-workflows@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/tdd-workflows",
+        "version": "1.3.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "team-collaboration@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/team-collaboration",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "ui-design@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/ui-design",
+        "version": "1.0.3",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "unit-testing@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/unit-testing",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
+    ],
+    "web-scripting@claude-code-workflows": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/web-scripting",
+        "version": "1.2.0",
+        "installedAt": "2026-03-19T09:08:38.000Z",
+        "lastUpdated": "2026-03-19T09:08:38.000Z",
+        "gitCommitSha": "1ad2f007d5e9ec822a2d79e727ac1dcdf5f66f11"
+      }
     ]
   }
 }
