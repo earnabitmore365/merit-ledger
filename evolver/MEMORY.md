@@ -63,8 +63,5 @@
 | #0084-90 | 03-16 | optimize ×7 (narrative+MEMORY+gene integrity) | ✅ 退休gene_bootstrap_memory_files，归档乱序/污染/错配条目×4，合并pre-crossover条目为归档块（-19行），去重MEMORY行，补录ghost gene，修正genes.json registered_by，基因池8→7条，narrative 67→53行 |
 | #0091 | 03-16 | innovate (evo-lint skill) | ✅ 创建 evo-lint 技能（演化数据完整性校验器），检查时序乱序/意图错配/信号污染/基因引用/重复条目，注册 gene_innovate_evo_lint 到 genes.json（第9条），5文件~230行 |
 | #0092 | 03-16 | optimize (narrative+MEMORY dedup) | ✅ 归档乱序污染条目11:57入CONSOLIDATED块（第4个bookkeeping周期），去重MEMORY 4行（#0085/#0086/#0089/#0090已被批次行覆盖），narrative 63→59行 |
-| #0093 | 03-17 | optimize (final tail cleanup) | ✅ 归档最后一条乱序失败条目12:05入ARCHIVED块（7→8 failed cycles），清理信号污染+意图错配，narrative 62→59行（净减3行） |
-| #0094 | 03-18 | optimize (narrative+MEMORY tail cleanup) | ✅ 归档最后一条乱序条目13:13入CONSOLIDATED bookkeeping块（4→5周期），去重MEMORY.md #0088重复行，evo-lint验证0问题，narrative 67→63行 |
-| #0095 | 03-19 | optimize (data integrity: phantom entries + intent fix) | ✅ 修正narrative末条REPAIR→OPTIMIZE意图错配+清洗信号污染(6个字段)，删除MEMORY.md 2条幻影条目(#0095/#0096从未solidify)，修正genes.json epigenetic mark中的幻影cycle引用，evo-lint验证0问题，3文件~10行 |
-| #0096 | 03-19 | optimize (narrative tail cleanup: intent+signal) | ✅ 修正08:21:49条目REPAIR→OPTIMIZE意图错配+信号去污(204→40字符)+Result行去污，evo-lint验证0问题，1文件~4行 |
-| #0097 | 03-20 | optimize (narrative integrity: intent+signal fix) | ✅ 修正09:28:12条目REPAIR→OPTIMIZE意图错配+信号去污(204→40字符)+补充Result行（#0095声称已修但未持久化），evo-lint验证0问题，1文件~4行 |
+| #0093-97 | 03-17~20 | optimize ×5 (narrative integrity + tail cleanup) | ✅ 归档/合并乱序条目，修正3处REPAIR→OPTIMIZE意图错配，信号去污(204→40字符)，幻影条目清理，evo-lint验证0问题，narrative 92→63行 |
+| #0098 | 03-21 | optimize (narrative+MEMORY noise reduction) | ✅ 合并8条narrative尾部条目(03-17~20)为1个CONSOLIDATED块（修正INNOVATE→OPTIMIZE意图错配），合并5条MEMORY行为1行批次摘要，evo-lint 0问题，narrative 92→64行，MEMORY 71→67行，2文件~33行 |

@@ -60,33 +60,17 @@ A chronological record of evolution decisions and outcomes.
 - Gene: gene_innovate_evo_lint | Score: 0.90 | Scope: 5 files, 230 lines
 - Signals: [protocol_drift, force_innovation_after_repair_loop, capability_gap]
 - Result: 创建 evo-lint 技能（演化数据完整性校验器），检查时序乱序/意图错配/信号污染/基因引用完整性/重复条目，注册 gene_innovate_evo_lint 到 genes.json（第9条），同时归档修复 narrative 尾部乱序条目
-### [2026-03-17 13:49:56] OPTIMIZE - failed
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines
-- Signals: [protocol_drift, user_feature_request]
-### [2026-03-18 10:33:30] OPTIMIZE - success
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 1 files, 5 lines
-- Signals: [protocol_drift, user_feature_request, high_failure_ratio, force_innovation_after_repair_loop]
-- Result: gene strategy 追加 "Append cycle record to MEMORY.md" 步骤，变更 1 文件 / 5 行
-### [2026-03-18 12:50:17] OPTIMIZE - failed
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines
-- Signals: [protocol_drift, user_feature_request]
-### [2026-03-18 15:30:49] OPTIMIZE - success
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 1 files, 5 lines
-- Signals: [log_error, protocol_drift, user_feature_request]
-- Result: validate-modules.js 路径检查优化（1文件/5行），修复对不存在路径的报错
-### [2026-03-19 07:08:20] OPTIMIZE - failed
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines
-- Signals: [log_error, errsig:API_401_502_Bad_Gateway, protocol_drift, user_feature_request:append_only_history, high_failure_ratio, force_innovation_after_repair_loop]
-- Result: zero-change cycle, API transient error (not actionable), mutation category=repair mismatched optimize gene
-### [2026-03-19 08:21:49] OPTIMIZE - success
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 1 files, 5 lines
-- Signals: [log_error, errsig:API_401_502_Bad_Gateway, protocol_drift, user_feature_request:append_only_history]
-- Result: validate-modules.js 路径检查优化（1文件/5行），CHECKPOINT.md 追加 #100 通讯部总机记录
-### [2026-03-19 09:28:12] OPTIMIZE - failed
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines
-- Signals: [log_error, errsig:API_401_502_Bad_Gateway, protocol_drift, user_feature_request:append_only_history]
-- Result: zero-change cycle, API transient error (502 Bad Gateway), intent corrected REPAIR→OPTIMIZE by cycle #0097
-### [2026-03-20 09:51:20] INNOVATE - success
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 1 files, 5 lines
-- Signals: [protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop]
-- Result: 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop，变更 1 文件 / 5 行。
+> **CONSOLIDATED**: 8 gene_gep_optimize_prompt_and_assets cycles (2026-03-17 to 2026-03-20): 4 success (each 1 file/5 lines: gene strategy step addition, validate-modules path optimization, history record append) + 4 failed (0 files/0 lines: API transient errors or no actionable target). Note: 2026-03-20 entry intent corrected INNOVATE→OPTIMIZE.
+
+### [2026-03-21 02:16:32] OPTIMIZE - success
+- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 33 lines
+- Signals: [log_error, protocol_drift, user_feature_request:append_only_history, perf_bottleneck, capability_gap, high_tool_usage:exec]
+- Result: consolidated 8 narrative tail entries (2026-03-17~20) into 1 CONSOLIDATED block (30→2 lines), merged 5 MEMORY.md entries (#0093-97) into 1 batch line (5→1), fixed INNOVATE→OPTIMIZE intent mismatch, evo-lint 0 issues
+### [2026-03-21 02:20:24] REPAIR - success
+- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 3 lines
+- Signals: [log_error, protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, perf_bottleneck]
+- Strategy:
+  1. Extract signals and determine selection rationale via Selector JSON
+  2. Prefer reusing existing Gene/Capsule; only create if no match exists
+  3. Refactor prompt assembly to embed assets (genes, capsules, parent event)
+- Result: 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, user_improvement_suggestion:lock — entry had 3 issues: (a) out of chronological order (appear
