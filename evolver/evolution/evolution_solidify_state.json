@@ -1,38 +1,41 @@
 {
   "last_run": {
-    "run_id": "run_1774085245112",
-    "created_at": "2026-03-21T09:27:25.145Z",
-    "parent_event_id": "evt_1774079917995",
+    "run_id": "run_1774133252547",
+    "created_at": "2026-03-21T22:47:32.582Z",
+    "parent_event_id": "evt_1774132047348",
     "selected_gene_id": "gene_gep_optimize_prompt_and_assets",
-    "selected_capsule_id": "capsule_1774079917995",
+    "selected_capsule_id": null,
     "selector": {
       "selected": "gene_gep_optimize_prompt_and_assets",
       "reason": [
         "signals match gene.signals_match",
-        "capsule trigger matches signals",
-        "signals: protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史",
-        "memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.838",
-        "drift_intensity: 0.707"
+        "signals: protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop",
+        "memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.835",
+        "drift_intensity: 0.577"
       ],
       "alternatives": []
     },
     "signals": [
       "protocol_drift",
-      "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史"
+      "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史",
+      "high_failure_ratio",
+      "force_innovation_after_repair_loop"
     ],
     "mutation": {
       "type": "Mutation",
-      "id": "mut_1774085245111",
+      "id": "mut_1774133252546",
       "category": "innovate",
       "trigger_signals": [
         "protocol_drift",
-        "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史"
+        "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史",
+        "high_failure_ratio",
+        "force_innovation_after_repair_loop"
       ],
       "target": "gene:gene_gep_optimize_prompt_and_assets",
       "expected_effect": "explore new strategy combinations to escape local optimum",
       "risk_level": "medium"
     },
-    "mutation_id": "mut_1774085245111",
+    "mutation_id": "mut_1774133252546",
     "personality_state": {
       "type": "PersonalityState",
       "rigor": 0.7,
@@ -56,13 +59,9 @@
       "assets/gep/events.jsonl",
       "assets/gep/failed_capsules.json",
       "assets/gep/genes.json",
-      "assets/gep/genes.jsonl",
-      "context.md",
-      "monitor_bot.py",
-      "review.md",
-      "scripts/validate-modules.js"
+      "assets/gep/genes.jsonl"
     ],
-    "baseline_git_head": "f960a531580af321922c5ec13657146b3a36761c",
+    "baseline_git_head": "85594d11078b02b14d88c753ea786e6c1de355fb",
     "blast_radius_estimate": {
       "files": 20,
       "lines": 1600
@@ -75,10 +74,10 @@
     "hub_lessons": []
   },
   "last_solidify": {
-    "run_id": "run_1774085245112",
-    "at": "2026-03-21T09:32:55.883Z",
-    "event_id": "evt_1774085575883",
-    "capsule_id": "capsule_1774079917995",
+    "run_id": "run_1774133252547",
+    "at": "2026-03-21T22:51:21.487Z",
+    "event_id": "evt_1774133481487",
+    "capsule_id": "capsule_1774133481487",
     "outcome": {
       "status": "success",
       "score": 0.85

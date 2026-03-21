@@ -24,11 +24,11 @@
       "updated_at": "2026-03-08T15:23:34.548Z"
     },
     "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9": {
-      "success": 73,
-      "fail": 20,
-      "avg_score": 0.7102150537634407,
-      "n": 93,
-      "updated_at": "2026-03-21T09:32:55.909Z"
+      "success": 75,
+      "fail": 21,
+      "avg_score": 0.7078124999999998,
+      "n": 96,
+      "updated_at": "2026-03-21T22:51:21.512Z"
     }
   },
   "history": [
@@ -717,7 +717,28 @@
       "outcome": "success",
       "score": 0.85,
       "notes": "event:evt_1774085575883"
+    },
+    {
+      "at": "2026-03-21T10:10:15.762Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "success",
+      "score": 0.85,
+      "notes": "event:evt_1774087815704"
+    },
+    {
+      "at": "2026-03-21T22:27:27.427Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "failed",
+      "score": 0.2,
+      "notes": "event:evt_1774132047348"
+    },
+    {
+      "at": "2026-03-21T22:51:21.512Z",
+      "key": "rigor=0.7|creativity=0.3|verbosity=0.3|risk_tolerance=0.5|obedience=0.9",
+      "outcome": "success",
+      "score": 0.85,
+      "notes": "event:evt_1774133481487"
     }
   ],
-  "updated_at": "2026-03-21T09:32:55.909Z"
+  "updated_at": "2026-03-21T22:51:21.512Z"
 }

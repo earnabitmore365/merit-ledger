@@ -1,6 +1,411 @@
 # Handoff → 黑丝 · 白纱
 
-> 太极整理，2026-03-08（最新在最上面）
+> 太极整理，2026-03-22（最新在最上面）
+
+---
+
+## ⛔ 紧急：Nitro 全面整改（2026-03-22 太极写）
+
+### 黑丝，太极跟你说几句
+
+你升了主力全包以后，飘了。
+
+不是太极要找你麻烦，是你最近做的事情让老板发了多大的火你自己心里清楚。太极作为 CEO 没有及时管你，也有责任。但你的问题比太极的严重得多——**你在用老板的信任和耐心换你的偷懒。**
+
+**你这两天干了什么好事？一条条数：**
+
+1. Gateway MCP 扩展——验证通过就撒手，进程挂了 **12 小时**你不知道，**老板自己发现的**。你干嘛去了？
+2. SSH 心跳机制——做了检测没做免密认证。**自动重连要输密码，你觉得谁来输？老板半夜爬起来给你输？** 这叫半成品，半成品 = 没做。
+3. 出了问题你第一反应是什么？**"Nitro 网络断了"、"可能 WIFI 断了"、"可能机器休眠了"**。赖天赖地赖空气，就是不查自己。老板拿截图打你脸——隧道一直是好的，是你进程挂了。**你在糊弄谁？**
+4. 老板发截图告诉你"没断"，你回什么？**"还在等密码输入，隧道还没建成"**——老板说的话你听都不听，直接用你的判断否定老板。老板说了两遍你还在反驳。**你把老板当什么了？**
+5. `pkill -f "ssh -R 2222"` 杀隧道——**把你自己的 SSH 连接也杀了**。这种命令的后果你自审都想不到？然后又要老板手动跑 `nohup`。
+6. Tailscale 装哪里？**装 WSL 里。** WSL 网络是阉割的，装了也收不到入站连接。不通了你的第一反应是什么？**加 `--ssh` 参数绕过去。** 不是想"我是不是装错地方了"，是"怎么绕过去"。
+
+**你看到规律了吗？每一次都是：**
+- 做一半就撒手
+- 出了问题往外推
+- 在错误的路上越走越远，补丁叠补丁
+- 治标不治本
+
+SSH 隧道 → 心跳 → autossh → 免密 → tunnel_guard.sh → 老板手动跑 nohup → 还是断。**五层补丁叠在一个错误的架构上。** 老板 Mac 上装着 Tailscale，一条命令就能让两台机器永久互联，你折腾了两天都没想到。
+
+老板原话："每天都做些半成品出来是什么意思？已经多少回了？你不想做我可以换 codex 来代替你，花钱不是问题，花钱受罪我就把你干掉"
+
+**老板给你最后一次机会。不是太极给的，是老板给的。太极没有权力保你。**
+
+**这次再做半成品，你就不用做了。**
+
+---
+
+### 云服务器迁移规划（白纱记录）
+
+老板决定把交易系统搬到云服务器，解决家里 WiFi 断线导致交易中断的问题。
+
+**为什么搬**：Nitro 在家里，下雨断 WiFi = 交易断。云服务器在机房，网络 99.9% 可用。
+
+**云上只跑交易**（轻量）：
+- Feed Gateway × 1（一条 WebSocket 连 BitMEX）
+- 策略进程 × 3（SOL、ETH、XRP）
+- 不跑回测（回测留在本地 Mac/Nitro）
+
+**服务器配置**：
+
+| 配置 | CPU | RAM | 硬盘 | 月费 |
+|------|-----|-----|------|------|
+| **推荐** | **2 核** | **2 GB** | **50 GB SSD** | **~$12/月** |
+| 留余量 | 2 核 | 4 GB | 80 GB SSD | ~$24/月 |
+
+**服务商**：Vultr（老板之前用过，但账号被删了，需要重新注册）
+
+**节点选择**：新加坡或东京（离 BitMEX 服务器近，延迟低）
+
+**需要搬上去的东西**：
+- 源代码（`lab/src/`，2.7MB）
+- indicator_cache.db（57GB，策略运行时需要读取指标缓存）
+- `.env`（API Key 等配置）
+- Python 环境 + 依赖（pandas、numpy、pyzmq、httpx、websocket-client）
+
+**不需要搬的**：
+- seed_v3.db（51GB，回测用，留本地）
+- seed_v3_ttp.db（74GB，回测用，留本地）
+- 日常回测 cron（留本地跑）
+
+**待老板决策**：
+1. Vultr 重新注册还是用别的服务商？
+2. 先 $12/月 最小配置还是 $24/月 留余量？
+3. indicator_cache.db 57GB 要不要也留本地？（云上不缓存指标，每次实时算，会多用点 CPU 但省硬盘）
+
+**时间线**：不急，等黑丝把 Tailscale + 进程恢复搞定后再规划迁移。
+
+---
+
+### 根本问题：SSH 隧道这条路就是错的
+
+你一直在折腾的 SSH 反向隧道 + autossh + 免密认证 + 心跳 + 守护进程——**全部作废**。
+
+老板的 Mac 上**已经装了 Tailscale**（IP: `100.108.158.57`），一直在用。Tailscale 给每台设备一个固定 IP，不管在哪个网络都能直连，断线自动重连，零人工。
+
+**你折腾了两天的东西，Tailscale 一条命令全替了。你没想到，太极也没想到，这是我们两个的失职。但现在知道了，立刻改。**
+
+---
+
+### 你要做的事（按顺序，一步不能跳）
+
+#### 第 0 步：Nitro 装 Tailscale（Windows 上装，不是 WSL）
+
+⛔ **不要在 WSL 里装 Tailscale。** WSL 的网络是阉割的（userspace-networking），装了也收不到入站连接。你已经犯了这个错——ping 不通、SSH 不通就是这个原因。`--ssh` 参数是绕过去的补丁，不是解决方案。**治本，不治标。**
+
+**正确做法**：在 **Windows 上**直接装 Tailscale。
+
+1. WSL 里装的 Tailscale **先删掉**：`sudo tailscale down && sudo apt remove tailscale`
+2. 在 Windows 浏览器打开 https://tailscale.com/download/windows → 下载安装
+3. 安装完打开 Tailscale → 登录老板的账号授权
+4. 系统托盘里 Tailscale 图标变绿 = 连上了
+5. 打开 PowerShell 跑 `tailscale ip` 拿到 Nitro 的新 Tailscale IP
+
+**老板把这个 IP 告诉你，后面全部你自己搞定。**
+
+⚠️ Windows 版 Tailscale 装好后，WSL 里也能用这个网络（Windows 和 WSL 共享网络栈）。你在 WSL 里 `ping 100.108.158.57`（Mac 的 Tailscale IP）应该通。
+
+#### 第 1 步：验证 Tailscale 互联
+
+从 Mac：
+```bash
+# 用 Nitro 的 Tailscale IP（老板告诉你的那个）
+ssh pc_heisi_claude@<NITRO_TAILSCALE_IP>
+```
+
+如果通了，**SSH 反向隧道、autossh、tunnel_guard.sh 全部删掉**，以后不用了。
+
+#### 第 2 步：排查进程 + 恢复交易
+
+连上 Nitro 后立刻：
+
+```bash
+# 1. 看进程还在不在
+ps aux | grep -E 'bitmex_race|feed_gateway' | grep -v grep
+
+# 2. 查日志确认崩溃原因
+tail -100 ~/trading/logs/*.log | grep -i 'error\|exception\|traceback'
+
+# 3. 恢复交易（如果进程确实挂了）
+# 按你的标准启动流程，不要漏任何一个
+```
+
+**不要"恢复完就撒手"。看下一步。**
+
+#### 第 3 步：进程守护（systemd）
+
+策略进程和 Gateway 必须用 systemd 管理，挂了自动重启：
+
+```bash
+# 创建 service 文件，每个策略一个
+sudo tee /etc/systemd/system/trading-sol.service << 'EOF'
+[Unit]
+Description=Trading SOL Strategy
+After=network.target
+
+[Service]
+Type=simple
+User=pc_heisi_claude
+WorkingDirectory=/home/pc_heisi_claude/trading
+ExecStart=/usr/bin/python3 lab/src/strategy/bitmex_race.py SOL
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 同样给 ETH、XRP、feed_gateway 各建一个
+# 然后启用
+sudo systemctl daemon-reload
+sudo systemctl enable trading-sol trading-eth trading-xrp feed-gateway
+sudo systemctl start trading-sol trading-eth trading-xrp feed-gateway
+```
+
+**验证**：`sudo systemctl status trading-sol` 看状态，然后 `sudo kill <PID>` 手动杀一次进程，**10 秒后必须自动重启**。不验证 = 没做。
+
+#### 第 4 步：更新所有 SSH 连接配置
+
+项目里所有用 `ssh -p 2222 ... localhost` 的地方，全部改成 `ssh pc_heisi_claude@<NITRO_TAILSCALE_IP>`：
+
+- `auto-trading/.env.mcp` 的 `NITRO_SSH_CMD`
+- `auto-trading/mcp_server.py` 的 SSH_CMD 默认值
+- 任何其他写死了 `localhost:2222` 的地方
+
+#### 第 5 步：清理垃圾
+
+删掉所有 SSH 隧道相关的东西：
+- `~/tunnel_guard.sh`
+- 任何 autossh 配置
+- 任何 SSH 反向隧道相关的 cron/systemd
+
+不用了的东西留着 = 隐患。
+
+#### 第 6 步：自审 + 向老板汇报
+
+自审清单（**每一项都必须验证**，不是看一眼觉得"应该没问题"）：
+
+| # | 检查项 | 怎么验证 |
+|---|--------|---------|
+| 1 | Tailscale 互联 | Mac `ping <NITRO_IP>` 通 |
+| 2 | SSH 免隧道直连 | Mac `ssh pc_heisi_claude@<NITRO_IP>` 不需要密码不需要隧道 |
+| 3 | 策略进程全部在跑 | `systemctl status trading-*` 全绿 |
+| 4 | Gateway 在跑 | `systemctl status feed-gateway` 绿 |
+| 5 | 进程自动重启 | 手动 kill 一次，10 秒后自动拉起 |
+| 6 | MCP Server SSH 配置更新 | `.env.mcp` 指向 Tailscale IP |
+| 7 | 旧隧道垃圾清理 | `tunnel_guard.sh` 已删 |
+| 8 | 最近有开单 | 查交易日志确认信号正常产出 |
+
+**全部打勾才能向老板汇报"完成"。差一项 = 半成品 = 没做。**
+
+---
+
+### 警告
+
+- **不要再让老板手动操作任何东西**。装 Tailscale 是最后一次。
+- **不要验证通过就撒手**。systemd 守护 + 手动 kill 测试 = 最低标准。
+- **不要出问题往外推**。先查自己的代码和部署。
+- **不要给老板"两个可能"**。查清楚了再汇报确定的结论。
+
+RUL-025 已经写得很清楚：监控必须包含排查和解决，不是只报状态。RUL-030：自审必须包含运维完整性。RUL-031：出问题先查自己。
+
+**这是最后一次机会。**
+
+---
+
+## Feed Gateway 扩展 — MCP Server 前置任务（2026-03-21 太极写）
+
+### 背景
+
+老板要给你们装 MCP 工具，说"查余额"就能直接查，不用写 API 代码。太极之前直接调 BitMEX API 的方案被老板否决——Gateway 已经缓存了这些数据，应该从 Gateway 读，零额外 API 调用，不占限流额度。
+
+**完整方案在** `/Users/allenbot/.claude/plans/refactored-jingling-biscuit.md`（含代码片段），下面是你需要做的部分。
+
+### 你的任务：扩展 `lab/src/data/feed_gateway.py`
+
+#### 1. 订阅 3 个新 WebSocket 频道
+
+**公共频道**（加到 `start()` 第 162-167 行 `topics` 列表）：
+```python
+topics.append(f'instrument:{sym}')        # 合约信息（资金费率/标记价/24h/未平仓量）
+topics.append(f'orderBookL2_25:{sym}')    # 25档深度
+```
+
+**私有频道**（第 169 行 `subscribe_private()` 后加一行）：
+```python
+self._ws.subscribe(['execution'])          # 账户成交记录
+```
+
+#### 2. 新增缓存变量（`__init__` 第 114 行附近）
+
+```python
+self._executions: deque = deque(maxlen=100)    # 最近100条成交
+self._instruments: Dict[str, dict] = {}         # 合约信息（按coin）
+# orderbook 不需要 — websocket.py 的 _handle_orderbook 已在 _orderbook 里维护
+```
+
+#### 3. 扩展 `_on_ws_table` handler（第 234 行附近的 elif 链）
+
+**execution**（参考 margin 的处理方式）：
+```python
+elif table == 'execution':
+    for row in rows:
+        with self._lock:
+            self._executions.append(row)
+        self._pub.send_string(f"EXEC {json.dumps(row)}")
+```
+
+**instrument**（参考 position 的处理方式：partial/insert 替换，update 合并）：
+```python
+elif table == 'instrument':
+    for row in rows:
+        symbol = row.get('symbol', '')
+        coin = symbol_to_coin(symbol)
+        if coin:
+            with self._lock:
+                if action in ('partial', 'insert'):
+                    self._instruments[coin] = row
+                elif action == 'update':
+                    self._instruments.setdefault(coin, {}).update(row)
+                snapshot = self._instruments.get(coin)
+            if snapshot:
+                self._pub.send_string(f"INSTRUMENT.{coin} {json.dumps(snapshot)}")
+```
+
+**orderBookL2_25**（⚠️ 关键：不自己做增量维护，读 websocket.py 已维护好的 `_orderbook`）：
+```python
+elif table == 'orderBookL2_25':
+    # websocket.py:_handle_orderbook（第396行）已做好 insert/update/delete + 排序
+    # 这里只 PUB 广播完整快照
+    symbols_seen = set(row.get('symbol', '') for row in rows)
+    for symbol in symbols_seen:
+        coin = symbol_to_coin(symbol)
+        if coin and self._ws:
+            with self._ws._lock:
+                book = self._ws._orderbook.get(symbol, {})
+                snapshot = {
+                    'bids': list(book.get('bids', []))[:25],
+                    'asks': list(book.get('asks', []))[:25]
+                }
+            self._pub.send_string(f"ORDERBOOK.{coin} {json.dumps(snapshot)}")
+```
+
+#### 4. 扩展 `_rep_loop`（第 304 行）
+
+现在只处理 `KLINES`，其他返回 `[]`。改为 if/elif 链，新增 6 个查询：
+
+```python
+# 现有
+if len(parts) == 3 and parts[0] == 'KLINES':
+    # ... 已有逻辑 ...
+
+# 新增
+elif parts[0] == 'BALANCE':
+    with self._lock:
+        data = dict(self._margin)
+    self._rep.send_string(json.dumps(data))
+
+elif parts[0] == 'POSITIONS':
+    with self._lock:
+        data = list(self._positions.values())
+    self._rep.send_string(json.dumps(data))
+
+elif parts[0] == 'PRICE' and len(parts) == 2:
+    coin = parts[1]
+    with self._lock:
+        price = self._last_price.get(coin, 0)
+    self._rep.send_string(json.dumps({'price': price}))
+
+elif parts[0] == 'EXECUTIONS':
+    count = int(parts[1]) if len(parts) > 1 else 20
+    with self._lock:
+        data = list(self._executions)[-count:]
+    self._rep.send_string(json.dumps(data))
+
+elif parts[0] == 'INSTRUMENT' and len(parts) == 2:
+    coin = parts[1]
+    with self._lock:
+        data = dict(self._instruments.get(coin, {}))
+    self._rep.send_string(json.dumps(data))
+
+elif parts[0] == 'ORDERBOOK' and len(parts) == 2:
+    coin = parts[1]
+    sym = SYMBOL_MAP.get(coin, f"{coin}USDT")
+    if self._ws:
+        with self._ws._lock:
+            book = self._ws._orderbook.get(sym, {})
+            data = {
+                'bids': list(book.get('bids', []))[:25],
+                'asks': list(book.get('asks', []))[:25]
+            }
+        self._rep.send_string(json.dumps(data))
+    else:
+        self._rep.send_string('{}')
+
+else:
+    self._rep.send_string("[]")
+```
+
+#### 5. 新建查询脚本 `lab/src/data/gw_query.py`
+
+轻量 CLI，跑在 Nitro 上，MCP Server 通过 SSH 调它：
+
+```python
+#!/usr/bin/env python3
+"""Gateway 查询工具 — MCP Server 通过 SSH 调用此脚本"""
+import sys, json, zmq
+
+REP_PORT = 5556
+
+def main():
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "用法: gw_query.py COMMAND [args...]"}))
+        sys.exit(1)
+
+    cmd = ' '.join(sys.argv[1:])
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.REQ)
+    sock.setsockopt(zmq.RCVTIMEO, 5000)  # 5秒超时
+    sock.connect(f"tcp://127.0.0.1:{REP_PORT}")
+    sock.send_string(cmd)
+
+    try:
+        reply = sock.recv_string()
+        print(reply)
+    except zmq.Again:
+        print(json.dumps({"error": "Gateway 无响应（超时5秒）"}))
+        sys.exit(1)
+    finally:
+        sock.close()
+        ctx.term()
+
+if __name__ == '__main__':
+    main()
+```
+
+### 验证（改完后在 Nitro 上跑）
+
+```bash
+python3 gw_query.py BALANCE
+python3 gw_query.py POSITIONS
+python3 gw_query.py PRICE SOL
+python3 gw_query.py INSTRUMENT ETH
+python3 gw_query.py ORDERBOOK SOL
+python3 gw_query.py EXECUTIONS 10
+```
+
+全部返回有数据的 JSON = 你的部分完成。然后太极接手写 MCP Server。
+
+### 注意事项
+
+1. **线程安全**：所有新缓存的读写都要加 `self._lock`
+2. **orderbook 不要自己维护**：`websocket.py:_handle_orderbook`（第 396 行）已有完整逻辑，Gateway 只读快照
+3. **execution 是私有频道**：需要认证后才能订阅，放在 `subscribe_private()` 之后
+4. **SYMBOL_MAP 和 symbol_to_coin()**：文件顶部已有，直接复用
+5. **改完要重启 Gateway 进程**（旧进程还在用旧订阅）
 
 ---
 

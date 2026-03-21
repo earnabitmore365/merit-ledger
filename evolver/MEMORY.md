@@ -69,4 +69,7 @@
 | #0100 | 03-21 | innovate (prompt-budget-analyzer skill) | ✅ 创建 prompt-budget-analyzer 技能，分析 GEP 提示词组成（按 Context 区域拆分行/字节/占比），追踪跨周期膨胀趋势，发现 Capsule Preview +2080%/Gene Preview +82% 为最大膨胀源，注册 gene_innovate_prompt_budget_analyzer（第10条），3 文件 ~210 行 |
 | #0101 | 03-21 | innovate (evo-narrative-compactor skill) | ✅ 创建 evo-narrative-compactor 技能（自动 narrative 压缩器），解析 narrative 为结构化块，识别3+相邻同基因条目自动合并为 CONSOLIDATED 块，支持 dry-run/apply 模式，注册 gene_innovate_narrative_compactor（第10条活跃基因），安装到 ~/.claude/skills/，3 文件 ~220 行 |
 | #0102 | 03-21 | optimize (validate-modules + intent fix) | ✅ gene_gep_optimize_prompt_and_assets 命中 protocol_drift，validate-modules.js 兼容垫片优化（1 文件 / 5 行），Note: 意图标签 INNOVATE→OPTIMIZE 已修正 |
-| #0103 | 2026-03-21 | innovate (protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史) | ✅ 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request，1 文件 10 行变更 |
+| #0103 | 03-21 | optimize (narrative + signal cleanup) | ✅ gene_gep_optimize_prompt_and_assets 命中 protocol_drift，1 文件 10 行。Note: intent INNOVATE→OPTIMIZE |
+| #0104 | 03-21 | optimize (stagnation signal) | ✅ gene_auto_53538cc4 (retired) 命中信号，4 文件 33 行。Note: intent INNOVATE→OPTIMIZE |
+| #0105 | 2026-03-22 | innovate (evolution-scorecard skill) | ✅ 创建 evolution-scorecard 技能（量化健康评分器 0-100），聚合6项加权指标（成功率/创新比/零变更率/基因多样性/停滞频率/速度），输出复合分数+字母等级+改进建议，注册 gene_innovate_evolution_scorecard（第11条），安装到 ~/.claude/skills/，3 文件 ~210 行 |
+| #0106 | 03-22 | optimize (narrative integrity) | ✅ 修正3处意图错配(INNOVATE→OPTIMIZE)，修复时序乱序(03-21条目跃到03-22之后)，标注retired gene，修正scope数据，清洗信号污染，2文件~10行 |

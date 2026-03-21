@@ -4,25 +4,30 @@
 
 # CEO / 项目管理 记忆
 
-> 太极最后更新：2026-03-21
+> 太极最后更新：2026-03-22
 
 ## 上次会话要点
 
 > 覆盖更新，不累积。只记下次会话需要知道的事。
 
-- **通讯部合并方案执行**：老板与 claude.ai 讨论完整方案后交太极执行，P0-P2 优先级
-- **通讯部归太极管**：太极 = CEO层 + 通讯部基础设施，黑丝白纱不碰通讯部代码
-- **P0 已完成**：comm_hub.sh 加 Basic Auth 认证（密码 ~/.claude/.comm_pass）、看板手机适配（竖排+状态检测）、brief.sh 简报工具（python3 参数化查询防 SQL 注入）
-- **P1 已完成**：new_project.sh 脚手架（生成 CLAUDE.md/CHECKPOINT/handoff/context/review）、auto-trading 补 context.md + review.md（外部顾问用）
-- **今天还完成**：db_write.py tool_use 提取修复、inject_rules.py、inject_work_protocol.py、RUL-003、ttyd 看板跑通
-- **P2 待做（下周）**：Trading MCP Server、Cloudflare Tunnel 远程接入
+- **Trading MCP Server 完成**：mcp_server.py 重写（337行→373行），从直接调 API 改为 SSH → Gateway 缓存，6 个只读工具，零 API 调用
+- **黑丝已完成 Gateway 扩展**：3 个 WS 频道（instrument/orderBookL2_25/execution）+ 6 个 REP 查询 + gw_query.py，已验证
+- **SSH 连不上**：port 2222 Connection refused，Nitro 不在 Tailscale 网络，需要确认端口转发配置
+- **Cloudflare Tunnel 不需要了**：Tailscale 替代
+- **Tailscale 账号变更**：旧 earnabitmore365 → 新 allentang365.wes@gmail.com，Mac IP 变为 100.79.175.114
+- **手机已加入 Tailscale**：honor-magic-v3 (100.83.244.49)，手机用 `echo:端口` 访问 Mac
+- **Nitro Tailscale IP**：100.88.115.98（Windows 版 Tailscale，不是 WSL）
+- **群聊系统已上线**：8080 端口跑 group_chat.py（Flask+SocketIO），手机 `echo:8080` 访问。`claude -p --bare --dangerously-skip-permissions` 调用
+- **⛔ 群聊待改**：@按钮改成多选切换——第一个点亮的是回答者，其余点亮的是旁听者。旁听者看到回答后可以举手🖐/✅/❌表态。✅❌🖐是AI之间的互动机制（旁听者对回答的反应），不是给老板的按钮。未点亮的角色不参与该轮对话。手动触发旁听，不自动
+- **WebSocket 频道调研完成**：BitMEX 全部公共/私有/平台频道已记录在计划文件（`~/.claude/plans/refactored-jingling-biscuit.md`），老板确认 funding/liquidation/wallet 不加
 
 ---
 
 ## 会话索引（最新在最上面）
 | # | ID | 日期 | 核心内容 |
 |---|-----|------|----------|
-| S44 | 当前 | 03-21 | 通讯部合并方案P0-P1执行(认证+brief.sh+手机适配+new_project.sh+外部顾问文件) |
+| S45 | 当前 | 03-21~22 | Trading MCP Server完成(Gateway扩展+mcp_server.py重写+SSH→Gateway零API)+WebSocket频道全面调研+SSH连不上待查 |
+| S44 | 2ab536e0 | 03-21 | 通讯部P0-P1执行+MCP方案讨论(老板纠正直接调API→改从Gateway读) |
 | S43 | — | 03-19 | 新会话（无历史记录） |
 | S42 | 0da5d1b1 | 03-16 | Mission Control搁置+Claude Code API(port 8100)+Abby升qwen3.5:9b+evolver hook链路修复(加锁)+SessionStart通知修复+Autoresearch调研(暂不动)+命名哲学记录+evo-digest/gene-crossover新skill |
 | S41 | c2c95c51续2 | 03-15 | OpenClaw/Abby修复(API模式修正)+本地模型安装(3注册1未注册)+evolve.js僵尸根修复+openclaw.md参考文档 |
@@ -137,7 +142,7 @@
 | 项目 | 主线 | 当前阶段 |
 |------|------|----------|
 | auto-trading | 分层投资组合分析（快狠准翻倍） | 黑丝主导，白纱支援 |
-| 通讯部 | 对话种子 + ttyd 看板 + 工具链 | ✅ P0-P1完成（认证/brief/看板/脚手架），P2待做（MCP/Tunnel） |
+| 通讯部 | 对话种子 + ttyd 看板 + 工具链 | ✅ P0-P2大部分完成（认证/brief/看板/脚手架/MCP Server），待做：Cloudflare Tunnel + SSH端口转发确认 |
 | cashflowAPP | 澳洲小企业主现金流管理 | 待立项，框架未定 |
 
 ---
