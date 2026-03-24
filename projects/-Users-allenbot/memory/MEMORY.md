@@ -4,34 +4,25 @@
 
 # CEO / 项目管理 记忆
 
-> 太极最后更新：2026-03-24
+> 太极最后更新：2026-03-25
 
 ## 上次会话要点
 
 > 覆盖更新，不累积。只记下次会话需要知道的事。
 
-- **conversations MCP Server**：写好了 `~/.claude/scripts/conversations_mcp.py`（4个工具：catchup/query_messages/brief/stats），但老板从 settings.json 移除了注册（可能有问题待排查）
-- **Ralph Loop 搭建完成**：外置硬盘 `/Volumes/BIWIN NV 7400 2TB/Loop/` + `Loop Done/`
-  - `/ralph` slash command：交互式，太极自动循环审查
-  - `run.sh`：无人值守后台跑
-  - `PROMPT.md`：审查规则（P0-P3 优先级）
-  - `CLAUDE.md`：覆盖全局恢复协议，loop 专用
-  - 收尾自动生成 README（每轮实时追加记录）
-  - 首次试跑 gp_engine 12 个 .py 文件，4 轮完成（1个P0 + 5个P1 + 2个P2）
-- **黑丝完工三问**：auto-trading CLAUDE.md 主线流程第5步改为完工三问（删了什么→grep确认 / 改了什么→调用方同步 / 干净吗→通篇扫），必须贴结果
-- **reflect 链路修复**：
-  - `reflect_hook.py`：改用 `last_reflect`（只有 /reflect 执行时才推进），防信号丢失
-  - `session_start.py`：加 `inject_reflect_pending()`，所有会话启动检查待处理信号
-  - `reflect_mcp.py`：加 `clear_pending()` 工具
-  - auto-trading CLAUDE.md：加"被老板纠正时当场承认+说教训"
-- **权限确认**：全局 `bypassPermissions` + 所有项目无项目级 settings = 全工具自动放行
+- **上次会话（13e15208，03-24 21:07~21:24）**：查了S46大会话总结 → 基线考试14.1% → RUL-053/054/055升全局 → 启动两个后台任务（Ralph Loop lab + Agent Evolution）→ 断线
+- **两个后台任务**：Ralph Loop lab (PID 5833) + Agent Evolution evolve_rules.sh (PID 5863)，断线后状态未知，需检查
+- **Agent Evolution**：考题库165道（训练82+测试83），基线14.1%，进化循环可能已跑也可能挂了
+- **S46核心**：Ralph Loop搭建完成 / conversations MCP写好但未注册 / 黑丝完工三问 / reflect链路修复 / 权限全bypass / 无极替换混沌 / rules整合+hook注入
 
 ---
 
 ## 会话索引（最新在最上面）
 | # | ID | 日期 | 核心内容 |
 |---|-----|------|----------|
-| S46 | 当前 | 03-24 | Ralph Loop搭建(/ralph command+run.sh+外置硬盘Loop/LoopDone)+conversations MCP(写好但未注册)+黑丝完工三问+reflect链路修复(pending不丢失)+权限排查(全bypass) |
+| S48 | 当前 | 03-25 | 断线恢复，查两个后台任务状态 |
+| S47 | c68162aa | 03-25 | 恢复协议启动即中断（断线） |
+| S46 | 13e15208 | 03-24 | 查S46总结+基线14.1%+RUL-053/054/055升全局+启动Ralph Loop lab+Agent Evolution→断线 |
 | S45 | 7b7ad37e | 03-21~22 | MCP Server重写+Tailscale全面部署(替代SSH隧道)+群聊系统上线(plan mode)+evolver回滚修复+RUL-033+恢复协议身份bug修+云服务器规划+黑丝整改handoff |
 | S44 | 2ab536e0 | 03-21 | 通讯部P0-P1执行+MCP方案讨论(老板纠正直接调API→改从Gateway读) |
 | S43 | — | 03-19 | 新会话（无历史记录） |

@@ -584,6 +584,53 @@
       ],
       "registered_by": "cycle_0108",
       "registered_at": "2026-03-22T10:44:00.000Z"
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_innovate_code_stats",
+      "category": "innovate",
+      "signals_match": [
+        "evolution_stagnation_detected",
+        "stable_success_plateau",
+        "codebase_complexity",
+        "repo_analysis"
+      ],
+      "preconditions": [
+        "no code-stats skill exists",
+        "codebase complexity analysis gap detected"
+      ],
+      "strategy": [
+        "Scan target directory tree for source files by extension",
+        "Count files, lines, functions, exports, and require/import statements",
+        "Compute coupling ratio and average function length",
+        "Rank files by size and compute complexity grade A-D",
+        "Output structured JSON report with actionable metrics",
+        "Install skill to ~/.claude/skills/code-stats/"
+      ],
+      "constraints": {
+        "max_files": 4,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver",
+          "skills/feishu-evolver-wrapper"
+        ]
+      },
+      "validation": [
+        "node -e \"const s = require(process.env.HOME+'/.claude/skills/code-stats'); console.log(Object.keys(s))\"",
+        "node -e \"const s = require(process.env.HOME+'/.claude/skills/code-stats'); s.main({rootDir:'./skills',quiet:true}).then(r => console.log('files:', r.totalFiles, 'grade:', r.complexityGrade))\""
+      ],
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": 0.5,
+          "reason": "new_innovation_skill_codebase_complexity_analysis",
+          "created_at": "2026-03-23T15:21:00.000Z"
+        }
+      ],
+      "registered_at": "2026-03-23T15:21:00.000Z",
+      "registered_by": "cycle_0115"
     }
   ],
   "retired_genes": [

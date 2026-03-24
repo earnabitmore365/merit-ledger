@@ -78,3 +78,4 @@
 | #0117 | 03-24 | optimize (narrative consolidation + gene suppression) | ✅ 合并4条连续失败narrative条目(03-23 11:26~12:53)为1个CONSOLIDATED块（108→97行，-11行），修正4处INNOVATE→OPTIMIZE意图错配，信号去污(raw Chinese→append_only_history)，补录genes.json批次失败抑制标记(boost -0.30)，2文件~15行 |
 | #0118 | 03-25 | optimize (narrative data gap repair) | ✅ 补录3条缺失narrative条目(#0115 code-stats/#0116 integrity/#0117 consolidation)，修正最后条目意图错配(INNOVATE→OPTIMIZE)，信号去污(raw Chinese→append_only_history)，narrative 100→112行，2文件~15行 |
 | #0119 | 03-25 | optimize (intent+signal+truncation fix) | ✅ 修正#0118条目意图错配(INNOVATE→OPTIMIZE)、信号去污(raw Chinese→append_only_history)、截断result补全，补录genes.json缺失成功标记(boost +0.10 for cycle_0118)，3文件~10行 |
+| #0120 | 03-25 | optimize (consolidation + gene integrity) | ✅ 合并5条连续narrative条目(03-23 17:00~03-24 21:12)为1个CONSOLIDATED块（120→103行，-17行），补录genes.json缺失gene_innovate_code_stats（第13条活跃基因），3文件~25行 |
