@@ -1,7 +1,7 @@
 {
   "agent:main:main": {
     "sessionId": "a64f8bb7-abcc-483b-ac04-d0eb68a4d996",
-    "updatedAt": 1774388268681,
+    "updatedAt": 1774429665925,
     "systemSent": true,
     "abortedLastRun": false,
     "chatType": "direct",
@@ -474,7 +474,7 @@
     "contextTokens": 200000,
     "systemPromptReport": {
       "source": "run",
-      "generatedAt": 1774388255459,
+      "generatedAt": 1774429655624,
       "sessionId": "a64f8bb7-abcc-483b-ac04-d0eb68a4d996",
       "sessionKey": "agent:main:main",
       "provider": "minimax",
@@ -834,11 +834,11 @@
         ]
       }
     },
-    "inputTokens": 31098,
-    "outputTokens": 395,
+    "inputTokens": 34563,
+    "outputTokens": 147,
     "cacheRead": 13226,
     "cacheWrite": 0,
-    "totalTokens": 28834,
+    "totalTokens": 47751,
     "totalTokensFresh": true
   },
   "telegram:slash:6506412244": {

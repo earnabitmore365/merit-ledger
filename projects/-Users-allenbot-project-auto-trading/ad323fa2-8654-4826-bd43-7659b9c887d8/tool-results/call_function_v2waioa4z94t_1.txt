@@ -1,1 +1,0 @@
-The file /Users/allenbot/.openclaw/openclaw.json has been updated successfully.

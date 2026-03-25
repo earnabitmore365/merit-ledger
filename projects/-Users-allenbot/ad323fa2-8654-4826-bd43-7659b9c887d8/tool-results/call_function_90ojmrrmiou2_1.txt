@@ -1,6 +1,0 @@
-26:PROJECT_ROOT = '/Users/allenbot/.openclaw/workspace/project/abby-auto-trading'
-27:DATA_DIR = os.path.join(PROJECT_ROOT, 'src', 'backtest', 'data')
-28:REPORT_DIR = os.path.join(PROJECT_ROOT, 'src', 'backtest', 'reports')
-31:if PROJECT_ROOT not in sys.path:
-32:    sys.path.insert(0, PROJECT_ROOT)
-33:src_dir = os.path.join(PROJECT_ROOT, 'src')

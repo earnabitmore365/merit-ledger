@@ -1,1 +1,0 @@
-199:__all__ = ['Signal', 'TradingSignal', 'Strategy', 'register_strategy', 'get_strategy', 'list_strategies']

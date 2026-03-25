@@ -104,3 +104,11 @@ A chronological record of evolution decisions and outcomes.
 - Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 29 lines
 - Signals: [protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, user_improvement_suggestion]
 - Result: 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, user_improvement_suggestion:lock — entry had 3 issues: (a) out of chronological order (appear
+### [2026-03-25 08:00:00] INNOVATE - success
+- Gene: gene_innovate_cycle_guard | Score: 0.90 | Scope: 4 files, 200 lines
+- Signals: [user_improvement_suggestion]
+- Result: 创建 evo-cycle-guard 技能（进化周期预检验证器），执行9项预检：意图错配/退休基因/失败连击/重复模式/基因冷却/创新干旱/意图类别不匹配/信号污染/未知基因，返回 go/no-go 推荐+结构化 blocks/warnings，注册 gene_innovate_cycle_guard（第14条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行
+### [2026-03-24 21:48:13] INNOVATE - success
+- Gene: gene_auto_5eb089f2 | Score: 0.85 | Scope: 5 files, 288 lines
+- Signals: [user_improvement_suggestion]
+- Result: 固化：gene_auto_5eb089f2 命中信号 user_improvement_suggestion，变更 5 文件 / 288 行。

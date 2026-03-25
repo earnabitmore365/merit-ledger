@@ -1,6 +1,0 @@
-total 16
-drwxr-xr-x   5 allenbot  staff  160 Feb 23 12:41 .
-drwxr-xr-x  19 allenbot  staff  608 Feb 23 13:00 ..
--rw-------   1 allenbot  staff  414 Feb 23 12:41 blocklist.json
--rw-r--r--   1 allenbot  staff  279 Feb 22 20:18 known_marketplaces.json
-drwxr-xr-x   3 allenbot  staff   96 Feb 21 21:28 marketplaces

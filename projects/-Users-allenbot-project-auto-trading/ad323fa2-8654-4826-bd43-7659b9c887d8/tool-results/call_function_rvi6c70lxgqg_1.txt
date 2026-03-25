@@ -1,1 +1,0 @@
-File created successfully at: /Users/allenbot/.claude/prompt.md

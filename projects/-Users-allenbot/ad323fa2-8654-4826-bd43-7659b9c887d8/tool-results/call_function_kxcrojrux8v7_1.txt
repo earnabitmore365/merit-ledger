@@ -1,5 +1,0 @@
-The file /Users/allenbot/.claude/projects/abby-auto-trading/src/backtest/backtest.py has been updated. All occurrences of '            # 检查提款
-
-            if withdraw > 0:' were successfully replaced with '            # 检查提款
-            withdraw = self._check_withdraw()
-            if withdraw > 0:'.

@@ -1,8 +1,0 @@
-total 16
-drwxr-xr-x  7 allenbot  staff   224 Feb 22 04:51 .
-drwxr-xr-x  8 allenbot  staff   256 Feb 22 12:13 ..
--rw-r--r--  1 allenbot  staff  2981 Feb 22 04:51 FINAL_REPORT.md
--rw-r--r--  1 allenbot  staff  1781 Feb 22 04:50 README.md
-drwxr-xr-x  8 allenbot  staff   256 Feb 22 05:59 data
-drwxr-xr-x  4 allenbot  staff   128 Feb 22 04:46 logs
-drwxr-xr-x  8 allenbot  staff   256 Feb 22 06:17 src

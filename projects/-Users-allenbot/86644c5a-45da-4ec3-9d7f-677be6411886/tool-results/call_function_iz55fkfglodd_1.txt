@@ -1,1 +1,0 @@
-lrwxr-xr-x   1 allenbot  staff   28 Feb 19 15:58 mcp-hub -> ../../.agents/skills/mcp-hub

@@ -10,17 +10,20 @@
 
 > 覆盖更新，不累积。只记下次会话需要知道的事。
 
-- **上次会话（13e15208，03-24 21:07~21:24）**：查了S46大会话总结 → 基线考试14.1% → RUL-053/054/055升全局 → 启动两个后台任务（Ralph Loop lab + Agent Evolution）→ 断线
-- **两个后台任务**：Ralph Loop lab (PID 5833) + Agent Evolution evolve_rules.sh (PID 5863)，断线后状态未知，需检查
-- **Agent Evolution**：考题库165道（训练82+测试83），基线14.1%，进化循环可能已跑也可能挂了
-- **S46核心**：Ralph Loop搭建完成 / conversations MCP写好但未注册 / 黑丝完工三问 / reflect链路修复 / 权限全bypass / 无极替换混沌 / rules整合+hook注入
+- **S47~S50（03-25）**：连续4次断线，S48老板问了进展报告，已汇报
+- **Ralph Loop (PID 5833)**：仍存活，已跑到第73遍，当前处理PLW0603 linting（global语句noqa），lab目录活跃更新中
+- **Agent Evolution (PID 5863)**：已死亡，无相关进程存活
+- **老板在S48问"有什么值得报告的"**：已汇报Ralph 59 commits + Evolution基线提升
 
 ---
 
 ## 会话索引（最新在最上面）
 | # | ID | 日期 | 核心内容 |
 |---|-----|------|----------|
-| S48 | 当前 | 03-25 | 断线恢复，查两个后台任务状态 |
+| S51 | 当前 | 03-25 | 新会话恢复，Ralph存活(73遍)，Evolution已死 |
+| S50 | 2ad88a9c | 03-25 | 断线恢复（第4次），两后台任务存活 |
+| S49 | a8524d23 | 03-25 | 恢复协议启动即断线 |
+| S48 | feb809dc | 03-25 | 断线恢复，查两个后台任务状态 |
 | S47 | c68162aa | 03-25 | 恢复协议启动即中断（断线） |
 | S46 | 13e15208 | 03-24 | 查S46总结+基线14.1%+RUL-053/054/055升全局+启动Ralph Loop lab+Agent Evolution→断线 |
 | S45 | 7b7ad37e | 03-21~22 | MCP Server重写+Tailscale全面部署(替代SSH隧道)+群聊系统上线(plan mode)+evolver回滚修复+RUL-033+恢复协议身份bug修+云服务器规划+黑丝整改handoff |

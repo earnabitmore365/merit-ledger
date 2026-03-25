@@ -1,5 +1,0 @@
-total 456
-drwxr-xr-x  47 allenbot  staff  1504 Feb 19 23:52 .
-drwxr-xr-x   7 allenbot  staff   224 Feb 20 17:45 ..
--rw-r--r--@  1 allenbot  staff  8196 Feb 19 23:45 .DS_Store
--rw-r--r--@  1 allenbot  staff  2827 Feb 15 08:32 REGISTRY.md

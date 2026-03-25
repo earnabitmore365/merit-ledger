@@ -1,1 +1,0 @@
-26:PROJECT_ROOT = '/Users/allenbot/.openclaw/workspace/project/abby-auto-trading'

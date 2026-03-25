@@ -1,6 +1,0 @@
-  "projects": {
-    "/Users/allenbot": {
-      "allowedTools": [],
-      "mcpContextUris": [],
-      "mcpServers": {},
-      "enabledMcpjsonServers": [],

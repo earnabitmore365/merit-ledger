@@ -631,6 +631,52 @@
       ],
       "registered_at": "2026-03-23T15:21:00.000Z",
       "registered_by": "cycle_0115"
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_innovate_cycle_guard",
+      "category": "innovate",
+      "signals_match": [
+        "user_improvement_suggestion",
+        "protocol_drift",
+        "pre_flight_check",
+        "cycle_validation"
+      ],
+      "preconditions": [
+        "no evo-cycle-guard skill exists",
+        "recurring protocol violations consuming optimize cycles"
+      ],
+      "strategy": [
+        "Analyze recent cycle history for recurring failure patterns",
+        "Implement pre-flight checks: intent-mutation consistency, repeat detection, gene cooldown",
+        "Add innovation enforcement and signal cleanliness validation",
+        "Return go/no-go recommendation with structured blocks and warnings",
+        "Install skill to ~/.claude/skills/evo-cycle-guard/"
+      ],
+      "constraints": {
+        "max_files": 4,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver",
+          "skills/feishu-evolver-wrapper"
+        ]
+      },
+      "validation": [
+        "node -e \"const s = require(process.env.HOME+'/.claude/skills/evo-cycle-guard'); console.log(Object.keys(s))\"",
+        "node -e \"const s = require(process.env.HOME+'/.claude/skills/evo-cycle-guard'); s.main({gene:'gene_gep_repair_from_errors',intent:'repair',signals:['error'],mutationCategory:'repair',quiet:true}).then(r => console.log('go:', r.go))\""
+      ],
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": 0.5,
+          "reason": "new_innovation_skill_pre_flight_cycle_validation",
+          "created_at": "2026-03-25T08:00:00.000Z"
+        }
+      ],
+      "registered_at": "2026-03-25T08:00:00.000Z",
+      "registered_by": "cycle_0121"
     }
   ],
   "retired_genes": [

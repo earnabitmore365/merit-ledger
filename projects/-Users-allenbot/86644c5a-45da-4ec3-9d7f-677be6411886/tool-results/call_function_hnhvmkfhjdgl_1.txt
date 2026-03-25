@@ -1,4 +1,0 @@
-sleep: invalid time interval: ps
-sleep: invalid time interval: aux
-usage: sleep number[unit] [...]
-Unit can be 's' (seconds, the default), m (minutes), h (hours), or d (days).

@@ -1,2 +1,0 @@
-mcp not found
-mcp command not found in PATH

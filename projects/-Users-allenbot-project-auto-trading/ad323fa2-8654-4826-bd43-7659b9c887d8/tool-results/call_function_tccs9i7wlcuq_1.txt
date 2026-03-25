@@ -1,6 +1,0 @@
-total 6264
-drwxr-xr-x   5 allenbot  staff      160 Feb 21 01:36 .
-drwx------  29 allenbot  staff      928 Feb 22 14:30 ..
--rw-------   1 allenbot  staff    27003 Feb 22 14:22 config-audit.jsonl
--rw-r--r--   1 allenbot  staff  1006779 Feb 22 14:37 gateway.err.log
--rw-r--r--   1 allenbot  staff  1994598 Feb 22 14:37 gateway.log

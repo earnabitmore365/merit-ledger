@@ -1,4 +1,0 @@
-80:        candles = self.exchange.get_candles(self.coin, self.interval, limit=100)
-81:        if not candles:
-84:        current_price = candles[-1]['close']
-119:        signal = self.strategy.generate_signal(self.coin, candles)

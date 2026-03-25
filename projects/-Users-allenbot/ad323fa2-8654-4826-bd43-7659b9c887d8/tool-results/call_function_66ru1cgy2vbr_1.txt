@@ -1,4 +1,0 @@
-Exit code 1
-ls: .openclaw/: No such file or directory
-
-ls: .openclaw/: No such file or directory

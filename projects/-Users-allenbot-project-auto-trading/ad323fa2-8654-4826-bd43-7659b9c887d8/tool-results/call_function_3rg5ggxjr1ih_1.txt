@@ -1,5 +1,0 @@
-<tool_use_error>String to replace not found in file.
-String:         signal = Signal.BUY if buy_count >= 2 else Signal.SELL if sell_count >= 2 else Signal.HOLD
-        return TradingSignal(signal=signal, confidence=0.6, coin=coin,
-            timestamp=candles[-1]["time"],
-            metadata={"trend": trend, "bb": bb, "macd": macd})</tool_use_error>

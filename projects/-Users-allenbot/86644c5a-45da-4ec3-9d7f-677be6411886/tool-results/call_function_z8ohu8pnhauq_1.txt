@@ -1,2 +1,0 @@
-Secure MCP Filesystem Server running on stdio
-[2]  + running    npx -y @modelcontextprotocol/server-filesystem /tmp 2>&1

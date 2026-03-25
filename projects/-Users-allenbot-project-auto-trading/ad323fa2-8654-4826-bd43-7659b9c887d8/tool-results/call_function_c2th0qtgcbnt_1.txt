@@ -1,1 +1,0 @@
-Command running in background with ID: b7ad71e. Output is being written to: /private/tmp/claude-502/-Users-allenbot/tasks/b7ad71e.output
