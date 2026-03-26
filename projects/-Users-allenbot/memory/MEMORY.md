@@ -1,53 +1,6 @@
-⛔ **恢复协议优先**：看到此文件 ≠ 已完成恢复协议。必须先完整执行 CLAUDE.md 步骤1-4，才能开始任何工作。
-
-> 太极签：2026-03-05
-
 # CEO / 项目管理 记忆
 
-> 太极最后更新：2026-03-25
-
-## 上次会话要点
-
-> 覆盖更新，不累积。只记下次会话需要知道的事。
-
-- **S47~S50（03-25）**：连续4次断线，S48老板问了进展报告，已汇报
-- **Ralph Loop (PID 5833)**：仍存活，已跑到第73遍，当前处理PLW0603 linting（global语句noqa），lab目录活跃更新中
-- **Agent Evolution (PID 5863)**：已死亡，无相关进程存活
-- **老板在S48问"有什么值得报告的"**：已汇报Ralph 59 commits + Evolution基线提升
-
----
-
-## 会话索引（最新在最上面）
-| # | ID | 日期 | 核心内容 |
-|---|-----|------|----------|
-| S51 | 当前 | 03-25 | 新会话恢复，Ralph存活(73遍)，Evolution已死 |
-| S50 | 2ad88a9c | 03-25 | 断线恢复（第4次），两后台任务存活 |
-| S49 | a8524d23 | 03-25 | 恢复协议启动即断线 |
-| S48 | feb809dc | 03-25 | 断线恢复，查两个后台任务状态 |
-| S47 | c68162aa | 03-25 | 恢复协议启动即中断（断线） |
-| S46 | 13e15208 | 03-24 | 查S46总结+基线14.1%+RUL-053/054/055升全局+启动Ralph Loop lab+Agent Evolution→断线 |
-| S45 | 7b7ad37e | 03-21~22 | MCP Server重写+Tailscale全面部署(替代SSH隧道)+群聊系统上线(plan mode)+evolver回滚修复+RUL-033+恢复协议身份bug修+云服务器规划+黑丝整改handoff |
-| S44 | 2ab536e0 | 03-21 | 通讯部P0-P1执行+MCP方案讨论(老板纠正直接调API→改从Gateway读) |
-| S43 | — | 03-19 | 新会话（无历史记录） |
-| S42 | 0da5d1b1 | 03-16 | Mission Control搁置+Claude Code API(port 8100)+Abby升qwen3.5:9b+evolver hook链路修复(加锁)+SessionStart通知修复+Autoresearch调研(暂不动)+命名哲学记录+evo-digest/gene-crossover新skill |
-| S41 | c2c95c51续2 | 03-15 | OpenClaw/Abby修复(API模式修正)+本地模型安装(3注册1未注册)+evolve.js僵尸根修复+openclaw.md参考文档 |
-| S40 | c2c95c51续 | 03-13 | 僵尸基因自动复活根因修复(BUG-007/FIX-005: ensureGene退役检查+c7368808退役条目+workspace同步) |
-| S39 | c2c95c51 | 03-12 | 太极升Opus首会话；evolver genes.json修复(补2 innovate基因)+EVOLVER_README.md完全重写；角色变更(黑丝升主力/白纱转支援) |
-| S38 | 1f704c1f续4 | 03-09 | 压缩后恢复；待修double-dash路径bug（`-Users-allenbot--claude`） |
-| S37 | 1f704c1f续3 | 03-09 | evolver完整链路跑通：session读取+自动触发hook+skills目录验证 |
-| S36 | 1f704c1f续2 | 03-09 | 压缩后恢复；修复两个剩余evolver问题（timestamp+MEMORY.md） |
-| S35 | 1f704c1f续 | 03-09 | evolver rollback彻底解决+所有文件恢复+genes.json重建+solidify跑通（shim生效） |
-| S34 | 1f704c1f | 03-08 | evolver迁移~/.claude/evolver/+多项目支持(taiji/auto-trading验证)+~/.claude/ git init+基因库共享；三层→两层记忆决策；bridge实装测试 |
-| S33 | S32续 | 03-08 | 擅自执行被批→RUL-006→三层记忆研究(鲜活/温度/冷)→Vibe Coding→DESIGN_DECISIONS.md创建+/reflect门槛修改→三套记忆系统完成 |
-| S32 | aa00b2a6续4 | 03-07 | /claude强制Read+用户→老板全替换+reflect触发词+白纱换人+AI人格研究+太极人格（老板确认）+三项待做 |
-| S31 | aa00b2a6续3 | 03-07 | 提升词类+RUL-004/005+CLAUDE.md头脚架构+letterhead+slogan+白纱handoff未读问题（排查中） |
-| S30 | aa00b2a6续2 | 03-06 | LRN-20260306-005定性提升，db_write.py扩展9类词表，/reflect skill扩展 |
-| S29 | aa00b2a6续 | 03-05 | SessionStart/SessionEnd/PreCompact hooks+CLAUDE.md简化+reflect效果验证(33→1条) |
-| S28 | aa00b2a6 | 03-04~05 | 对话种子完整实装+tags（8类词表/回填3378条/去噪/Markdown格式确认） |
-| S27 | 当前 | 03-02 | 新会话，待用户指示 |
-| S26 | 4f681d51 | 03-01 | CHECKPOINT打磨版块设计 + agentchattr接入 + 规章升级 |
-| S25 | 3ac548bf | 03-01 | 规章升级+文件职责简称+CLAUDE.md三段结构+OpenClaw调研 |
-| S24 | 3ac548bf | 02-28 | CLAUDE.md全面升级+session_summaries双区域重构 |
+> 太极最后更新：2026-03-26
 
 ---
 
@@ -64,9 +17,7 @@
 | 简称 | 文件 | 职责 |
 |------|------|------|
 | 制度 | `CLAUDE.md` | 规则、行为准则 |
-| 交接 | `CHECKPOINT.md` | 任务状态、下一步 |
 | 档案 | `MEMORY.md` | 跨会话知识、决策记录、项目历史 |
-| ~~日记~~ | ~~`session_summaries.md`~~ | ~~废弃（2026-03-08）~~ — 合并进 `MEMORY.md` 的「上次会话要点」区域 |
 
 ---
 
@@ -120,13 +71,9 @@
 
 ## 待做清单
 
-1. **CHECKPOINT.md 头部正式化** — 标记规范（✅ vs ⚠️）+ 交接填写要求
-2. **CLAUDE.md 步骤9简化** — 改为"按CHECKPOINT头部标记规范更新"
-3. **阶段三补完整** — 步骤10：白纱接收结果→分析→给下一步（闭环）
-4. **白纱角色定义** — 加"全程主导"定位
-5. **撞车修复** — "不擅自行动" vs 白纱"主动触发"，明确后者是有意例外
-6. **PreCompact hook** — 压缩前自动写入种子防漏数据
-7. **SessionStart hook** — 需调研 additionalContext 支持情况
+1. **PreCompact 效果验证** — `pre_compact_save.py` 已部署，待老板测试 `/compact` 效果
+2. **恢复协议简化已落地** — CLAUDE.md 从 70 行砍到 5 行，CHECKPOINT 已退役
+3. **MEMORY.md 精简** — 砍掉会话索引和上次要点，由 hook 自动处理
 
 ---
 
@@ -157,7 +104,7 @@
 - **太极频道**：home 目录不写入，上层对话隔离
 - **认证**：ttyd Basic Auth（用户名 boss，密码在 `~/.claude/.comm_pass`）
 - **看板**：http://100.108.158.57:8080（三实例 iframe + 状态检测 + 手机竖排适配）
-- **待做**：PreCompact hook（防漏）、Trading MCP Server、Cloudflare Tunnel
+- **待做**：Trading MCP Server、Cloudflare Tunnel
 
 ### 通讯部文件清单
 
@@ -165,10 +112,9 @@
 |------|------|
 | `~/.claude/scripts/comm_hub.sh` | ttyd 三实例 + 看板，start/stop/status |
 | `~/.claude/scripts/brief.sh` | 项目简报生成器（从 conversations.db 提取摘要+剪贴板） |
-| `~/.claude/scripts/new_project.sh` | 新项目脚手架（CLAUDE.md/CHECKPOINT/handoff/context/review） |
+| `~/.claude/scripts/new_project.sh` | 新项目脚手架（CLAUDE.md/handoff/context/review） |
 | `~/.claude/scripts/db_write.py` | 对话种子写入（hooks 触发） |
 | `~/.claude/scripts/inject_rules.py` | UserPromptSubmit hook 注入 rules.md |
-| `~/.claude/scripts/inject_work_protocol.py` | UserPromptSubmit hook 注入工作准则 |
 | `~/.claude/.comm_pass` | ttyd 认证密码（chmod 600） |
 
 ---
@@ -182,7 +128,7 @@
 - `~/.claude/scripts/new_project.sh` — 新项目脚手架
 - `~/.claude/scripts/inject_rules.py` — hook: 注入 rules.md
 - `~/.claude/scripts/inject_work_protocol.py` — hook: 注入工作准则
-- `~/.claude/commands/checkpoint.md` — `/checkpoint` slash command
+- `~/.claude/scripts/pre_compact_save.py` — PreCompact hook: 压缩前保存最近 30 条对话到 compact_context.md
 - `~/.claude/handofffromtaiji.md` — 太极写给黑丝白纱的 handoff
 - `~/.claude/.comm_pass` — ttyd 认证密码
 

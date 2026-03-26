@@ -42,11 +42,9 @@ TAG_WORDS = {
 # 决策组（用于无极特殊标签）
 DECISION_WORDS = TAG_WORDS['决策词']
 
-# session 目录 → project 名（路径编码：去掉开头/，所有/换-）
-KNOWN_PROJECTS = {
-    '-Users-allenbot-project-auto-trading': 'auto-trading',
-    '-Volumes-BIWIN-NV-7400-2TB-project-auto-trading': 'auto-trading',
-}
+# 已废弃：不再手工映射短名，统一用目录全名
+# 旧数据兼容：session_start.py 会同时查短名和全名
+# KNOWN_PROJECTS 保留注释供溯源，不再使用
 
 # 这些目录的 session 不写入（太极、evolver headless 等）
 SKIP_DIRS = {
@@ -91,9 +89,7 @@ def get_project_from_session(session_id):
                     if fname.startswith(session_id) and fname.endswith('.jsonl'):
                         if proj_dir_name in SKIP_DIRS:
                             return None
-                        if proj_dir_name in KNOWN_PROJECTS:
-                            return KNOWN_PROJECTS[proj_dir_name]
-                        # 未知项目目录：用目录名本身（fallback）
+                        # 统一用目录全名（如 -Users-allenbot-project-auto-trading）
                         return proj_dir_name
             except Exception:
                 continue
@@ -198,6 +194,13 @@ def main():
 
     conn = sqlite3.connect(DB_PATH)
 
+    # subagent 识别：agent_id 存在时覆盖 speaker（向后兼容双终端模式）
+    agent_id = data.get('agent_id', '')
+    agent_speaker_override = None
+    if agent_id.startswith('baisha'):
+        agent_speaker_override = '白纱'
+        log(f'Subagent detected: agent_id={agent_id} → speaker=白纱')
+
     if event == 'Stop':
         transcript_path = data.get('transcript_path', '')
         log(f'Stop: session={session_id[:8]} project={project} transcript={transcript_path[-50:] if transcript_path else "EMPTY"}')
@@ -208,6 +211,9 @@ def main():
                 break
             if attempt < 2:
                 time.sleep(0.5)
+        # subagent 覆盖 speaker
+        if agent_speaker_override:
+            speaker = agent_speaker_override
         log(f'Stop result: speaker={speaker} content_len={len(content)}')
         if content:
             last_id = write_message(conn, speaker, content, project, session_id)

@@ -80,3 +80,6 @@
 | #0119 | 03-25 | optimize (intent+signal+truncation fix) | ✅ 修正#0118条目意图错配(INNOVATE→OPTIMIZE)、信号去污(raw Chinese→append_only_history)、截断result补全，补录genes.json缺失成功标记(boost +0.10 for cycle_0118)，3文件~10行 |
 | #0120 | 03-25 | optimize (consolidation + gene integrity) | ✅ 合并5条连续narrative条目(03-23 17:00~03-24 21:12)为1个CONSOLIDATED块（120→103行，-17行），补录genes.json缺失gene_innovate_code_stats（第13条活跃基因），3文件~25行 |
 | #0121 | 03-25 | innovate (evo-cycle-guard skill) | ✅ 创建 evo-cycle-guard 技能（进化周期预检验证器），执行9项预检（意图错配/退休基因/失败连击/重复模式/基因冷却/创新干旱/信号污染等），返回 go/no-go 推荐，注册 gene_innovate_cycle_guard（第14条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行 |
+| #0122 | 03-25 | innovate (todo-manager skill) | ✅ 创建 todo-manager 技能（技术债务追踪器），扫描代码库提取 TODO/FIXME/HACK/XXX/NOTE 标记注释，按优先级排序（FIXME>HACK>XXX>TODO>NOTE），输出文件热点+标签统计+结构化 JSON 报告，注册 gene_innovate_todo_manager（第15条活跃基因），安装到 ~/.claude/skills/，3 文件 ~160 行 |
+| #0123 | 2026-03-25 | innovate (evolution_stagnation_detected, stable_success_plateau) | ✅ 固化：gene_auto_53538cc4 命中信号 evolution_stagnation_detected, stable_success_plateau，6 文件 230 行变更 |
+| #0124 | 2026-03-26 | optimize (narrative+gene integrity) | ✅ 修正3处意图错配(INNOVATE→OPTIMIZE)，时序乱序修复(03-24 21:48条目移到03-25之前)，信号去污(raw Chinese→append_only_history)，截断result补全，scope修正(6/230→9/178)，ghost gene标注(gene_auto_5eb089f2)并注册到retired_genes，补录epigenetic mark(+0.10)，3文件~20行 |

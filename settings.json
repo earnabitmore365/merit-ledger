@@ -54,6 +54,14 @@
           {
             "type": "command",
             "command": "bash ~/.claude/scripts/evolve_hook.sh"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/pre_compact_save.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/reflect_hook.py"
           }
         ]
       }
@@ -84,6 +92,17 @@
           {
             "type": "command",
             "command": "bash ~/.claude/scripts/evolve_hook.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/scripts/post_tool_validate.sh"
           }
         ]
       }

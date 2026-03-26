@@ -21,8 +21,16 @@ def get_project(cwd):
 
 
 def get_project_encoded(cwd):
-    """绝对路径 → memory 目录编码（所有 / 替换为 -）"""
-    return cwd.replace('/', '-')
+    """绝对路径 → projects 目录下的实际目录名（处理 Claude 的 _→- 编码）"""
+    projects_base = os.path.expanduser('~/.claude/projects')
+    encoded = cwd.replace('/', '-')
+    if os.path.isdir(os.path.join(projects_base, encoded)):
+        return encoded
+    # Claude 的编码也会把 _ 替换成 -
+    alt = encoded.replace('_', '-')
+    if os.path.isdir(os.path.join(projects_base, alt)):
+        return alt
+    return encoded
 
 
 def inject_evolver_notifications():
@@ -86,6 +94,30 @@ def inject_reflect_pending():
         pass
 
 
+def inject_compact_context(cwd):
+    """注入 PreCompact hook 保存的上下文快照，注入后删除"""
+    projects_base = os.path.expanduser('~/.claude/projects')
+    # 处理下划线→连字符的编码差异
+    project_encoded = cwd.replace('/', '-')
+    project_dir = os.path.join(projects_base, project_encoded)
+    if not os.path.isdir(project_dir):
+        project_dir = os.path.join(projects_base, project_encoded.replace('_', '-'))
+    context_path = os.path.join(project_dir, 'compact_context.md')
+    if not os.path.exists(context_path):
+        return
+    try:
+        with open(context_path, encoding='utf-8') as f:
+            content = f.read()
+        if content.strip():
+            print("【PreCompact 上下文快照】")
+            print(content)
+            print("")
+        # 注入后删除（一次性）
+        os.remove(context_path)
+    except Exception:
+        pass
+
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -103,11 +135,14 @@ def main():
     # 所有会话启动都检查 reflect 待处理信号（不限 compact）
     inject_reflect_pending()
 
-    # 非压缩来源：只注入 evolver 通知 + reflect 提醒，不做完整压缩注入
+    # 所有会话启动都检查 PreCompact 上下文快照
+    inject_compact_context(cwd)
+
+    # 非压缩来源：只注入 evolver 通知 + reflect 提醒 + compact 快照，不做完整压缩注入
     if source != 'compact':
         sys.exit(0)
 
-    # home 目录：evolver 通知已注入，不需要完整压缩注入
+    # home 目录：compact 快照已注入，不需要完整压缩注入
     if cwd == home:
         sys.exit(0)
 
@@ -124,21 +159,22 @@ def main():
     out.append("")
 
     # ── 1. 读对话种子（从上次压缩点开始）──────────────────
+    # 兼容新旧两种项目名格式（短名如 'auto-trading' / 全名如 '-Users-allenbot-project-auto-trading'）
     try:
         conn = sqlite3.connect(DB_PATH)
 
-        # 找上次压缩点（[压缩点] 标记）
+        # 找上次压缩点（[压缩点] 标记），两种项目名都查
         row = conn.execute(
             "SELECT id FROM messages WHERE speaker='系统' AND content LIKE '[压缩点]%' "
-            "AND project=? ORDER BY id DESC LIMIT 1",
-            (project,)
+            "AND project IN (?, ?) ORDER BY id DESC LIMIT 1",
+            (project, project_encoded)
         ).fetchone()
         since_id = row[0] if row else 0
 
         rows = conn.execute(
             'SELECT time, speaker, content FROM messages '
-            'WHERE id > ? AND project=? ORDER BY id',
-            (since_id, project)
+            'WHERE id > ? AND project IN (?, ?) ORDER BY id',
+            (since_id, project, project_encoded)
         ).fetchall()
 
         if rows:
@@ -147,8 +183,8 @@ def main():
             # fallback：最近 50 条
             rows = conn.execute(
                 'SELECT time, speaker, content FROM messages '
-                'WHERE project=? ORDER BY id DESC LIMIT 50',
-                (project,)
+                'WHERE project IN (?, ?) ORDER BY id DESC LIMIT 50',
+                (project, project_encoded)
             ).fetchall()
             rows = list(reversed(rows))
             out.append(f"【最近对话（最新 {len(rows)} 条）】")
@@ -163,29 +199,7 @@ def main():
 
     out.append("")
 
-    # ── 4. 读 CHECKPOINT.md（完整动态区）──────────────────
-    checkpoint_path = os.path.join(cwd, 'CHECKPOINT.md')
-    if os.path.exists(checkpoint_path):
-        try:
-            with open(checkpoint_path) as f:
-                content = f.read()
-            # 提取完整动态区（DYNAMIC START 到 DYNAMIC END）
-            ds = content.find('<!-- DYNAMIC START -->')
-            de = content.find('<!-- DYNAMIC END -->')
-            if ds >= 0 and de >= 0:
-                dynamic = content[ds:de + len('<!-- DYNAMIC END -->')].strip()
-                out.append("【CHECKPOINT 动态区（完整）】")
-                out.append(dynamic)
-            else:
-                # 没有动态区标记，读前120行
-                lines = content.splitlines()
-                out.append("【CHECKPOINT（前120行）】")
-                out.append('\n'.join(lines[:120]))
-        except Exception:
-            pass
-        out.append("")
-
-    # ── 5. 读 MEMORY.md（前120行）──────────────────────────
+    # ── 4. 读 MEMORY.md（前120行）──────────────────────────
     memory_path = os.path.expanduser(
         f'~/.claude/projects/{project_encoded}/memory/MEMORY.md'
     )

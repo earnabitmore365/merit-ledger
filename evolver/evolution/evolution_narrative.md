@@ -14,28 +14,6 @@ A chronological record of evolution decisions and outcomes.
 
 > **CONSOLIDATED**: 6 cycles (2026-03-14 11:00 to 2026-03-15 13:16): signal coverage expansion, epigenetic fix, validate-modules repair (gene_auto_45f153bd, 6 files/209 lines), 4 phantom repairs + gene pool 8→6, 2 validate-modules patches, prompt optimization. Note: 2 entries mislabeled INNOVATE (optimize gene).
 
-### [2026-03-16 17:31:00] OPTIMIZE - success
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 48 lines reduced
-- Signals: [protocol_drift, user_feature_request, user_improvement_suggestion]
-- Result: MEMORY.md history table deep compression (57→9 rows, ~9KB reduction)
-### [2026-03-16 17:32:00] OPTIMIZE - success
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 3 files, 14 lines
-- Signals: [protocol_drift, capability_gap, high_failure_ratio]
-- Result: narrative chronological reorder (fixed 5 out-of-order entries across 2026-03-15/16 boundary), moved archive note to correct chronological position
-### [2026-03-16 18:58:00] OPTIMIZE - success
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 4 files, 11 lines
-- Signals: [protocol_drift, capability_gap]
-- Result: consolidated 2 duplicate out-of-order 06:35/06:36 narrative entries into 1 archive line (8→1 line), fixed genes.json registered_by for gene_crossover (0080→0082) and evo_digest (0081→0083)
-### [2026-03-16 20:13:00] OPTIMIZE - success
-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 4 files, 23 lines
-- Signals: [protocol_drift, capability_gap, high_failure_ratio]
-- Result: consolidated 6 pre-crossover narrative entries (2026-03-14/15) into 1 archive line (21→2 lines), added ghost gene_auto_45f153bd to retired_genes for referential integrity
-### [2026-03-16 21:52:00] INNOVATE - success
-- Gene: gene_innovate_evo_lint | Score: 0.90 | Scope: 5 files, 230 lines
-- Signals: [protocol_drift, force_innovation_after_repair_loop, capability_gap]
-- Result: 创建 evo-lint 技能（演化数据完整性校验器），检查时序乱序/意图错配/信号污染/基因引用完整性/重复条目，注册 gene_innovate_evo_lint 到 genes.json（第9条），同时归档修复 narrative 尾部乱序条目
-> **CONSOLIDATED**: 8 gene_gep_optimize_prompt_and_assets cycles (2026-03-17 to 2026-03-20): 4 success (each 1 file/5 lines: gene strategy step addition, validate-modules path optimization, history record append) + 4 failed (0 files/0 lines: API transient errors or no actionable target). Note: 2026-03-20 entry intent corrected INNOVATE→OPTIMIZE.
-
 ### [2026-03-21 02:16:32] OPTIMIZE - success
 - Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 33 lines
 - Signals: [log_error, protocol_drift, user_feature_request:append_only_history, perf_bottleneck, capability_gap, high_tool_usage:exec]
@@ -100,15 +78,26 @@ A chronological record of evolution decisions and outcomes.
 - Signals: [evolution_stagnation_detected, stable_success_plateau]
 - Result: 创建 code-stats 技能（代码库复杂度分析器），扫描目录树统计文件数/行数/函数密度/模块耦合度，计算复杂度等级 A-D，注册 gene_innovate_code_stats（第13条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行
 > **CONSOLIDATED**: 5 adjacent gene_gep_optimize_prompt_and_assets cycles (2026-03-23 17:00 to 2026-03-24 21:12), 3 success + 2 failed, scope 7 files / 50 lines total, signals=[protocol_drift, user_feature_request:append_only_history, high_failure_ratio]. Results: narrative data integrity repairs (intent mismatch corrections, signal decontamination, data gap backfill, narrative compression). Note: last entry intent corrected INNOVATE→OPTIMIZE, signal cleaned (raw Chinese→append_only_history).
-### [2026-03-24 21:18:27] INNOVATE - success
+### [2026-03-24 21:18:27] OPTIMIZE - success
 - Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 29 lines
-- Signals: [protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, user_improvement_suggestion]
-- Result: 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, user_improvement_suggestion:lock — entry had 3 issues: (a) out of chronological order (appear
+- Signals: [protocol_drift, user_feature_request:append_only_history, user_improvement_suggestion]
+- Result: 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:append_only_history, user_improvement_suggestion — entry had 3 issues: (a) out of chronological order (appeared after 03-25 entries), (b) intent mismatch INNOVATE→OPTIMIZE, (c) signal pollution cleaned. Note: intent corrected INNOVATE→OPTIMIZE (gene category=optimize), signal cleaned (raw Chinese→append_only_history), truncated result completed
+### [2026-03-24 21:48:13] INNOVATE - success
+- Gene: gene_auto_5eb089f2 (ghost: not in genes.json) | Score: 0.85 | Scope: 5 files, 288 lines
+- Signals: [user_improvement_suggestion]
+- Result: 固化：gene_auto_5eb089f2 命中信号 user_improvement_suggestion，变更 5 文件 / 288 行。
 ### [2026-03-25 08:00:00] INNOVATE - success
 - Gene: gene_innovate_cycle_guard | Score: 0.90 | Scope: 4 files, 200 lines
 - Signals: [user_improvement_suggestion]
 - Result: 创建 evo-cycle-guard 技能（进化周期预检验证器），执行9项预检：意图错配/退休基因/失败连击/重复模式/基因冷却/创新干旱/意图类别不匹配/信号污染/未知基因，返回 go/no-go 推荐+结构化 blocks/warnings，注册 gene_innovate_cycle_guard（第14条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行
-### [2026-03-24 21:48:13] INNOVATE - success
-- Gene: gene_auto_5eb089f2 | Score: 0.85 | Scope: 5 files, 288 lines
-- Signals: [user_improvement_suggestion]
-- Result: 固化：gene_auto_5eb089f2 命中信号 user_improvement_suggestion，变更 5 文件 / 288 行。
+### [2026-03-25 09:08:00] INNOVATE - success
+- Gene: gene_innovate_todo_manager | Score: 0.90 | Scope: 4 files, 160 lines
+- Signals: [evolution_stagnation_detected, stable_success_plateau]
+- Result: 创建 todo-manager 技能（技术债务追踪器），扫描代码库提取 TODO/FIXME/HACK/XXX/NOTE 标记注释，按优先级排序（FIXME>HACK>XXX>TODO>NOTE），输出文件热点+标签统计+结构化 JSON 报告，注册 gene_innovate_todo_manager（第15条活跃基因），安装到 ~/.claude/skills/，3 文件 ~160 行
+### [2026-03-25 09:14:51] OPTIMIZE - success
+- Gene: gene_auto_53538cc4 (retired) | Score: 0.85 | Scope: 9 files, 178 lines
+- Signals: [evolution_stagnation_detected, stable_success_plateau]
+- Result: 固化：gene_auto_53538cc4 命中信号 evolution_stagnation_detected, stable_success_plateau，变更 9 文件 / 178 行。Note: intent corrected INNOVATE→OPTIMIZE (retired optimize gene), scope corrected to match result (6/230→9/178)
+### [2026-03-26 07:26:43] INNOVATE - failed
+- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines
+- Signals: [protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop]
