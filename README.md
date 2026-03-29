@@ -40,6 +40,16 @@ AI 对三样东西有真实行为反应：
 - AI 表现好 → Haiku 自动加分 → 等级升 → 检查变少
 - AI 犯错 → Haiku 自动减分 + 记录教训 → 等级降 → 检查变多
 
+### 实战演示：门卫连续拦截
+
+![门卫拦截演示](docs/images/gate-deny-demo.png)
+
+> AI 想用 general-purpose 写代码 → **deny**（必须用专业 agent）
+> 改用 python-pro 但没指定 sonnet → **deny**（必须省配额）
+> 最终乖乖用 `python-pro model: sonnet` → **放行** ✅
+>
+> 三条规则叠加自动执行，AI 想偷懒都偷不了。
+
 ### 等级体系（默认，全部可自定义）
 
 | 等级 | 分数 | 称号 | 门卫严度 |
