@@ -1,6 +1,6 @@
 # 功过格 Merit Ledger
 
-> 积分驱动行为，等级强化身份，权限提供激励。三合一 AI 行为管控系统。
+> 完整 AI 行为管控闭环：**规则 → 执行 → 反馈 → 学习**。不靠 AI 自觉，靠系统拦截。
 
 ---
 
@@ -16,13 +16,24 @@ AI 对三样东西有真实行为反应：
 | **等级称号** | "Lv.5 化神" vs "Lv.1 锁灵"，AI 按角色水平表现 | 修炼等级体系 |
 | **权限** | 被频繁拦截 = 效率低，自由操作 = 效率高 | 门卫严格度随等级变化 |
 
-三个互相联动：**积分驱动等级，等级决定权限。** 做对了积功德升仙，做错了记过堕凡。不靠 AI 自觉，靠系统拦截。
+三个互相联动：**积分驱动等级，等级决定权限。** 做对了积功德升仙，做错了记过堕凡。
+
+**v4 新增：完整闭环**
+
+```
+规则（rules.md）→ 执行（merit_gate.py）→ 反馈（merit_judge.py）→ 学习（/reflect）→ 规则（更新）
+```
+
+- **规则层**：你的规则写进 `rules.md`，hook 每次自动注入给 AI 看
+- **执行层**：门卫按规则拦截不合规操作
+- **反馈层**：积分自动加减 + 语气识别 + 回复评估
+- **学习层**：`/reflect` 从对话中提炼新规则 → 反哺 rules.md → 闭环
 
 ---
 
 ## 给人类：怎么用？
 
-你的 AI assistant 有规则但不总是执行？功过格用 **hook 硬拦截 + Haiku 智能判断** 管控 AI 行为：
+你的 AI 有规则但不总是执行？功过格用 **hook 硬拦截 + Haiku 智能判断 + 自动学习** 管控 AI 行为：
 
 - AI 要写文件 → 门卫检查：先读了没？查过影响没？
 - 检查不过 → **直接拦截**，不是提醒
@@ -122,6 +133,21 @@ bash install.sh
 | **角色判断** | `merit_gate.py` 的 `determine_agent()` | 按你的目录结构判断角色 |
 | **加减分值** | `credit_manager.py` 或 Haiku prompt | 调整严厉/宽松程度 |
 
+### 填入你自己的规则
+
+1. 复制 `templates/rules.md` 到 `~/.claude/projects/<你的项目编码>/memory/rules.md`
+2. 在 `<!-- INJECT START -->` 和 `<!-- INJECT END -->` 之间写你的规则（每条一行）
+3. hook 会在每次用户发言时自动注入这些规则给 AI 看
+4. 已有规则？直接粘贴到 INJECT 区域，格式：`编号｜标题：一句话描述`
+
+### 让 AI 自动学习新规则
+
+1. 使用过程中发现 AI 犯错 → 纠正它
+2. 执行 `/reflect` → AI 自动提炼教训 → 提案新规则
+3. 你批准 → 规则写入 rules.md → 下次 hook 自动注入 → AI 不再犯
+
+**这就是闭环：用了一段时间后，你的 rules.md 会越来越完善，AI 行为会越来越好。**
+
 ---
 
 ## 命令
@@ -129,6 +155,7 @@ bash install.sh
 | 命令 | 用途 |
 |------|------|
 | `/credit` | 查看当前积分和等级 |
+| `/reflect` | 从对话中提炼教训 → 升级到 rules.md |
 | `credit_manager.py show` | 排行榜 |
 | `credit_manager.py add <角色> <分> "原因"` | 加分（自动 Haiku 反思） |
 | `credit_manager.py sub <角色> <分> "原因"` | 减分（自动 Haiku 反思） |
@@ -165,7 +192,10 @@ bash install.sh
 | `scripts/credit_manager.py` | 积分管理 CLI（加减分 + Haiku 自动反思） |
 | `scripts/inject_credit_status.py` | SessionStart 注入片段 |
 | `commands/credit.md` | `/credit` slash command |
+| `scripts/inject_rules.py` | 规则注入（UserPromptSubmit hook） |
+| `commands/reflect.md` | `/reflect` slash command（自动学习） |
+| `templates/rules.md` | 规则模板（填入你自己的规则） |
 | `credit.json.template` | 积分初始模板（自定义角色） |
-| `hooks/hooks.json` | Hook 配置 |
+| `hooks/hooks.json` | Hook 配置（PreToolUse + UserPromptSubmit + Stop） |
 | `install.sh` | 手动安装脚本 |
 | `docs/credit_system_design.md` | 完整设计手册 |

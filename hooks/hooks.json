@@ -17,6 +17,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 ${PLUGIN_DIR}/scripts/inject_rules.py"
+          },
+          {
+            "type": "command",
             "command": "python3 ${PLUGIN_DIR}/scripts/merit_judge.py"
           }
         ]

@@ -1,6 +1,6 @@
 {
   "name": "merit-ledger",
-  "version": "3.0.0",
-  "description": "功过格 (Merit Ledger) — AI 积分+等级+权限 三合一行为管控系统",
-  "commands": ["./commands/credit.md"]
+  "version": "4.0.0",
+  "description": "功过格 (Merit Ledger) — AI 行为管控闭环：规则→执行→反馈→学习",
+  "commands": ["./commands/credit.md", "./commands/reflect.md"]
 }
