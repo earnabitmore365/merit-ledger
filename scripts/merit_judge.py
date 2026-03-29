@@ -123,8 +123,11 @@ def mark_pending_task(text):
             return
 
 
+VIOLATIONS_PATH = os.path.expanduser("~/.claude/merit_violations.jsonl")
+
+
 def check_pending_task_executed(data):
-    """Stop 时检查：老板派了任务，有没有开始执行？"""
+    """Stop 时检查：老板派了任务，有没有开始执行？不自动扣分，标记通知老板。"""
     if not os.path.exists(PENDING_TASK_PATH):
         return
 
@@ -146,12 +149,20 @@ def check_pending_task_executed(data):
         os.remove(PENDING_TASK_PATH)
 
         if not has_action:
-            # 派了任务没执行 → 扣 5 分
+            # 派了任务没执行 → 不自动扣分，标记给老板裁决
             cwd = data.get("cwd", "")
             agent_name = determine_agent(cwd)
-            task_desc = pending.get("task", "")[:50]
-            update_credit(agent_name, -5, f"派任务未执行: {task_desc}")
-            record_learning(agent_name, -5, f"老板派了任务但没开始执行: {task_desc}")
+            task_desc = pending.get("task", "")[:100]
+            import time
+            violation = {
+                "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+                "agent": agent_name,
+                "type": "task_not_executed",
+                "task": task_desc,
+                "status": "pending_review",  # 等老板裁决
+            }
+            with open(VIOLATIONS_PATH, "a") as f:
+                f.write(json.dumps(violation, ensure_ascii=False) + "\n")
     except Exception:
         pass
 

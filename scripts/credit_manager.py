@@ -244,6 +244,87 @@ def cmd_history(args):
         )
 
 
+VIOLATIONS_PATH = os.path.expanduser("~/.claude/merit_violations.jsonl")
+
+
+def cmd_report(args):
+    """完整积分报告：当前状态 + 全部历史 + 待审违规"""
+    data = load_credit()
+    agents = data.get("agents", {})
+    history = data.get("history", [])
+
+    name = args[0] if args else None
+
+    # 当前状态
+    print("╔══════════════════════════════════════╗")
+    print("║        功过格 完整报告               ║")
+    print("╚══════════════════════════════════════╝")
+    print()
+
+    if name and name in agents:
+        agent_list = [(name, agents[name])]
+    else:
+        agent_list = sorted(agents.items(), key=lambda x: x[1]["score"], reverse=True)
+
+    for n, info in agent_list:
+        bar_len = info["score"] // 5
+        bar = "█" * bar_len + "░" * (20 - bar_len)
+        print(f"  {n:4s} Lv.{info['level']} {info['title']:3s} [{bar}] {info['score']:3d}分")
+    print()
+
+    # 统计
+    agent_history = [h for h in history if not name or h.get("agent") == name]
+    rewards = [h for h in agent_history if h.get("delta", 0) > 0]
+    penalties = [h for h in agent_history if h.get("delta", 0) < 0]
+    total_earned = sum(h.get("delta", 0) for h in rewards)
+    total_lost = sum(h.get("delta", 0) for h in penalties)
+
+    target = name or "全员"
+    print(f"  📊 {target} 统计：")
+    print(f"     总奖励：{len(rewards)} 次，共 +{total_earned} 分")
+    print(f"     总惩罚：{len(penalties)} 次，共 {total_lost} 分")
+    print(f"     净值：{total_earned + total_lost:+d} 分")
+    print()
+
+    # 完整历史
+    print(f"  📜 完整历史（{len(agent_history)} 条）：")
+    print(f"  {'时间':20s} {'角色':5s} {'变动':6s} {'分后':5s} 原因")
+    print(f"  {'-'*68}")
+    for h in agent_history:
+        delta = h.get("delta", 0)
+        delta_str = f"+{delta}" if delta >= 0 else str(delta)
+        icon = "✅" if delta > 0 else "⚠️" if delta < 0 else "➖"
+        print(
+            f"  {icon} {h.get('ts', '?'):18s} "
+            f"{h.get('agent', '?'):5s} "
+            f"{delta_str:6s} "
+            f"{h.get('score_after', '?'):5} "
+            f"{h.get('reason', '')[:40]}"
+        )
+    print()
+
+    # 待审违规
+    if os.path.exists(VIOLATIONS_PATH):
+        violations = []
+        with open(VIOLATIONS_PATH) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        v = json.loads(line)
+                        if not name or v.get("agent") == name:
+                            if v.get("status") == "pending_review":
+                                violations.append(v)
+                    except json.JSONDecodeError:
+                        pass
+        if violations:
+            print(f"  🔴 待审违规（{len(violations)} 条）：")
+            for v in violations:
+                print(f"     [{v.get('ts')}] {v.get('agent')} — {v.get('type')}: {v.get('task', '')[:50]}")
+            print(f"\n  老板裁决后用：credit_manager.py sub <角色> <分数> \"原因\"")
+            print()
+
+
 DELETE_WHITELIST_PATH = os.path.expanduser("~/.claude/merit_delete_whitelist.json")
 
 
@@ -347,6 +428,7 @@ def main():
         "add": cmd_add,
         "sub": cmd_sub,
         "history": cmd_history,
+        "report": cmd_report,
         "declare-delete": cmd_declare_delete,
     }
 
