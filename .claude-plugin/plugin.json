@@ -1,0 +1,6 @@
+{
+  "name": "haiku-gate",
+  "version": "2.0.0",
+  "description": "Haiku Gate — AI 信用积分门卫系统。用 hook 拦截 + 信用积分动态管控 AI 行为。",
+  "commands": ["./commands/credit.md"]
+}
