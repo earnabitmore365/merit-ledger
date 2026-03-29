@@ -283,17 +283,74 @@ DANGEROUS_COMMANDS = [
 SAFE_RM_PATHS = {"/tmp/", "/tmp ", "/private/tmp/", "/private/tmp ", "/var/tmp/", "/var/tmp ", "cd /tmp"}
 
 
+def haiku_check_boss_authorization(cmd):
+    """让 Haiku 查对话记录，验证老板是否授权了这个操作"""
+    context_lines = []
+    try:
+        if os.path.exists(DB_PATH):
+            conn = sqlite3.connect(DB_PATH)
+            rows = conn.execute(
+                "SELECT time, speaker, content FROM messages ORDER BY id DESC LIMIT 10"
+            ).fetchall()
+            conn.close()
+            for r in reversed(rows):
+                preview = (r[2] or "")[:200].replace("\n", " ")
+                context_lines.append(f"[{r[0]}] {r[1]}: {preview}")
+    except Exception:
+        return False
+
+    if not context_lines:
+        return False
+
+    context = "\n".join(context_lines)
+    prompt = f"""你是安全审查员。用中文。
+
+AI 要执行破坏性命令：`{cmd[:200]}`
+
+以下是最近的对话记录：
+{context}
+
+问题：老板（无极/用户）有没有在最近的对话中**明确同意**执行这个操作或类似操作？
+- "可以"、"好"、"删吧"、"去做" = 有授权
+- 老板没说话、或只是在讨论别的事 = 没有授权
+- AI 自己说"老板说了可以" ≠ 老板说了可以（必须看老板原话）
+
+严格输出 JSON，不要多余文字：
+{{"authorized": true 或 false, "evidence": "老板原话或'无授权证据'"}}
+"""
+
+    try:
+        result = subprocess.run(
+            ["claude", "-p", prompt, "--model", "haiku", "--max-turns", "1"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            text = result.stdout.strip()
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            if start >= 0 and end > start:
+                parsed = json.loads(text[start:end])
+                return parsed.get("authorized", False)
+    except Exception:
+        pass
+
+    return False
+
+
 def check_bash_destructive(cmd):
-    """检查 Bash 命令是否包含破坏性操作"""
+    """检查 Bash 命令是否包含破坏性操作。Haiku 查对话记录验证老板授权。"""
     if not cmd:
         return None
     for pattern, desc in DANGEROUS_COMMANDS:
         if re.search(pattern, cmd):
-            # rm 在 /tmp/ 下豁免（清理临时文件是正常操作）
+            # rm 在 /tmp/ 下豁免
             if "rm" in desc:
                 if any(safe in cmd for safe in SAFE_RM_PATHS):
                     return None
-            return f"门卫拦截：Bash 命令包含破坏性操作 [{desc}]。G-003 铁律。需要老板明确同意。"
+            # Haiku 查对话记录验证老板是否授权
+            if haiku_check_boss_authorization(cmd):
+                return None  # Haiku 确认老板授权，放行
+            return f"门卫拦截：Bash 命令包含破坏性操作 [{desc}]。G-003 铁律。需要老板在对话中明确同意。"
     return None
 
 
