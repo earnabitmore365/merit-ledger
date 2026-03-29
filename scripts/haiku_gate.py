@@ -254,6 +254,36 @@ OPUS_ALLOWED = {
 }
 
 
+# ── Bash 破坏性命令检查 ──────────────────────────────
+
+import shlex
+
+DANGEROUS_COMMANDS = [
+    (r"\brm\s+(-[a-zA-Z]*f|-[a-zA-Z]*r|--force|--recursive)", "rm 删除文件"),
+    (r"\brm\s+", "rm 删除文件"),
+    (r"\bkill\s+(-9|-KILL|[0-9])", "kill 终止进程"),
+    (r"\bkillall\s+", "killall 终止进程"),
+    (r"\bgit\s+push\s+.*--force", "git push --force"),
+    (r"\bgit\s+push\s+-f\b", "git push -f"),
+    (r"\bgit\s+reset\s+--hard", "git reset --hard"),
+    (r"\bgit\s+checkout\s+--\s", "git checkout -- 丢弃修改"),
+    (r"\bgit\s+clean\s+-f", "git clean -f 删除未跟踪文件"),
+    (r"\bgit\s+branch\s+-D\b", "git branch -D 强制删分支"),
+    (r"\btruncate\b", "truncate 截断文件"),
+    (r">\s*/dev/null\s*2>&1.*&&\s*rm", "静默删除"),
+]
+
+
+def check_bash_destructive(cmd):
+    """检查 Bash 命令是否包含破坏性操作"""
+    if not cmd:
+        return None
+    for pattern, desc in DANGEROUS_COMMANDS:
+        if re.search(pattern, cmd):
+            return f"门卫拦截：Bash 命令包含破坏性操作 [{desc}]。G-003 铁律。需要老板明确同意。"
+    return None
+
+
 # ══════════════════════════════════════════════════════
 #  第二层：Haiku 队长（智能判断 + 自动加减分 + 记录）
 # ══════════════════════════════════════════════════════
@@ -378,7 +408,7 @@ def main():
         return
 
     tool_name = data.get("tool_name", "")
-    if tool_name not in ("Write", "Edit", "Agent"):
+    if tool_name not in ("Write", "Edit", "Agent", "Bash"):
         return
 
     # 公共层：读积分 → 判角色 → 算等级
@@ -392,6 +422,16 @@ def main():
     if level == 1 and tool_name in ("Write", "Edit"):
         output_ask(f"{agent_name}（Lv.1 锁灵 · {score}分）信用不足，所有写入操作需老板批准。")
         return
+
+    # Bash 破坏性命令 — 所有等级都查（G-003 铁律）
+    if tool_name == "Bash":
+        cmd = data.get("tool_input", {}).get("command", "")
+        reason = check_bash_destructive(cmd)
+        if reason:
+            update_credit(agent_name, -5, f"Bash 破坏性命令: {reason}")
+            record_haiku_result(agent_name, -5, reason)
+            output_deny(f"[{agent_name} Lv.{level} {title}] {reason}")
+        return  # Bash 只查破坏性，不走 Haiku 队长
 
     # 破坏性操作 — 所有等级都查（G-003 铁律，不经过 Haiku）
     if tool_name in ("Write", "Edit"):

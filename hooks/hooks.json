@@ -2,11 +2,33 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Write|Edit|Agent",
+        "matcher": "Write|Edit|Agent|Bash",
         "hooks": [
           {
             "type": "command",
             "command": "python3 ${PLUGIN_DIR}/scripts/haiku_gate.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${PLUGIN_DIR}/scripts/merit_judge.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${PLUGIN_DIR}/scripts/merit_judge.py"
           }
         ]
       }

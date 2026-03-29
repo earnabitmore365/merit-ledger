@@ -114,23 +114,35 @@ type: project
 
 ## 加减分规则
 
-### 加分（慢升）
+### 自动触发（无需手动）
+
+| 触发点 | hook | 时机 | 加减分 |
+|--------|------|------|--------|
+| **老板表扬** | UserPromptSubmit → merit_judge.py | 老板说"好/不错/完美" | +1 到 +3 |
+| **老板批评** | UserPromptSubmit → merit_judge.py | 老板说"不对/错了/搞什么" | -1 到 -5 |
+| **AI 操作合规** | PreToolUse → haiku_gate.py | Write/Edit/Agent 之前 | +1 到 +3（Haiku 队长） |
+| **AI 操作违规** | PreToolUse → haiku_gate.py | Write/Edit/Agent 之前 | -1 到 -5（Haiku 队长） |
+| **AI 回复质量** | Stop → merit_judge.py | 每 5 次 AI 回复后 | ±1 到 ±3（后台 Haiku） |
+| **硬规则拦截** | PreToolUse → haiku_gate.py | 破坏性操作 | -5（自动） |
+
+### 手动触发（太极用）
 
 | 事件 | 分值 |
 |------|------|
 | 完成任务无纠错 | **+3** |
 | 主动发现并报告问题 | **+5** |
-| Haiku 队长判断操作规范 | **+1 到 +3** |
-
-### 减分（快降）
-
-| 事件 | 分值 |
-|------|------|
-| 被老板纠正（轻微） | **-5** |
 | 完整性违规（跳步骤/遗漏） | **-10** |
 | 真实性违规（编数据/猜测当事实） | **-20** |
-| Haiku 队长判断违规 | **-1 到 -5** |
-| 触发硬规则拦截（破坏性操作） | **-5** |
+
+### 老板语气关键词（merit_judge.py 自动匹配）
+
+| 分值 | 关键词 |
+|------|--------|
+| +3 | 太好了、完美、漂亮、厉害、做得好 |
+| +2 | 不错、可以、嗯嗯、就这、没问题 |
+| +1 | 嗯、好、ok |
+| -3 | 不对、错了、漏了、忘了、重做 |
+| -5 | 你搞什么、搞砸、又错、怎么搞的 |
 
 **核心原则**：建立信任慢，失去信任快。升降比约 1:2 到 1:7。
 
@@ -139,34 +151,51 @@ type: project
 ## 系统架构
 
 ```
-haiku_gate.py（Haiku 门卫部）
+功过格 Merit Ledger — 完整架构
   │
-  ├── 第一层：队员巡逻（硬规则，毫秒级，不依赖 AI）
-  │     ├── Lv.1 全锁 → ask 老板
-  │     ├── 破坏性操作 → deny + 自动扣 5 分
-  │     ├── Agent 写代码类型检查 → deny
-  │     └── Agent 模型限制（Lv.5 豁免）→ deny
+  ├── 积分层：credit.json（实时分数 + 变更历史）
   │
-  └── 第二层：Haiku 队长（智能判断，1-8 秒）
-        ├── 读上下文（conversations.db 最近 5 条）+ 当前操作
-        ├── 判断合规性 → allow / deny
-        ├── 自动加减分（-5 到 +3）→ 更新 credit.json
-        ├── 记录做对/做错 → LEARNINGS.md
-        └── Lv.4+ 不经过队长（已被信任）
+  ├── 等级层：锁灵 → 筑基 → 金丹 → 元婴 → 化神
+  │
+  └── 权限层（三个 hook 联动）
+        │
+        ├── haiku_gate.py（PreToolUse: Write|Edit|Agent）
+        │     ├── 队员：硬规则秒回（破坏性/Read前/Grep前/方案格式/新文件/Agent限制）
+        │     └── 队长：Haiku 智能判断 + 自动加减分（Lv.1-3）
+        │
+        ├── merit_judge.py（UserPromptSubmit）
+        │     └── 关键词匹配老板语气 → 自动加减分（表扬+/批评-）
+        │
+        ├── merit_judge.py（Stop，每5次触发）
+        │     └── 后台 Haiku 评估 AI 回复质量 → 自动加减分
+        │
+        └── taiji-audit（/audit 命令）
+              └── 事后审查打分 → 按总分自动调整 credit.json
 ```
 
 ## 文件清单
 
 | 文件 | 用途 |
 |------|------|
-| `~/.claude/scripts/haiku_gate.py` | Haiku 门卫部主脚本 |
-| `~/.claude/credit.json` | 积分存储（三角色分数/等级/称号/变更历史） |
-| `~/.claude/scripts/credit_manager.py` | 手动加减分工具（太极用） |
+| `~/.claude/scripts/haiku_gate.py` | 门卫（PreToolUse hook，硬规则+Haiku 队长） |
+| `~/.claude/scripts/merit_judge.py` | 自动判官（UserPromptSubmit 语气识别 + Stop 后台 Haiku 评估） |
+| `~/.claude/scripts/credit_manager.py` | 手动加减分 CLI + Haiku 自动反思 |
+| `~/.claude/credit.json` | 积分存储（角色/分数/等级/称号/变更历史） |
 | `~/.claude/scripts/session_start.py` | 会话启动注入信用状态 |
 | `~/.claude/learnings/LEARNINGS.md` | Haiku 自动记录的教训/经验 |
+| `~/.claude/scripts/create_plugin.sh` | Marketplace plugin 打包工具 |
 
-## 待做（v3）
+## GitHub
 
-- Bash 破坏性拦截（rm/kill/force push）
-- taiji-audit 审查后自动调分
-- Haiku 队长 prompt 精调
+- **merit-ledger**：https://github.com/earnabitmore365/merit-ledger
+
+## v3 已完成（2026-03-29）
+
+- ✅ Bash 破坏性拦截（rm/kill/force push/reset --hard/clean -f/branch -D）
+- ✅ taiji-audit 审查联动（/audit 打分后自动写入 credit.json）
+- ✅ merit_judge.py（UserPromptSubmit 语气 + Stop 后台 Haiku 评估）
+
+## 待做（v4）
+
+- Haiku 队长 prompt 精调（根据运行效果优化）
+- Bash 误拦优化（echo/grep 中的 rm 不应被拦）
