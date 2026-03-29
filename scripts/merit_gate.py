@@ -515,17 +515,25 @@ def main():
         return
 
     # 批量模式：subagent（白纱）并行写文件时，每 5 次 Write/Edit 才调一次 Haiku
-    # 避免白纱改 20 个文件调 20 次 Haiku
+    # 超过 60 秒没有新操作 → 重置计数器（新一轮任务）
+    import time
     if data.get("agent_id") and tool_name in ("Write", "Edit"):
         batch_path = os.path.expanduser("~/.claude/merit_batch_counter.json")
         try:
             count = 0
+            last_ts = 0
+            now = time.time()
             if os.path.exists(batch_path):
                 with open(batch_path) as f:
-                    count = json.load(f).get("count", 0)
+                    batch_data = json.load(f)
+                    count = batch_data.get("count", 0)
+                    last_ts = batch_data.get("ts", 0)
+            # 超过 60 秒 → 新一轮，重置计数
+            if now - last_ts > 60:
+                count = 0
             count += 1
             with open(batch_path, "w") as f:
-                json.dump({"count": count}, f)
+                json.dump({"count": count, "ts": now}, f)
             if count % 5 != 0:
                 return  # 跳过 Haiku，硬规则已通过
         except Exception:
