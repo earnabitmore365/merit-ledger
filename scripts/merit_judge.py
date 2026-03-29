@@ -101,6 +101,61 @@ NEGATIVE_PATTERNS = {
 }
 
 
+TASK_KEYWORDS = [
+    "去做", "帮我", "做一下", "开始做", "你做", "现在做", "马上做",
+    "处理一下", "搞一下", "改一下", "查一下", "跑一下",
+    "你先", "你去", "动手", "执行", "部署", "上线",
+]
+
+PENDING_TASK_PATH = os.path.expanduser("~/.claude/merit_pending_task.json")
+
+
+def mark_pending_task(text):
+    """老板说了任务关键词 → 标记 pending_task"""
+    for kw in TASK_KEYWORDS:
+        if kw in text:
+            try:
+                import time
+                with open(PENDING_TASK_PATH, "w") as f:
+                    json.dump({"ts": time.time(), "task": text[:100]}, f, ensure_ascii=False)
+            except Exception:
+                pass
+            return
+
+
+def check_pending_task_executed(data):
+    """Stop 时检查：老板派了任务，有没有开始执行？"""
+    if not os.path.exists(PENDING_TASK_PATH):
+        return
+
+    try:
+        with open(PENDING_TASK_PATH) as f:
+            pending = json.load(f)
+
+        # 检查 transcript 里有没有 Write/Edit/Agent/Bash 操作
+        transcript_path = data.get("transcript_path", "")
+        has_action = False
+        if transcript_path and os.path.exists(transcript_path):
+            with open(transcript_path) as f:
+                for line in f:
+                    if '"tool_use"' in line and any(t in line for t in ['"Write"', '"Edit"', '"Agent"', '"Bash"']):
+                        has_action = True
+                        break
+
+        # 清除 pending 标记
+        os.remove(PENDING_TASK_PATH)
+
+        if not has_action:
+            # 派了任务没执行 → 扣 5 分
+            cwd = data.get("cwd", "")
+            agent_name = determine_agent(cwd)
+            task_desc = pending.get("task", "")[:50]
+            update_credit(agent_name, -5, f"派任务未执行: {task_desc}")
+            record_learning(agent_name, -5, f"老板派了任务但没开始执行: {task_desc}")
+    except Exception:
+        pass
+
+
 def extract_user_message(data):
     """从 UserPromptSubmit hook 数据提取老板消息"""
     # hook 数据结构：message.content 可能是字符串或数组
@@ -143,13 +198,16 @@ def judge_user_sentiment(text):
 
 
 def handle_user_prompt_submit(data):
-    """处理老板发言 → 语气判断 → 加减分"""
+    """处理老板发言 → 语气判断 + 任务标记 → 加减分"""
     cwd = data.get("cwd", "")
     agent_name = determine_agent(cwd)
     text = extract_user_message(data)
 
     if not text:
         return
+
+    # 任务关键词 → 标记 pending_task
+    mark_pending_task(text)
 
     delta, reason = judge_user_sentiment(text)
     if delta != 0:
@@ -208,7 +266,10 @@ def get_pending_review():
 
 
 def handle_stop(data):
-    """AI 回复完 → 两件事：1. 统一评白纱待评记录 2. 低频评黑丝/太极"""
+    """AI 回复完 → 三件事：0. 检查任务执行 1. 统一评白纱 2. 低频评黑丝"""
+    # 0. 检查老板派的任务有没有开始执行
+    check_pending_task_executed(data)
+
     cwd = data.get("cwd", "")
     agent_name = determine_agent(cwd)
 
