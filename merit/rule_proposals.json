@@ -1218,14 +1218,15 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_操作完成或失败后必须主动汇报，不等老板来",
-    "rule_text": "操作完成或失败后必须立即主动汇报结果、状态及原因，禁止等待询问才汇报。",
+    "rule_text": "操作完成或失败后必须立即主动汇报结果及原因，禁止等待询问才汇报。",
     "source_count": 2,
     "effective_triggers": 0,
     "last_trigger": null,
     "approved_by": "evolve_auto",
     "approved_date": "2026-04-05",
     "parent_category": "纪律",
-    "parent_updated": true
+    "parent_updated": true,
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-083",
@@ -1497,7 +1498,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_老祖已定义的事能推导出答案就不问（纪律-",
-    "rule_text": "提问前应先检索确认是否已有答案；已有答案的，直接复用，不得重复提问。",
+    "rule_text": "提问前应先检索确认是否已有答案；已有答案的，直接使用，不得重复提问。",
     "source_count": 2,
     "effective_triggers": 0,
     "last_trigger": null,
