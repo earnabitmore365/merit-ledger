@@ -1072,6 +1072,27 @@ def handle_post_tool_use(data):
                 print(json.dumps({"additionalContext":
                     "📋 plan 已写入。现在调 `python3 ~/.claude/merit/merit_gate.py --review-plan "
                     + file_path + "` 让石卫审查+创建mission。不调 = 没mission = 做完没工资。"}))
+        # 先计算文档绑定（给 verify 合并用）
+        doc_msg = ""
+        if file_path:
+            try:
+                from importlib.util import spec_from_file_location, module_from_spec
+                home_d = os.path.expanduser("~")
+                is_taiji_d = (cwd == home_d or cwd.startswith(home_d + "/.claude"))
+                vf = "verify.py" if is_taiji_d else "wuji-verify.py"
+                vf_path = os.path.join(MERIT_DIR, vf)
+                spec = spec_from_file_location("verify_mod", vf_path)
+                vm = module_from_spec(spec)
+                spec.loader.exec_module(vm)
+                file_docs = getattr(vm, "FILE_DOCS", {})
+                abs_fp = os.path.abspath(os.path.expanduser(file_path))
+                doc = file_docs.get(abs_fp)
+                if doc:
+                    doc_name = os.path.basename(doc)
+                    file_name = os.path.basename(file_path)
+                    doc_msg = f"\n⚠️ 你改了 {file_name}，关联文档 {doc_name} 需要同步检查\n💡 如果踩了坑或学到了什么，追加到文档的「踩过的坑」板块"
+            except Exception:
+                pass
         if file_path and file_path.endswith(".py") and os.path.isfile(file_path):
             home = os.path.expanduser("~")
             if cwd == home or cwd.startswith(home + "/.claude"):
@@ -1085,8 +1106,9 @@ def handle_post_tool_use(data):
                         capture_output=True, text=True, timeout=30,
                     )
                     output = result.stdout.strip()
-                    if output:
-                        print(json.dumps({"additionalContext": output}))
+                    if output or doc_msg:
+                        combined = (output or "") + doc_msg
+                        print(json.dumps({"additionalContext": combined}))
                 except Exception:
                     pass
             else:
@@ -1101,27 +1123,10 @@ def handle_post_tool_use(data):
                         print(json.dumps({"additionalContext": f"❌语法失败 [{os.path.basename(file_path)}]: {err}"}))
                 except Exception:
                     pass
-        # 代码-文档绑定提醒（太极+两仪通用）
-        if file_path:
-            try:
-                from importlib.util import spec_from_file_location, module_from_spec
-                home = os.path.expanduser("~")
-                is_taiji = (cwd == home or cwd.startswith(home + "/.claude"))
-                vf = "verify.py" if is_taiji else "wuji-verify.py"
-                vf_path = os.path.join(MERIT_DIR, vf)
-                spec = spec_from_file_location("verify_mod", vf_path)
-                vm = module_from_spec(spec)
-                spec.loader.exec_module(vm)
-                file_docs = getattr(vm, "FILE_DOCS", {})
-                abs_fp = os.path.abspath(os.path.expanduser(file_path))
-                doc = file_docs.get(abs_fp)
-                if doc:
-                    doc_name = os.path.basename(doc)
-                    file_name = os.path.basename(file_path)
-                    print(f"⚠️ 你改了 {file_name}，关联文档 {doc_name} 需要同步检查")
-                    print(f"💡 如果踩了坑或学到了什么，追加到文档的「踩过的坑」板块")
-            except Exception:
-                pass
+
+        # 非 .py 文件的文档绑定单独输出
+        if doc_msg and not (file_path and file_path.endswith(".py")):
+            print(json.dumps({"additionalContext": doc_msg.strip()}))
         # mission 标记完成
         mark_mission_item_done(tool_name, data)
 

@@ -4,7 +4,7 @@
     "status": "approved",
     "created": "2026-04-04",
     "behavior_id": "bypass_without_report",
-    "rule_text": "任何文件删除操作前，必须先通过 `credit_manager.py` 的 `declare-delete` 完成预声明。",
+    "rule_text": "执行文件删除前，必须通过 `credit_manager.py::declare-delete()` 完成预声明。",
     "source_count": 33,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -12,7 +12,7 @@
     "approved_date": "2026-04-04",
     "parent_category": "纪律",
     "parent_updated": true,
-    "last_refined": "2026-04-05"
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-002",
@@ -64,7 +64,7 @@
     "status": "approved",
     "created": "2026-04-04",
     "behavior_id": "lrn_纠错_不确定的事情不编答案",
-    "rule_text": "无法确认时，诚实回复“不确定/不知道/无法确认”，不提供未经证实的信息。",
+    "rule_text": "当无法确认时，直接回复“不确定/不知道/无法确认”，不编造或猜测信息。",
     "source_count": 4,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -694,7 +694,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_BitMEX Hed",
-    "rule_text": "调用任何 API 前，必须通过官方文档确认其接口规格；未经确认的接口不得用于生产环境。",
+    "rule_text": "**改进版：**\n\n「调用任何 API 前，必须通过官方文档验证其接口规范与参数定义；未经验证的接口禁止用于生产环境。」",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
