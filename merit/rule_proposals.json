@@ -199,7 +199,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "same_error_3rd_time",
-    "rule_text": "任务开始前查阅任务历史记录确认无重复，任务完成后汇报结果。",
+    "rule_text": "「任务开始前查阅任务历史记录，确认本任务非重复；任务完成后及时汇报处理结果。」",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -829,7 +829,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_ai_call 在 ",
-    "rule_text": "禁止在不同文件中重复实现相同功能，相同功能应定义一次并通过模块导入使用。",
+    "rule_text": "应将相同功能抽取为独立模块，禁止在不同文件中重复实现，可通过模块导入方式复用。",
     "source_count": 2,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -837,7 +837,7 @@
     "approved_date": "2026-04-05",
     "parent_category": "有效性",
     "parent_updated": true,
-    "last_refined": "2026-04-05"
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-057",
@@ -1541,7 +1541,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_没看完全链路就下结论。完整性-3：叫看就",
-    "rule_text": "回复前必须完整阅读全部上下文，确保充分理解后再作答。未完整阅读不得输出回复。",
+    "rule_text": "回复前必须完整阅读全部相关上下文，确保充分理解后再作答。未充分理解前不得输出回复。",
     "source_count": 2,
     "effective_triggers": 0,
     "last_trigger": null,
