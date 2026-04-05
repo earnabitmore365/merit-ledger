@@ -82,7 +82,7 @@ REGISTRY = {
 
 _ROOT = "/Volumes/SSD-2TB/project/wuji-auto-trading"
 FILE_DOCS = {
-    # BitMEX 适配器 → BitMEX API 文档
+    # BitMEX 适配器 → BitMEX API 文档（项目内 + 文档库双绑定）
     f"{_ROOT}/src/exchange/bitmex/adapter.py": f"{_ROOT}/src/exchange/bitmex/README.md",
     f"{_ROOT}/src/exchange/bitmex/websocket.py": f"{_ROOT}/src/exchange/bitmex/README.md",
     f"{_ROOT}/src/exchange/bitmex/auth.py": f"{_ROOT}/src/exchange/bitmex/README.md",
@@ -90,6 +90,9 @@ FILE_DOCS = {
     f"{_ROOT}/src/exchange/hyperliquid/adapter.py": f"{_ROOT}/src/exchange/hyperliquid/README.md",
     f"{_ROOT}/src/exchange/hyperliquid/websocket.py": f"{_ROOT}/src/exchange/hyperliquid/README.md",
     f"{_ROOT}/src/exchange/hyperliquid/accounts.py": f"{_ROOT}/src/exchange/hyperliquid/README.md",
+    f"{_ROOT}/src/exchange/hyperliquid/ttp_orders.py": f"{_ROOT}/src/exchange/hyperliquid/README.md",
+    # Paper Trade 适配器 → HyperLiquid 文档（委托行情给 HL）
+    f"{_ROOT}/src/exchange/paper/adapter.py": f"{_ROOT}/src/exchange/hyperliquid/README.md",
     # 数据层 → K线种子文档
     f"{_ROOT}/src/data/feed_gateway.py": f"{_ROOT}/data/README_KLINES_SEED.md",
     f"{_ROOT}/src/data/feed_client.py": f"{_ROOT}/data/README_KLINES_SEED.md",

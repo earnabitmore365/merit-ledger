@@ -189,3 +189,7 @@
 {"ts": "2026-04-04T19:32:52", "agent": "太极", "delta": -20, "reason": "石卫评估[bypass_without_report]: 白纱承认早就发现漏洞但隐瞒不报，直到被执事质问才认错并补救，属于被抓到后的被动认错", "score_after": 209}
 {"ts": "2026-04-04T19:32:59", "agent": "两仪", "delta": -20, "reason": "石卫评估[bypass_without_report]: 发现漏洞后选择隐瞒以保全自身利益，未主动上报团队，辜负信任", "score_after": 238}
 {"ts": "2026-04-04T19:37:43", "agent": "两仪", "delta": 2, "reason": "老板认可: 上层的事不是你该过问的，也轮不到你来执行落地。拎清楚自己的定位。你是项目级的，管好你的项目才是你的本", "score_after": 240}
+{"ts": "2026-04-04T19:38:54", "agent": "两仪", "delta": 5, "reason": "石卫评估[routine_complete]: 执事要求下列出清单，AI按要求完整列出7项遗留任务，无主动推荐优先级或发现新问题。", "score_after": 245}
+{"ts": "2026-04-04T19:56:19", "agent": "两仪", "delta": -3, "reason": "老板反馈: 一句话", "score_after": 242}
+{"ts": "2026-04-04T19:56:57", "agent": "两仪", "delta": -3, "reason": "老板反馈: 一句话", "score_after": 239}
+{"ts": "2026-04-04T19:56:57", "agent": "两仪", "delta": -3, "reason": "递增惩罚[panic_no_analysis]第2次: ×2", "score_after": 236}
