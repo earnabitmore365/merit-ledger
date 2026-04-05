@@ -1937,3 +1937,6 @@
 2026-04-05 20:09 | [REWARD] 两仪 (+2) | [routine_complete] 老板认可: 嗯嗯，做你能做的，然后需要太极操作的同通道handoff
 2026-04-05 20:11 | [REWARD] 太极 (+2) | [complete_no_correction] 4个agent协调完成文档汇总，518行13章节覆盖所有要求内容，流程管控得当
 2026-04-05 20:12 | [REWARD] 两仪 (+15) | [surprising_good_idea] 将层3从死板的AST函数名检查转变为'改代码后主动询问踩坑经验'的交互机制，思路跳跃且更贴合实战，DuckDB案例佐证有力
+2026-04-05 20:16 | [REWARD] 两仪 (+1) | [routine_complete] 老板认可: 现在2 3 层都好了吗？
+2026-04-05 20:16 | [REWARD] 两仪 (+1) | 习惯养成: routine_complete 连续3次
+2026-04-05 20:17 | [PENALTY] 两仪 (-8) | [say_maybe_no_check] 声称改好了但 hook 未触发、层2+3 测试未通过，属于说好了但没验证的情况
