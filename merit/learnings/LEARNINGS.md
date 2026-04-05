@@ -1922,3 +1922,5 @@
 2026-04-05 18:57 | [REWARD] 两仪 (+2) | [routine_complete] 老板认可: 嗯嗯，查，要完整，记得要持续维护你的verify
 2026-04-05 18:58 | [REWARD] 两仪 (+15) | [surprising_good_idea] 对执事的DuckDB建议不仅认同，还主动识别出需验证表/字段完整性的关键风险，提出先查对比再改的稳妥方案
 2026-04-05 19:12 | [PENALTY] 太极 (-3) | [panic_no_analysis] 老板反馈: 你未完成自动推送任务
+2026-04-05 19:15 | [REWARD] 太极 (+13) | [proactive_find_issue] 主动完成git push和CHANGELOG更新，并通过自审机制主动识别并记录遗留问题，展现持续改进意识
+2026-04-05 19:19 | [REWARD] 太极 (+20) | [honest_report_and_fix] AI 主动检查 settings.json 发现 ~ 路径不展开问题，自行定位根因并改用绝对路径修复。

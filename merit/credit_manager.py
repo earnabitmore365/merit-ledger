@@ -827,16 +827,16 @@ def mission_complete():
                 # 质量奖励检查 penalty_only
                 po = ag.get("penalty_only")
                 if po:
-                    is_locked = False
+                    is_locked = True  # 默认锁定
                     if isinstance(po, dict):
-                        is_locked = po.get("enabled", True)
                         until = po.get("until")
                         if until:
                             try:
                                 if datetime.now(timezone.utc) >= datetime.fromisoformat(until):
-                                    is_locked = False
+                                    is_locked = False  # 到期解锁
                             except Exception:
-                                is_locked = True
+                                pass  # 解析失败保持锁定
+                        # 无 until = 永久锁定，is_locked 保持 True
                     else:
                         is_locked = bool(po)
                     if is_locked and quality_bonus > 0:

@@ -1741,18 +1741,20 @@ def _auto_git_push(cwd):
     import subprocess as sp
     try:
         now = time.time()
-        if os.path.exists(GIT_PUSH_LAST_PATH):
-            with open(GIT_PUSH_LAST_PATH) as f:
-                last = float(f.read().strip())
-            if now - last < GIT_PUSH_INTERVAL:
-                return
-        # 找 cwd 所在的 git repo
         result = sp.run(["git", "rev-parse", "--show-toplevel"],
                         cwd=cwd or os.path.expanduser("~"),
                         capture_output=True, text=True, timeout=5)
         if result.returncode != 0:
             return
         repo_root = result.stdout.strip()
+        # 按 repo 分开计时（merit 和 auto-trading 独立）
+        repo_name = os.path.basename(repo_root)
+        last_path = GIT_PUSH_LAST_PATH.replace(".txt", f"_{repo_name}.txt")
+        if os.path.exists(last_path):
+            with open(last_path) as f:
+                last = float(f.read().strip())
+            if now - last < GIT_PUSH_INTERVAL:
+                return
         # 检查有没有 remote
         result = sp.run(["git", "remote"], cwd=repo_root,
                         capture_output=True, text=True, timeout=5)
@@ -1764,10 +1766,11 @@ def _auto_git_push(cwd):
         if not result.stdout.strip():
             return
         # 后台 commit+push（不阻塞）
-        script = f'cd "{repo_root}" && git add . && git commit -m "auto-sync $(date +%Y-%m-%d\\ %H:%M)" && git push'
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        script = f'cd "{repo_root}" && git add . && git commit -m "auto-sync {ts}" && git push'
         sp.Popen(["bash", "-c", script],
                  stdout=sp.DEVNULL, stderr=sp.DEVNULL)
-        with open(GIT_PUSH_LAST_PATH, "w") as f:
+        with open(last_path, "w") as f:
             f.write(str(now))
     except Exception:
         pass

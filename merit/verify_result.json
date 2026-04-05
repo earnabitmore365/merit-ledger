@@ -1,11 +1,11 @@
 {
-  "file": "merit_gate.py",
-  "time": "2026-04-06T05:13:45",
+  "file": "credit_manager.py",
+  "time": "2026-04-06T05:17:51",
   "results": {
     "syntax": "pass",
     "logic": "pass",
     "chain": "pending",
-    "docs": "fail"
+    "docs": "pending"
   },
   "pass_count": 2,
   "total": 4
