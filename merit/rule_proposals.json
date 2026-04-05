@@ -34,7 +34,7 @@
     "status": "approved",
     "created": "2026-04-04",
     "behavior_id": "honest_report_and_fix",
-    "rule_text": "结论须提供实测证据或标注未经验证，禁止仅凭推断声称功能正常。",
+    "rule_text": "「结论须提供实测证据或明确标注未经验证，禁止仅凭推断声称功能正常或有效。」",
     "source_count": 77,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -42,7 +42,7 @@
     "approved_date": "2026-04-04",
     "parent_category": "真实性",
     "parent_updated": true,
-    "last_refined": "2026-04-05"
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-004",
@@ -1129,7 +1129,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_做事必须一套完整做完",
-    "rule_text": "危险操作前必须列出全部修改位置并经独立复核确认无误后方可执行，执行后逐项验证每处改动的正确性，严禁以主观判断替代客观验证。",
+    "rule_text": "危险操作前必须列出全部涉及范围并经独立复核确认后方可执行，操作后逐项验证每处改动，严禁以主观判断替代客观验证。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -2103,7 +2103,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_自审是工序不是标签——每个触发时机（汇报",
-    "rule_text": "每个触发时机须逐项验证触发条件并输出结果（通过/失败及原因），禁止仅标注完成状态。",
+    "rule_text": "每个触发时机必须逐条验证触发条件并记录结果（通过/失败及具体原因），严禁仅标注“完成”等状态。",
     "source_count": 4,
     "effective_triggers": 0,
     "last_trigger": null,
