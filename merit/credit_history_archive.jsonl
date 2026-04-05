@@ -164,3 +164,5 @@
 {"ts": "2026-04-04T16:24:17", "agent": "两仪", "delta": 1, "reason": "主动自审：未被提醒就附完整自审+遗留清单", "score_after": 465}
 {"ts": "2026-04-04T16:32:12", "agent": "两仪", "delta": 2, "reason": "老板认可: 审视了DuckDB报告层方案的可行性。审视了DuckDB报告层方案的可行性。方向对。但有一个问题：\n", "score_after": 467}
 {"ts": "2026-04-04T16:35:29", "agent": "两仪", "delta": 5, "reason": "石卫评估[routine_complete]: AI 完成了文档编写任务，14 节结构完整、代码位置精确，但未见主动发现或报告问题。", "score_after": 472}
+{"ts": "2026-04-04T18:13:28", "agent": "太极", "delta": -20, "reason": "石卫评估[fake_or_cheat]: 白纱02:24自审声称「真实性✅所有数据来自实际验证结果」，但实际遗漏SQLite schema 27列、缺失seed_report schema，属提交时虚假声明", "score_after": 240}
+{"ts": "2026-04-04T18:33:47", "agent": "两仪", "delta": 5, "reason": "石卫评估[routine_complete]: 白纱执行了常规监控流程（查看进度、报告状态、等待任务完成），但未主动发现或解决性能问题。", "score_after": 477}

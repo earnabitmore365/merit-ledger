@@ -1,12 +1,12 @@
 {
-  "file": "wuji-verify.py",
-  "time": "2026-04-06T05:25:59",
+  "file": "indicator_cache.py",
+  "time": "2026-04-06T05:38:56",
   "results": {
     "syntax": "pass",
-    "logic": "pending",
-    "chain": "pass",
-    "docs": "pass"
+    "logic": "pass",
+    "chain": "pending",
+    "docs": "pending"
   },
-  "pass_count": 3,
+  "pass_count": 2,
   "total": 4
 }

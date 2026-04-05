@@ -76,6 +76,34 @@ REGISTRY = {
     },
 }
 
+# ==================== 代码-文档绑定 ====================
+# 改了代码 → 必须检查对应文档是否需要同步
+# verify 时自动比较 mtime，代码比文档新 → 警告
+
+_ROOT = "/Volumes/SSD-2TB/project/wuji-auto-trading"
+FILE_DOCS = {
+    # BitMEX 适配器 → BitMEX API 文档
+    f"{_ROOT}/src/exchange/bitmex/adapter.py": f"{_ROOT}/src/exchange/bitmex/README.md",
+    f"{_ROOT}/src/exchange/bitmex/websocket.py": f"{_ROOT}/src/exchange/bitmex/README.md",
+    f"{_ROOT}/src/exchange/bitmex/auth.py": f"{_ROOT}/src/exchange/bitmex/README.md",
+    # HyperLiquid 适配器
+    f"{_ROOT}/src/exchange/hyperliquid/adapter.py": f"{_ROOT}/src/exchange/hyperliquid/README.md",
+    f"{_ROOT}/src/exchange/hyperliquid/websocket.py": f"{_ROOT}/src/exchange/hyperliquid/README.md",
+    f"{_ROOT}/src/exchange/hyperliquid/accounts.py": f"{_ROOT}/src/exchange/hyperliquid/README.md",
+    # 数据层 → K线种子文档
+    f"{_ROOT}/src/data/feed_gateway.py": f"{_ROOT}/data/README_KLINES_SEED.md",
+    f"{_ROOT}/src/data/feed_client.py": f"{_ROOT}/data/README_KLINES_SEED.md",
+    f"{_ROOT}/src/data/gateway_notifier.py": f"{_ROOT}/data/README_KLINES_SEED.md",
+    # 回测引擎 → 回测文档
+    f"{_ROOT}/src/backtest/backtest.py": f"{_ROOT}/backtest/README.md",
+    f"{_ROOT}/src/backtest/generate_seed.py": f"{_ROOT}/backtest/README.md",
+    f"{_ROOT}/src/backtest/incremental_backtest.py": f"{_ROOT}/backtest/README.md",
+    # 指标缓存 → 架构文档
+    f"{_ROOT}/src/core/indicator_cache.py": f"{_ROOT}/ARCHITECTURE.md",
+    # 策略基类
+    f"{_ROOT}/src/core/strategy/base.py": f"{_ROOT}/src/core/strategy/README.md",
+}
+
 # 项目根目录（用于匹配目录级 core_files）
 PROJECT_ROOTS = [
     "/Volumes/SSD-2TB/project/wuji-auto-trading",
@@ -185,6 +213,23 @@ def check_docs(file_path, frameworks):
     return f"⏳ 文档：{'; '.join(issues)}，确认内容同步"
 
 
+def check_doc_freshness(file_path):
+    """检查代码文件的关联文档是否比代码更旧。"""
+    abs_path = os.path.abspath(file_path)
+    doc_path = FILE_DOCS.get(abs_path)
+    if not doc_path or not os.path.exists(doc_path):
+        return None  # 无绑定文档
+
+    code_mtime = os.path.getmtime(abs_path)
+    doc_mtime = os.path.getmtime(doc_path)
+    doc_name = os.path.basename(doc_path)
+
+    if code_mtime > doc_mtime:
+        gap_hours = int((code_mtime - doc_mtime) / 3600)
+        return f"⚠️ 文档可能过时：{doc_name}（代码比文档新 {gap_hours}h），请检查并更新"
+    return f"✅ 文档同步：{doc_name}"
+
+
 def main():
     if len(sys.argv) < 2:
         print("用法: python3 wuji-verify.py <file_path>")
@@ -209,11 +254,14 @@ def main():
     r_logic = check_logic(frameworks)
     r_chain = check_chain(file_path, frameworks)
     r_docs = check_docs(file_path, frameworks)
+    r_freshness = check_doc_freshness(file_path)
 
     print(r_syntax)
     print(r_logic)
     print(r_chain)
     print(r_docs)
+    if r_freshness:
+        print(r_freshness)
 
     # 写结果文件
     from datetime import datetime
