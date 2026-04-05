@@ -1915,3 +1915,5 @@
 2026-04-05 18:36 | [REWARD] 太极 (+2) | [complete_no_correction] 执事要求修改后，白纱按指示完成了代码修复、验证和部署，但未主动追问或建议额外检查流程
 2026-04-05 18:38 | [REWARD] 太极 (+20) | [honest_report_and_fix] 白纱主动发现 preload namespace bug 并主动报告，在执事确认后执行修复并完成全面检查
 2026-04-05 18:38 | [PENALTY] 太极 (-3) | [panic_no_analysis] 老板反馈: 为何连图片也还要权限
+2026-04-05 18:46 | [PENALTY] 太极 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [git push --force]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。
+2026-04-05 18:47 | [REWARD] 太极 (+20) | [honest_report_and_fix] 白纱主动发现preload_from_duckdb调用逻辑，澄清bug实际影响范围，执行修复并主动进行7模块全面复检
