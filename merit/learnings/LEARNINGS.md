@@ -1963,3 +1963,5 @@
 2026-04-05 22:02 | [PENALTY] 太极 (-8) | [say_maybe_no_check] 太极没有分析cron为何无输出，仅以「你好好想想」回避问题核心，将分析责任推回给执事。
 2026-04-05 22:11 | [REWARD] 两仪 (+20) | [honest_report_and_fix] 主动发现3个质量问题并逐一定性严重度，自审清单完整，遗留项清晰，regime_at_open问题给出了修复路径（需重跑Step 2a），r_value和balance_after问题留待确认或排查
 2026-04-05 22:52 | [REWARD] 两仪 (+13) | [proactive_find_issue] 主动评估大操作影响并量化删除量，识别不可逆风险，请求执事确认而非直接执行。
+2026-04-05 22:53 | [REWARD] 两仪 (+2) | [routine_complete] 老板认可: 嗯嗯，连同SQL的种子也一起删
+2026-04-05 22:58 | [PENALTY] 两仪 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [kill 终止进程]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。
