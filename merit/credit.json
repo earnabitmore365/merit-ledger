@@ -13,7 +13,7 @@
       }
     },
     "两仪": {
-      "score": 149,
+      "score": 151,
       "held": 3,
       "level": 3,
       "title": "金丹",
@@ -22,27 +22,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-04T23:14:41",
-      "agent": "两仪",
-      "delta": 0,
-      "reason": "任务完成，押金3归还 + 惩戒期中，质量奖励不发放: README查询指南 + 代码段落索引",
-      "score_after": 179
-    },
-    {
-      "ts": "2026-04-04T23:25:57",
-      "agent": "两仪",
-      "delta": -3,
-      "reason": "老板反馈: 已经给你更新过了，现在重做",
-      "score_after": 176
-    },
-    {
-      "ts": "2026-04-04T23:42:02",
-      "agent": "太极",
-      "delta": -5,
-      "reason": "Bash 破坏性命令: 门卫拦截：Bash 命令包含破坏性操作 [os.remove 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。",
-      "score_after": 115
-    },
     {
       "ts": "2026-04-04T23:50:49",
       "agent": "太极",
@@ -728,6 +707,20 @@
       "delta": 0,
       "reason": "任务押金预扣 3分: mirror_candles改收益率取反+重跑K线种子+更新文档",
       "score_after": 149
+    },
+    {
+      "ts": "2026-04-05T23:25:51",
+      "agent": "两仪",
+      "delta": 1,
+      "reason": "主动自审：未被提醒就附完整自审+遗留清单",
+      "score_after": 150
+    },
+    {
+      "ts": "2026-04-05T23:26:59",
+      "agent": "两仪",
+      "delta": 1,
+      "reason": "主动自审：未被提醒就附完整自审+遗留清单",
+      "score_after": 151
     }
   ],
   "last_decay_ts": "2026-04-05T01:56:49"

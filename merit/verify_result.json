@@ -1,6 +1,6 @@
 {
-  "file": "build_klines_indicators.py",
-  "time": "2026-04-06T09:16:48",
+  "file": "indicators.py",
+  "time": "2026-04-06T09:24:49",
   "results": {
     "syntax": "pass",
     "logic": "pass",
