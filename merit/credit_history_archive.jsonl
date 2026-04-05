@@ -231,3 +231,5 @@
 {"ts": "2026-04-04T23:42:02", "agent": "太极", "delta": -5, "reason": "Bash 破坏性命令: 门卫拦截：Bash 命令包含破坏性操作 [os.remove 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。", "score_after": 115}
 {"ts": "2026-04-04T23:50:49", "agent": "太极", "delta": -5, "reason": "Bash 破坏性命令: 门卫拦截：Bash 命令包含破坏性操作 [rm 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。", "score_after": 110}
 {"ts": "2026-04-04T23:57:49", "agent": "两仪", "delta": -3, "reason": "老板反馈: 未提前说导致浪费整晚", "score_after": 173}
+{"ts": "2026-04-04T23:59:47", "agent": "两仪", "delta": -3, "reason": "老板反馈: 每次叫你记却记不住", "score_after": 170}
+{"ts": "2026-04-05T00:11:01", "agent": "两仪", "delta": 0, "reason": "任务押金预扣 1分: plan: shimmying-foraging-treehouse.md", "score_after": 170}

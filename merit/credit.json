@@ -13,7 +13,7 @@
       }
     },
     "两仪": {
-      "score": 153,
+      "score": 175,
       "held": 3,
       "level": 3,
       "title": "金丹",
@@ -22,20 +22,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-04T23:59:47",
-      "agent": "两仪",
-      "delta": -3,
-      "reason": "老板反馈: 每次叫你记却记不住",
-      "score_after": 170
-    },
-    {
-      "ts": "2026-04-05T00:11:01",
-      "agent": "两仪",
-      "delta": 0,
-      "reason": "任务押金预扣 1分: plan: shimmying-foraging-treehouse.md",
-      "score_after": 170
-    },
     {
       "ts": "2026-04-05T00:14:22",
       "agent": "两仪",
@@ -721,6 +707,20 @@
       "delta": 1,
       "reason": "主动自审：未被提醒就附完整自审+遗留清单",
       "score_after": 153
+    },
+    {
+      "ts": "2026-04-05T23:34:55",
+      "agent": "两仪",
+      "delta": 20,
+      "reason": "石卫评估[honest_report_and_fix]: AI 自审发现 ad/fvg_detect 未入 col_map，主动报告并准备修复此缺口",
+      "score_after": 173
+    },
+    {
+      "ts": "2026-04-05T23:36:58",
+      "agent": "两仪",
+      "delta": 2,
+      "reason": "石卫评估[complete_no_correction]: 准确解释了indicator_cache.py的三级查找机制（内存→DuckDB→现场算），并用流程图清晰展示了逻辑，代码示例完整，无错误。",
+      "score_after": 175
     }
   ],
   "last_decay_ts": "2026-04-05T01:56:49"
