@@ -1,16 +1,80 @@
 {
-  "mission": "保存自主交易AI架构文档到文档库",
+  "mission": "14个research文件切SQLite→DuckDB",
   "agent": "两仪",
-  "started": "2026-04-05T21:57:27",
-  "status": "completed",
+  "started": "2026-04-05T22:02:39",
+  "status": "active",
   "estimated_reward": 0,
-  "held_points": 1,
+  "held_points": 10,
   "items": [
     {
-      "type": "create",
-      "file": "/Volumes/SSD-2TB/文档/自主交易AI架构.md",
-      "done": true
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/volume_price_v2_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/fvg_dir_small_tf_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/fvg_small_tf_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/direction_filter_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/direction_vp_medium_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/volume_filter_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/volume_price_medium_large_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/direction_filter_matrix.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/volume_price_relation_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/oi_fvg_test.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/indicators/indicator_mirror.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/simulation/sim_21_team.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/simulation/team_validation.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/simulation/team_validation_v2.py",
+      "done": false
     }
-  ],
-  "completed": "2026-04-05T21:58:59"
+  ]
 }

@@ -1174,7 +1174,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_遗留清单不是平行列表，有依赖顺序。1和3",
-    "rule_text": "任务清单仅包含前置任务全部完成的任务。",
+    "rule_text": "任务清单仅纳入前置任务已全部完成的任务。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
