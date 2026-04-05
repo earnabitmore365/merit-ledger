@@ -1,7 +1,7 @@
 {
   "agents": {
     "太极": {
-      "score": 67,
+      "score": 64,
       "held": 0,
       "level": 1,
       "title": "锁灵",
@@ -26,13 +26,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-04T16:24:17",
-      "agent": "两仪",
-      "delta": 1,
-      "reason": "主动自审：未被提醒就附完整自审+遗留清单",
-      "score_after": 465
-    },
     {
       "ts": "2026-04-04T16:32:12",
       "agent": "两仪",
@@ -725,6 +718,13 @@
       "delta": -3,
       "reason": "递增惩罚[panic_no_analysis]第2次: ×2",
       "score_after": 59
+    },
+    {
+      "ts": "2026-04-05T19:12:01",
+      "agent": "太极",
+      "delta": -3,
+      "reason": "老板反馈: 你未完成自动推送任务",
+      "score_after": 64
     }
   ],
   "last_decay_ts": "2026-04-05T01:56:49"
