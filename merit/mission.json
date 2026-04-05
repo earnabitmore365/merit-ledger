@@ -1,14 +1,14 @@
 {
-  "mission": "mirror_candles改收益率取反+重跑K线种子+更新文档",
+  "mission": "indicator_cache统一到klines.duckdb+删SQLite+更新文档",
   "agent": "两仪",
-  "started": "2026-04-05T23:16:16",
-  "status": "active",
+  "started": "2026-04-05T23:45:27",
+  "status": "completed",
   "estimated_reward": 0,
   "held_points": 3,
   "items": [
     {
       "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/data/build_klines_indicators.py",
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/src/core/indicator_cache.py",
       "done": true
     },
     {
@@ -21,5 +21,6 @@
       "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/ARCHITECTURE.md",
       "done": true
     }
-  ]
+  ],
+  "completed": "2026-04-05T23:49:33"
 }

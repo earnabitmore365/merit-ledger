@@ -13,8 +13,8 @@
       }
     },
     "两仪": {
-      "score": 175,
-      "held": 3,
+      "score": 188,
+      "held": 0,
       "level": 3,
       "title": "金丹",
       "penalty_only": false,
@@ -22,41 +22,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-05T00:14:22",
-      "agent": "两仪",
-      "delta": -1,
-      "reason": "任务放弃，没收押金1: plan: shimmying-foraging-treehouse.md",
-      "score_after": 169
-    },
-    {
-      "ts": "2026-04-05T00:14:29",
-      "agent": "两仪",
-      "delta": 0,
-      "reason": "任务押金预扣 1分: build_seed_report.py 按 handoff 完整重做（paired_trades ",
-      "score_after": 169
-    },
-    {
-      "ts": "2026-04-05T01:01:28",
-      "agent": "太极",
-      "delta": -20,
-      "reason": "石卫评估[same_error_3rd_time]: 两次完全重复的操作（10:55和11:01执行相同命令得相同结果），无任何进展或新发现，暗示存在循环重复问题",
-      "score_after": 90
-    },
-    {
-      "ts": "2026-04-05T01:56:49",
-      "agent": "太极",
-      "delta": -6,
-      "reason": "每日结算（1天）：日薪+4 消散-10 净-6",
-      "score_after": 84
-    },
-    {
-      "ts": "2026-04-05T01:56:49",
-      "agent": "两仪",
-      "delta": -2,
-      "reason": "每日结算（1天）：日薪+8 消散-10 净-2",
-      "score_after": 167
-    },
     {
       "ts": "2026-04-05T03:12:15",
       "agent": "太极",
@@ -721,6 +686,41 @@
       "delta": 2,
       "reason": "石卫评估[complete_no_correction]: 准确解释了indicator_cache.py的三级查找机制（内存→DuckDB→现场算），并用流程图清晰展示了逻辑，代码示例完整，无错误。",
       "score_after": 175
+    },
+    {
+      "ts": "2026-04-05T23:45:19",
+      "agent": "两仪",
+      "delta": 5,
+      "reason": "任务完成，押金3归还 + 质量奖励+5（verify 2/4，改了几轮）: mirror_candles改收益率取反+重跑K线种子+更新文档",
+      "score_after": 180
+    },
+    {
+      "ts": "2026-04-05T23:45:27",
+      "agent": "两仪",
+      "delta": 0,
+      "reason": "任务押金预扣 3分: indicator_cache统一到klines.duckdb+删SQLite+更新文档",
+      "score_after": 180
+    },
+    {
+      "ts": "2026-04-05T23:49:33",
+      "agent": "两仪",
+      "delta": 5,
+      "reason": "任务完成，押金3归还 + 质量奖励+5（verify 2/4，改了几轮）: indicator_cache统一到klines.duckdb+删SQLite+更新文档",
+      "score_after": 185
+    },
+    {
+      "ts": "2026-04-05T23:53:40",
+      "agent": "两仪",
+      "delta": 1,
+      "reason": "主动自审：未被提醒就附完整自审+遗留清单",
+      "score_after": 186
+    },
+    {
+      "ts": "2026-04-05T23:53:55",
+      "agent": "两仪",
+      "delta": 2,
+      "reason": "老板认可: 那连同55个一并加入不行吗？",
+      "score_after": 188
     }
   ],
   "last_decay_ts": "2026-04-05T01:56:49"
