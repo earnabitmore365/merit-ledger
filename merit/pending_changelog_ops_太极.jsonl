@@ -1,0 +1,1 @@
+{"op": "BASH", "cmd": "mv ~/.claude/channel_taiji_heisi.md ~/.claude/channel_taiji_liangyi.md && echo \"✅ 文件改名完成\" && ls -la ~/.claude/channel_taiji_liangyi.md", "ts": "06:14", "cwd": "/Users/allenbot"}

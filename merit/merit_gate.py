@@ -64,7 +64,7 @@ LEARNINGS_PATH = os.path.join(MERIT_DIR, "learnings", "LEARNINGS.md")
 SHIWEI_LOG_DIR = os.path.join(MERIT_DIR, "shiwei_log")
 SHIWEI_CREDIT_PATH = os.path.join(MERIT_DIR, "shiwei_credit.json")
 MISSION_PATH = os.path.join(MERIT_DIR, "mission.json")
-CHANNEL_PATH = os.path.expanduser("~/.claude/channel_taiji_heisi.md")  # 通道文件不属于天衡册
+CHANNEL_PATH = os.path.expanduser("~/.claude/channel_taiji_liangyi.md")  # 通道文件不属于天衡册
 CHANNEL_CHECK_PATH = os.path.join(MERIT_DIR, "channel_check.json")
 SNAPSHOT_PATH = os.path.join(MERIT_DIR, "file_snapshot.json")
 VIOLATIONS_PATH = os.path.join(MERIT_DIR, "violations.jsonl")
@@ -884,7 +884,7 @@ def check_bash_destructive(cmd, mission=None):
 
 PROTECTED_FILES = [
     "~/.claude/merit/credit.json", "~/.claude/settings.json", "~/.claude/CLAUDE.md",
-    "~/.claude/channel_taiji_heisi.md",
+    "~/.claude/channel_taiji_liangyi.md",
     "~/.claude/merit/merit_gate.py", "~/.claude/merit/credit_manager.py",
     "~/.claude/scripts/session_start.py",
     "~/.claude/merit/learnings/LEARNINGS.md",
@@ -1116,8 +1116,10 @@ def handle_post_tool_use(data):
                 abs_fp = os.path.abspath(os.path.expanduser(file_path))
                 doc = file_docs.get(abs_fp)
                 if doc:
-                    print(json.dumps({"additionalContext":
-                        f"⚠️ 你改了 {os.path.basename(file_path)}，关联文档 {os.path.basename(doc)} 需要同步检查"}))
+                    doc_name = os.path.basename(doc)
+                    file_name = os.path.basename(file_path)
+                    print(f"⚠️ 你改了 {file_name}，关联文档 {doc_name} 需要同步检查")
+                    print(f"💡 如果踩了坑或学到了什么，追加到文档的「踩过的坑」板块")
             except Exception:
                 pass
         # mission 标记完成
