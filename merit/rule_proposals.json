@@ -1362,14 +1362,15 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_老板说\"对照README\"就是对照REA",
-    "rule_text": "声称某特性为最新或已存在前，必须有文档明确记载的证据。",
+    "rule_text": "声明某特性为新增或已有功能时，必须提供文档记载的证据。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
     "approved_by": "evolve_auto",
     "approved_date": "2026-04-05",
     "parent_category": "纪律",
-    "parent_updated": true
+    "parent_updated": true,
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-093",
@@ -1509,14 +1510,15 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_说\"应该删了\"不去验证。表述要精确——\"",
-    "rule_text": "做出判断前必须先提供可验证的事实依据，禁止用“应该”“可能”等未证实的推测性表述替代验证结果。",
+    "rule_text": "判断必须基于可验证的事实依据。禁止使用“应该”“可能”等未经证实的推测性表述替代经过验证的结论。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
     "approved_by": "evolve_auto",
     "approved_date": "2026-04-05",
     "parent_category": "真实性",
-    "parent_updated": true
+    "parent_updated": true,
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-103",

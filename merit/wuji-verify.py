@@ -22,10 +22,16 @@ REGISTRY = {
             "/Volumes/SSD-2TB/project/wuji-auto-trading/trading/limit_executor.py",
             "/Volumes/SSD-2TB/project/wuji-auto-trading/trading/trade_logger.py",
             "/Volumes/SSD-2TB/project/wuji-auto-trading/trading/trader_report.py",
+            "/Volumes/SSD-2TB/project/wuji-auto-trading/trading/trader_bot.py",
             "/Volumes/SSD-2TB/project/wuji-auto-trading/trading/team_config.py",
+            "/Volumes/SSD-2TB/project/wuji-auto-trading/trading/monitor/monitor.py",
+            "/Volumes/SSD-2TB/project/wuji-auto-trading/trading/monitor/bitmex_dashboard.py",
         ],
         "cross_deps": [
             "/Volumes/SSD-2TB/project/wuji-auto-trading/src/core/indicator_cache.py",
+            "/Volumes/SSD-2TB/project/wuji-auto-trading/src/data/feed_gateway.py",
+            "/Volumes/SSD-2TB/project/wuji-auto-trading/src/data/feed_client.py",
+            "/Volumes/SSD-2TB/project/wuji-auto-trading/src/data/gateway_notifier.py",
             "/Volumes/SSD-2TB/project/wuji-auto-trading/path_config.py",
         ],
         "docs": [
