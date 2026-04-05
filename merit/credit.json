@@ -14,7 +14,7 @@
     },
     "两仪": {
       "score": 149,
-      "held": 0,
+      "held": 3,
       "level": 3,
       "title": "金丹",
       "penalty_only": false,
@@ -720,6 +720,13 @@
       "agent": "两仪",
       "delta": -3,
       "reason": "老板反馈: 结果全是垃圾，失望",
+      "score_after": 149
+    },
+    {
+      "ts": "2026-04-05T23:16:16",
+      "agent": "两仪",
+      "delta": 0,
+      "reason": "任务押金预扣 3分: mirror_candles改收益率取反+重跑K线种子+更新文档",
       "score_after": 149
     }
   ],

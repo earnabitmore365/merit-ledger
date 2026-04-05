@@ -1,12 +1,12 @@
 {
-  "file": "build_seed_report.py",
-  "time": "2026-04-06T07:44:02",
+  "file": "build_klines_indicators.py",
+  "time": "2026-04-06T09:16:48",
   "results": {
     "syntax": "pass",
     "logic": "pass",
-    "chain": "pass",
+    "chain": "pending",
     "docs": "pending"
   },
-  "pass_count": 3,
+  "pass_count": 2,
   "total": 4
 }

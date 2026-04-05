@@ -1,80 +1,25 @@
 {
-  "mission": "14个research文件切SQLite→DuckDB",
+  "mission": "mirror_candles改收益率取反+重跑K线种子+更新文档",
   "agent": "两仪",
-  "started": "2026-04-05T22:02:39",
-  "status": "aborted",
+  "started": "2026-04-05T23:16:16",
+  "status": "active",
   "estimated_reward": 0,
-  "held_points": 10,
+  "held_points": 3,
   "items": [
     {
       "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/volume_price_v2_test.py",
-      "done": false
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/data/build_klines_indicators.py",
+      "done": true
     },
     {
       "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/fvg_dir_small_tf_test.py",
-      "done": false
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/data/README_KLINES_SEED.md",
+      "done": true
     },
     {
       "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/fvg_small_tf_test.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/direction_filter_test.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/direction_vp_medium_test.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/volume_filter_test.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/volume_price_medium_large_test.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/direction_filter_matrix.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/volume_price_relation_test.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/filters/oi_fvg_test.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/indicators/indicator_mirror.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/simulation/sim_21_team.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/simulation/team_validation.py",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/research/simulation/team_validation_v2.py",
-      "done": false
+      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/ARCHITECTURE.md",
+      "done": true
     }
   ]
 }
