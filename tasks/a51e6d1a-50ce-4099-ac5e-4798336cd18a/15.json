@@ -1,0 +1,9 @@
+{
+  "id": "15",
+  "subject": "创建 mean_reversion_07 和 mean_reversion_10 策略文件",
+  "description": "复制 strategy_mean_reversion.py，创建 ±0.7% 和 ±1.0% 两个版本。自动注册，种子生成能识别。",
+  "activeForm": "创建策略文件",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

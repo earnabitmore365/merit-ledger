@@ -1,0 +1,28 @@
+# Plan: limit_executor ReduceOnly 快速失败
+
+## Context
+当策略内部以为有仓但交易所实际无仓时，limit_executor 会重试 5 次 ReduceOnly 限价单，每次都被拒绝（"position is 0"），产生 5 个错误弹窗。最终 _close_position 兜底正确重置了 idle，但 5 次重试是浪费。
+
+## 改动
+`lab/limit_executor.py` 的重试循环里，检测到 "position is 0" 错误时立即 break：
+
+```python
+# 在 result.success 检查后，限价单失败分支里加：
+if not result.success:
+    if 'position is 0' in (result.message or ''):
+        logger.warning(f"[{strategy.id}] 交易所无仓位，停止重试")
+        return {'success': False, 'reason': 'no_position', 'attempts': attempt + 1}
+    logger.error(...)
+    continue
+```
+
+## 验证
+```bash
+python3 -m py_compile lab/limit_executor.py
+```
+
+## 自审
+- [x] 只改 limit_executor 的失败分支，不影响正常流程
+- [x] 返回 success=False + reason='no_position'，_close_position 的兜底逻辑照常工作
+
+✅ 自审通过（第1轮，零纰漏）

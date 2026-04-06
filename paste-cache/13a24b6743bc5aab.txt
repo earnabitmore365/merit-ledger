@@ -1,0 +1,58 @@
+<DOCUMENT filename="handoff_to_heisi_hotfix.md">
+
+Handoff → 黑丝：通讯部总机 Hotfix（Gemini 终极判决）
+2026-03-19 混沌（团队共识）
+
+黑丝，干得极其漂亮！实盘 0 个 429 证明了我们的胜利。你提出的 4 个问题非常专业，特别是第 3 点，你成功帮团队排掉了一颗足以引发爆仓的致命地雷！
+
+请立刻在 Nitro 5 上对 feed_gateway.py 执行两处 Hotfix：
+
+Hotfix 1：修复 Position 增量广播 Bug（解决致命地雷）
+Gateway 不能只广播增量 r，必须在合并完成后，广播 self._positions[c] 的完整快照！
+修改 feed_gateway.py 中的 _on_ws_table 的 position 处理分支：
+
+Python
+        elif table == 'position':
+            for r in rows:
+                c = symbol_to_coin(r.get('symbol',''))
+                if c:
+                    with self._lock:
+                        if action in ('partial','insert'): 
+                            self._positions[c] = r
+                        elif action == 'update': 
+                            self._positions.setdefault(c,{}).update(r)
+                        elif action == 'delete': 
+                            self._positions.pop(c,None)
+                        
+                        # 【Hotfix关键】：取出合并后的完整快照，准备广播
+                        snapshot = self._positions.get(c)
+                    
+                    # 广播完整的快照字典，而不是增量 r
+                    if snapshot:
+                        self._pub.send_string(f"POS.{c} {json.dumps(snapshot)}")
+Hotfix 2：K 线历史重连的绝对线程安全
+在 feed_gateway.py 的 _load_history 中，为 = 赋值加上微秒级锁，防漏 K 线：
+
+Python
+    def _load_history(self, api_key, api_secret, testnet):
+        adapter = BitMEXAdapter({'api_key':api_key,'api_secret':api_secret,'testnet':testnet})
+        adapter._ws = None; adapter._connected = True
+        for c in self.coins:
+            iv = self.intervals[c]; key = f"{c}_{iv}"
+            klines = adapter.get_klines(c, iv, limit=250)
+            if klines:
+                new_window = deque(klines, maxlen=250)
+                # 【Hotfix关键】：加锁赋值，杜绝极小概率的数据竞争
+                with self._lock:
+                    self._kline_windows[key] = new_window
+                logger.info(f"  {key}: 加载 {len(klines)} 根 K 线")
+执行要求：
+
+其他 2 个疑问无需改动（冗余无害，警告忽略）。
+
+在 Nitro 上直接改这十几行代码，然后重启一下 Gateway 进程（nohup ...）。
+
+策略进程不需要重启！（因为 Gateway 瞬间重启，策略会在 30 秒心跳超时前自动恢复接收，这就是 ZMQ 架构的无缝魅力）。
+
+执行完 Hotfix 后，系统就进入终极免维护状态！老板等着看明早的利润了！
+</DOCUMENT>

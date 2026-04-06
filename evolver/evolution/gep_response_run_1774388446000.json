@@ -1,0 +1,13 @@
+**Evolution Cycle #0121 — SUCCESS**
+
+**What**: Created `evo-cycle-guard` skill — a pre-flight validator that checks 9 conditions before an evolution cycle executes.
+
+**Why**: System scored C (63/100), with innovation ratio at 30% and gene_gep_optimize_prompt_and_assets monopolizing cycles. Root cause: no mechanism to prevent bad cycles BEFORE they happen. All existing tools (evo-lint, evo-anomaly-detector) are retrospective.
+
+**Changes** (4 files, ~200 lines):
+- `~/.claude/skills/evo-cycle-guard/index.js` — 9 pre-flight checks with go/no-go output
+- `~/.claude/skills/evo-cycle-guard/SKILL.md` — Usage docs
+- `~/.claude/skills/evo-cycle-guard/package.json` — Package metadata
+- `~/.claude/evolver/assets/gep/genes.json` — Registered `gene_innovate_cycle_guard` (14th active gene)
+
+**Validation**: Tested 3 scenarios — correctly blocks retired genes, detects gene cooldown violations, and passes clean cycles.

@@ -1,0 +1,131 @@
+#!/bin/bash
+# Ralph Loop — 自动循环审查修复
+# 用法：把代码丢进 Loop/ 目录，然后执行 ./run.sh
+# 跑完后结果自动移到 Loop Done/
+
+LOOP_DIR="/Volumes/BIWIN NV 7400 2TB/Loop"
+DONE_DIR="/Volumes/BIWIN NV 7400 2TB/Loop Done"
+PROMPT_FILE="$LOOP_DIR/PROMPT.md"
+PROGRESS_FILE="$LOOP_DIR/PROGRESS.md"
+MAX_ROUNDS=50   # 安全上限
+FAIL_LIMIT=3    # 连续失败上限
+SLEEP_SEC=5     # 轮间间隔（秒）
+
+# ── 检查 ──────────────────────────────────────────────
+cd "$LOOP_DIR" || exit 1
+
+CODE_FILES=$(find . -name "*.py" -not -path "./.git/*" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$CODE_FILES" = "0" ]; then
+    echo "❌ Loop/ 里没有 .py 文件，先把代码丢进来再跑"
+    exit 1
+fi
+echo "📁 发现 $CODE_FILES 个 .py 文件"
+
+# ── 初始化 git ────────────────────────────────────────
+if [ ! -d .git ]; then
+    git init
+    git add -A
+    git commit -m "initial: 原始代码（loop 前）"
+    echo "🔧 git 已初始化"
+fi
+
+# 重置 PROGRESS
+cat > "$PROGRESS_FILE" << 'EOF'
+# Loop 进度
+
+## 状态
+STATUS: RUNNING
+
+## 历史
+EOF
+
+git add PROGRESS.md
+git commit -m "loop: 开始" --allow-empty 2>/dev/null || true
+
+# ── 循环 ──────────────────────────────────────────────
+ROUND=0
+FAILS=0
+echo ""
+echo "🚀 Ralph Loop 开始（最多 $MAX_ROUNDS 轮）"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+while [ $ROUND -lt $MAX_ROUNDS ]; do
+    ROUND=$((ROUND + 1))
+    echo ""
+    echo "🔄 第 $ROUND 轮...（$(date +%H:%M:%S)）"
+
+    # 调用 claude（不用 set -e，手动检查退出码）
+    if claude -p "$(cat "$PROMPT_FILE")" \
+        --permission-mode bypassPermissions \
+        2>&1 | tail -10; then
+        FAILS=0
+    else
+        FAILS=$((FAILS + 1))
+        echo "⚠️ claude 返回错误（连续 $FAILS 次）"
+        if [ $FAILS -ge $FAIL_LIMIT ]; then
+            echo "❌ 连续失败 $FAIL_LIMIT 次，停止"
+            break
+        fi
+        sleep 10  # 错误后多等一会
+        continue
+    fi
+
+    # 检查退出条件
+    if grep -q "STATUS: DONE" "$PROGRESS_FILE" 2>/dev/null; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ 全部完成！共 $ROUND 轮"
+        break
+    fi
+
+    # 轮间间隔
+    sleep $SLEEP_SEC
+done
+
+if [ $ROUND -ge $MAX_ROUNDS ]; then
+    echo ""
+    echo "⚠️ 达到最大轮次 $MAX_ROUNDS，强制停止"
+fi
+
+# ── 移到 Done ─────────────────────────────────────────
+TIMESTAMP=$(date +%Y%m%d-%H%M)
+DEST="$DONE_DIR/$TIMESTAMP"
+mkdir -p "$DEST"
+
+# 复制全部内容（含 .git 历史）
+cp -a "$LOOP_DIR/." "$DEST/"
+# 删掉 Done 里的 run.sh（它只属于 Loop/）
+rm -f "$DEST/run.sh"
+
+COMMITS=$(cd "$DEST" && git log --oneline 2>/dev/null | wc -l | tr -d ' ')
+echo ""
+echo "📦 结果已存到: Loop Done/$TIMESTAMP/"
+echo "📊 共 $COMMITS 个 commit，查看: cd \"$DEST\" && git log --oneline"
+echo "📝 查看每轮改了什么: cd \"$DEST\" && git log -p"
+
+# ── 清空 Loop（只保留基础设施文件）────────────────────
+cd "$LOOP_DIR"
+
+# 列出要保留的文件，删掉其余所有
+find . -mindepth 1 -maxdepth 1 \
+    -not -name "run.sh" \
+    -not -name "PROMPT.md" \
+    -not -name "PROGRESS.md" \
+    -not -name "CLAUDE.md" \
+    -exec rm -rf {} + 2>/dev/null || true
+
+# 重置 PROGRESS
+cat > "$PROGRESS_FILE" << 'EOF'
+# Loop 进度
+
+## 状态
+STATUS: PENDING
+
+## 历史
+（每轮自动追加）
+EOF
+
+echo "🧹 Loop/ 已清空，可以丢下一批代码了"
+
+# macOS 通知
+osascript -e 'display notification "Ralph Loop 完成！结果在 Loop Done/" with title "🔄 Loop Done"' 2>/dev/null || true

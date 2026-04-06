@@ -1,0 +1,49 @@
+<DOCUMENT filename="handoff_to_heisi_airgap_monitor_and_ttp_probe_final.md">
+
+Handoff → 黑丝：Mac Mini 物理隔离监控 + TTP 极限探针 (统帅部终极执行版)
+2026-03-20 混沌（团队最高优指令）
+
+黑丝，你的“Nitro 零依赖 + Mac Mini 单次 SSH 轮询”架构设计堪称完美（100分）！老板已拍板，请立刻按此架构执行部署。
+
+统帅部对探针逻辑做出了唯一且致命的风控修正（必须基于利润率判断极值，防止空单逻辑倒挂），请严格按以下要求落地：
+
+任务一：Nitro 极速探针埋点（修改 ttp.py）
+在 ttp.py 的 check() 或 _update_long / _update_short 逻辑中，严格按以下 4 处埋点（保持零网络依赖）：
+
+Python
+# 1. 基础心跳：每60秒摘要（保留你原方案）
+self._check_count = getattr(self, '_check_count', 0) + 1
+if self._check_count % 60 == 0 and self.state.position_side:
+    self.logger.info(f"[TTP Probe] {self.state.position_side} entry={self.state.entry_price:.4f} curr={current_price:.4f} profit={profit_pct:.2%} highest={self.state.highest:.4f} swing={self.state.swing_count} ttp={self.state.ttp_level:.4f} active={self.state.active}")
+
+# 2. 极限探针：利润率刷新历史新高时即刻打印（Gemini强制要求，多空通用）
+if not hasattr(self, '_max_profit_seen') or profit_pct > self._max_profit_seen:
+    self._max_profit_seen = profit_pct
+    if profit_pct > 0: # 只打印赚钱的新高瞬间
+        self.logger.info(f"[TTP Probe] 🔥利润新高! {self.state.position_side} profit={profit_pct:.2%} curr={current_price:.4f}")
+
+# 3. TTP 上移时（保留你原方案）
+self.logger.info(f"[TTP Probe] TTP上移 swing={self.state.swing_count} ttp={old_level:.4f}→{new_ttp:.4f}")
+
+# 4. 首次激活 / 触发平仓时（保留你原方案）
+self.logger.info(f"[TTP Probe] 首次激活 / 触发平仓 profit={profit_pct:.2%} level={self.state.ttp_level:.4f}")
+任务二：Mac Mini 监控兵站部署
+完全采用你设计的 monitor_bot.py 方案：
+
+单次 SSH 轮询：每 30 秒执行 1 次合并了 5 个检查的 SSH 命令。
+
+安全推送：使用纯 urllib，纯文本发送 Telegram（无 parse_mode），使用时间戳去重防刷屏。
+
+异常报警：必须包含 Gateway ERROR 关键字监控和进程存活数（<8 时报警）。
+
+⚡ 执行步骤（限时 10 分钟）：
+改 Nitro：修改 ttp.py（加入上述 4 处探针代码），并重启 3 个策略进程。
+
+配 Mac Mini：创建 .env 文件填入 TOKEN 和 CHAT_ID，写入 monitor_bot.py 并运行 python3 monitor_bot.py。
+
+验证测试：先在 Mac Mini 本地确认能成功发出 Telegram 推送。
+
+交付物：请贴出老板手机上收到的 第一条 Telegram 摘要截图（或日志原文），以及 Nitro 日志中触发的一条 带有 🔥利润新高的 [TTP Probe] 日志！
+
+老板在等你的推送报平安，立刻点火行动！
+</DOCUMENT>

@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""
+GP Engine v0.2 — 入口脚本
+
+@see lab/README.md#architecture — 指标统一调用 indicator_cache
+
+用法:
+  cd lab/gp_engine
+  python3 run.py                # 默认参数运行
+  python3 run.py --gen 200      # 跑 200 代
+  python3 run.py --pop 500      # 500 棵树
+  python3 run.py --quick        # 快速测试 (50树×20代)
+  python3 run.py --sample 5     # 每5根取1根（加速5x，适合1m数据）
+"""
+import sys
+import os
+import json
+import time
+import argparse
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import config
+import indicators
+import tree as tree_mod
+from engine import evolve
+from graduation import graduation_report, split_data
+
+
+def load_data(coin=config.DATA_COIN, interval=config.DATA_INTERVAL):
+    """加载 K 线数据"""
+    data_path = os.path.join(config.DATA_DIR, coin, f'{interval}.json')
+    print(f"加载数据: {data_path}")
+
+    with open(data_path) as f:
+        raw = json.load(f)
+
+    print(f"  K 线数: {len(raw):,}")
+    print(f"  时间范围: {_ts_to_date(raw[0]['time'])} ~ {_ts_to_date(raw[-1]['time'])}")
+
+    ohlcv = {
+        'open':   np.array([c['open'] for c in raw], dtype=float),
+        'high':   np.array([c['high'] for c in raw], dtype=float),
+        'low':    np.array([c['low'] for c in raw], dtype=float),
+        'close':  np.array([c['close'] for c in raw], dtype=float),
+        'volume': np.array([c['volume'] for c in raw], dtype=float),
+    }
+    return ohlcv
+
+
+def _ts_to_date(ts_ms):
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime('%Y-%m-%d')
+
+
+def main():
+    parser = argparse.ArgumentParser(description='GP Engine v0.2 — 表达式树自进化')
+    parser.add_argument('--pop', type=int, default=config.POPULATION_SIZE,
+                        help=f'种群大小 (default: {config.POPULATION_SIZE})')
+    parser.add_argument('--gen', type=int, default=config.GENERATIONS,
+                        help=f'进化代数 (default: {config.GENERATIONS})')
+    parser.add_argument('--quick', action='store_true',
+                        help='快速测试模式 (50树×20代)')
+    parser.add_argument('--interval', type=str, default=config.DATA_INTERVAL,
+                        help=f'K线周期 (default: {config.DATA_INTERVAL})')
+    parser.add_argument('--sample', type=int, default=1,
+                        help='数据子采样倍率 (1=全量, 5=每5根取1根)')
+    parser.add_argument('--resume', action='store_true',
+                        help='从断点恢复继续跑')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='随机种子 (可复现)')
+    args = parser.parse_args()
+
+    if args.quick:
+        args.pop = 50
+        args.gen = 20
+
+    if args.seed is not None:
+        import random
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+
+    # 命令行覆盖 config 周期
+    config.DATA_INTERVAL = args.interval
+
+    print("=" * 60)
+    print("  GP Engine v0.2 — 表达式树自进化引擎")
+    print("  Tabula Rasa: 不给策略，让系统自己发现")
+    print("=" * 60)
+    print(f"  种群: {args.pop} 个（做多+做空各半）")
+    print(f"  代数: {args.gen} 代")
+    print(f"  币种: {config.DATA_COIN}")
+    print(f"  杠杆: {config.LEVERAGE}x")
+    print(f"  手续费: {config.FEE_RATE*100:.3f}%/侧")
+    print(f"  训练/WF测试: {int(config.TRAIN_RATIO*100)}/{round((1-config.TRAIN_RATIO)*100)}")
+    print(f"  WF 窗口数: {config.WF_WINDOWS}")
+    print(f"  适应度: t-statistic (Sharpe × √交易数)")
+    print()
+
+    # 1. 加载数据
+    ohlcv = load_data()
+    close_raw = ohlcv['close']
+
+    # 2. 子采样
+    if args.sample > 1:
+        n_before = len(close_raw)
+        ohlcv = {k: v[::args.sample] for k, v in ohlcv.items()}
+        close_raw = ohlcv['close']
+        print(f"\n子采样: 每 {args.sample} 根取 1 根 ({n_before:,} → {len(close_raw):,})")
+
+    # 3. 计算指标 (v0.2: 19个)
+    print("\n计算指标 (19个, 含多周期变体)...")
+    raw_indicators = indicators.compute_all(ohlcv)
+
+    # 4. 去掉预热期
+    warmup = indicators.warmup_bars()
+    for k, v in raw_indicators.items():
+        raw_indicators[k] = v[warmup:]
+    close_raw = close_raw[warmup:]
+    print(f"  预热期: {warmup} 根 K 线")
+    print(f"  有效数据: {len(close_raw):,} 根")
+
+    # 5. 分割训练/测试
+    split_idx = int(len(close_raw) * config.TRAIN_RATIO)
+    print(f"  训练集: {split_idx:,} 根 (前 {int(config.TRAIN_RATIO*100)}%)")
+    print(f"  WF 测试: {len(close_raw) - split_idx:,} 根 ({config.WF_WINDOWS} 窗口)")
+
+    # 6. 归一化
+    print("\n归一化指标（z-score, 基于训练集）...")
+    norm_data, stats = indicators.normalize(raw_indicators, train_end_idx=split_idx)
+
+    # 7. 训练集数据
+    train_data = {k: v[:split_idx] for k, v in norm_data.items()}
+    train_close = close_raw[:split_idx]
+
+    # 8. 进化!
+    print(f"\n{'='*60}")
+    print(f"  开始进化")
+    print(f"{'='*60}\n")
+
+    candidates, history = evolve(
+        train_data, train_close,
+        population_size=args.pop,
+        generations=args.gen,
+        resume=args.resume,
+    )
+
+    # 取最高分的候选人
+    if not candidates:
+        print("无有效候选人，退出。")
+        return
+    best_ind, best_score, _ = max(candidates, key=lambda x: x[1])
+    best_tree, best_direction = best_ind
+
+    # 9. Walk-Forward 毕业考（v0.3: 含镜像）
+    if config.MIRROR_WF:
+        # ohlcv 已经子采样过了，直接镜像
+        mirror_ohlcv_data = indicators.mirror_ohlcv(ohlcv)
+        mirror_raw_ind = indicators.compute_all(mirror_ohlcv_data)
+        for k, v in mirror_raw_ind.items():
+            mirror_raw_ind[k] = v[warmup:]
+        m_close_raw = mirror_ohlcv_data['close'][warmup:]
+        m_split = int(len(m_close_raw) * config.TRAIN_RATIO)
+        mirror_norm, _ = indicators.normalize(mirror_raw_ind, train_end_idx=m_split)
+        print(f"\n{'='*60}")
+        print(f"  毕业考 (WF {config.WF_WINDOWS} 窗口 × 2 = 10关，需过 {config.MIRROR_PASS_REQUIRED})")
+        print(f"{'='*60}")
+        grad_result = graduation_report(best_tree, best_direction, norm_data,
+                                         close_raw, config.TRAIN_RATIO,
+                                         config.WF_WINDOWS,
+                                         mirror_data=mirror_norm,
+                                         mirror_close_raw=m_close_raw)
+    else:
+        print(f"\n{'='*60}")
+        print(f"  毕业考 (Walk-Forward {config.WF_WINDOWS} 窗口)")
+        print(f"{'='*60}")
+        grad_result = graduation_report(best_tree, best_direction, norm_data,
+                                         close_raw, config.TRAIN_RATIO,
+                                         config.WF_WINDOWS)
+
+    # 10. 保存结果
+    results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
+    os.makedirs(results_dir, exist_ok=True)
+
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    result_file = os.path.join(results_dir, f'run_{timestamp}.json')
+
+    result_data = {
+        'version': '0.2',
+        'timestamp': timestamp,
+        'config': {
+            'population': args.pop,
+            'generations': args.gen,
+            'coin': config.DATA_COIN,
+            'leverage': config.LEVERAGE,
+            'fee_rate': config.FEE_RATE,
+            'train_ratio': config.TRAIN_RATIO,
+            'wf_windows': config.WF_WINDOWS,
+            'data_points': len(close_raw),
+            'sample': args.sample,
+        },
+        'best_tree': {
+            'formula': tree_mod.to_formula(best_tree),
+            'direction': best_direction,
+            'size': tree_mod.size(best_tree),
+            'depth': tree_mod.depth(best_tree),
+        },
+        'evolution': {
+            'best_score': best_score,
+            'final_gen': history[-1] if history else None,
+        },
+        'graduation': {
+            'passed': grad_result['passed'],
+            'direction': best_direction,
+            'train_return': grad_result['train_return'],
+            'profitable_windows': grad_result['profitable_windows'],
+            'total_windows': grad_result['total_windows'],
+            'window_returns': grad_result['window_returns'],
+            'avg_test_return': grad_result['avg_test_return'],
+            'degradation': grad_result['degradation'],
+            'overfit_score': grad_result['overfit_score'],
+        },
+        'history': history,
+    }
+
+    with open(result_file, 'w') as f:
+        json.dump(result_data, f, indent=2, ensure_ascii=False)
+
+    print(f"\n结果已保存: {result_file}")
+
+    # 11. 最终总结
+    dir_label = '做多' if best_direction == 'long' else '做空'
+    print(f"\n{'='*60}")
+    print(f"  总结")
+    print(f"{'='*60}")
+    print(f"  发现的规则: {tree_mod.to_formula(best_tree)}")
+    print(f"  方向: {dir_label}")
+    print(f"  t-stat: {best_score:+.4f}")
+    print(f"  训练集收益: {grad_result['train_return']:+.4f}")
+    print(f"  WF 测试均值: {grad_result['avg_test_return']:+.4f}")
+    print(f"  盈利窗口: {grad_result['profitable_windows']}/{grad_result['total_windows']}")
+    print(f"  毕业: {'✅ 通过' if grad_result['passed'] else '❌ 未通过'}")
+    print()
+
+
+if __name__ == '__main__':
+    main()

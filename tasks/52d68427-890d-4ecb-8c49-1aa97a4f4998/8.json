@@ -1,0 +1,9 @@
+{
+  "id": "8",
+  "subject": "新建 regime_router.py（双引擎+熔断+冷却）",
+  "description": "RegimeRouter 类：固定 max_price 翻转 + regime 选信号 + 动态ATR熔断 + 30分钟冷却锁 + 1h聚合喂detector",
+  "activeForm": "编写 Regime Router",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

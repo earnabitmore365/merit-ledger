@@ -1,0 +1,9 @@
+{
+  "id": "24",
+  "subject": "选人第一步：基础筛选（全combo合格判定）",
+  "description": "对seed_v3_ttp全combo统计全程PnL/笔数/胜率/MDD/最大单笔/最大单月，判定合格。排除TRX和币本位。",
+  "activeForm": "基础筛选",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

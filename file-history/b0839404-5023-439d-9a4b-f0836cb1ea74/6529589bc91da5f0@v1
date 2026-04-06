@@ -1,0 +1,124 @@
+"""
+哨兵适应度 — F-beta score (regime detection)
+
+与 gp_engine 的区别:
+  gp_engine: 适应度 = t-stat（赚多少钱）
+  哨兵营:    适应度 = F-beta（检测 regime 多准）
+
+4 个检测任务（v2: 叠加定义）:
+  偏多检测 → 检测 '初牛'+'盘整'（过渡偏多）    β=2.0 宁可多报不漏
+  牛市确认 → 检测 '牛'                          β=0.5 精准为主
+  偏空检测 → 检测 '初熊'+'盘整'（过渡偏空）    β=2.0 宁可多报不漏
+  熊市确认 → 检测 '熊'                          β=0.5 精准为主
+
+任务类型决定参数:
+  持续状态（牛/熊确认）: min_precision=0.60, β=0.5, max_signal_ratio=0.50
+  转折检测（偏多/偏空）: min_precision=0.30, β=2.0, max_signal_ratio=0.30
+"""
+import numpy as np
+import sys
+import os
+
+_GP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'gp_engine')
+if _GP_DIR not in sys.path:
+    sys.path.insert(0, _GP_DIR)
+import tree as tree_mod
+
+# 任务类型参数
+TASK_PARAMS = {
+    'confirm': {  # 持续状态确认（牛/熊）
+        'min_precision': 0.60,
+        'beta': 0.5,
+        'max_signal_ratio': 0.50,
+    },
+    'transition': {  # 转折检测（偏多/偏空）
+        'min_precision': 0.30,
+        'beta': 2.0,
+        'max_signal_ratio': 0.30,
+    },
+}
+
+
+def sentinel_fitness(root, data, regime_labels, target_regime,
+                     min_signals=30, parsimony_coeff=0.005,
+                     task_type='confirm'):
+    """
+    F-beta fitness for detecting a target regime.
+
+    tree 输出 boolean → 1 = "我认为当前是 target_regime"
+    对比 regime_labels 计算 precision/recall/F-beta
+
+    Args:
+        root: 表达式树
+        data: dict[str, np.array] 归一化指标
+        regime_labels: np.array 每根K线的 regime 标签
+        target_regime: str 或 list[str] 目标 regime（如 '牛' 或 ['初牛', '盘整']）
+        min_signals: int 信号最少触发次数（太少 = 无效）
+        parsimony_coeff: float 简洁性惩罚
+        task_type: str 'confirm'（持续状态）或 'transition'（转折检测）
+
+    Returns:
+        score: float (F-beta - parsimony, or -999 if degenerate)
+        result: dict 详细结果
+    """
+    params = TASK_PARAMS.get(task_type, TASK_PARAMS['confirm'])
+
+    raw = tree_mod.evaluate(root, data)
+    signal = (raw > 0.5).astype(float)
+
+    # target_regime 支持单个或多个标签（叠加定义）
+    if isinstance(target_regime, (list, tuple)):
+        target = np.zeros(len(regime_labels), dtype=float)
+        for r in target_regime:
+            target = np.maximum(target, (regime_labels == r).astype(float))
+    else:
+        target = (regime_labels == target_regime).astype(float)
+
+    n_signals = int(np.sum(signal))
+    n_target = int(np.sum(target))
+
+    # 信号太少或太多 = 无效
+    if n_signals < min_signals or n_signals > len(signal) * params['max_signal_ratio']:
+        return -999.0, _make_result(0, 0, 0, n_signals, n_target)
+
+    # TP / FP / FN
+    tp = float(np.sum(signal * target))
+    fp = float(np.sum(signal * (1 - target)))
+    fn = float(np.sum((1 - signal) * target))
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+
+    # precision 最低门槛
+    if precision < params['min_precision']:
+        return -999.0, _make_result(0, precision, recall, n_signals, n_target)
+
+    if precision + recall == 0:
+        return -999.0, _make_result(0, 0, 0, n_signals, n_target)
+
+    # F-beta（β<1 重 precision，β>1 重 recall）
+    beta = params['beta']
+    f_beta = (1 + beta**2) * precision * recall / (beta**2 * precision + recall)
+
+    # 简洁性惩罚
+    tree_size = tree_mod.size(root)
+    score = f_beta - parsimony_coeff * tree_size
+
+    result = _make_result(f_beta, precision, recall, n_signals, n_target)
+    result['tp'] = int(tp)
+    result['fp'] = int(fp)
+    result['fn'] = int(fn)
+    result['tree_size'] = tree_size
+    result['beta'] = beta
+
+    return score, result
+
+
+def _make_result(f1, precision, recall, n_signals, n_target):
+    return {
+        'f1': f1,
+        'precision': precision,
+        'recall': recall,
+        'n_signals': n_signals,
+        'n_target': n_target,
+    }

@@ -1,0 +1,16 @@
+# Telegram 监控 + TTP 探针（终极执行版）
+
+## 前置条件 ✅ 全部就绪
+- Token: `8626060346:AAFnkP2V7avxpmnFsO8DUsHEDB7SmqtMJhg`
+- Chat ID: `6506412244`
+- Gemini 100 分放行 + 老板拍板
+
+## 改动文件
+1. `lab/src/core/risk/ttp.py` — Nitro +20行探针日志
+2. `monitor_bot.py` — Mac Mini 新建 ~180行
+3. `.env` 加 Telegram 配置
+
+## 执行步骤
+1. 改 ttp.py（4处埋点）→ py_compile → 部署 Nitro → 重启策略
+2. 写 monitor_bot.py → Mac Mini 启动
+3. 验证：Telegram 收到推送

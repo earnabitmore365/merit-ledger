@@ -1,0 +1,229 @@
+# build_klines_indicators.py 优化方案
+
+## Context
+
+build_klines_indicators.py 跑 154/240 组后因 SSD 改名中断。重启前修复所有已知问题：
+- pandas PerformanceWarning（碎片化）
+- 不必要的中间转换
+- 连接管理不复用
+- SQL 参数化不规范
+
+目标：消除 warning，降低内存峰值，保持断点续传和数据正确性不变。
+
+## 修改清单
+
+### 修改 1：DataFrame 碎片化（高优先级）
+**文件**：build_klines_indicators.py 行 248-250
+**问题**：先建 1 列 DataFrame，循环 101 次逐列赋值 → 102 个内存块碎片
+**改法**：
+```python
+# 旧
+indicator_df = pd.DataFrame({"time": times})
+for col_name in indicator_cols:
+    indicator_df[col_name] = computed[col_name]
+
+# 新（一次性构建，零碎片）
+computed["time"] = times
+indicator_df = pd.DataFrame(computed)
+```
+**理由**：pd.DataFrame(dict) 一次分配，不产生中间 BlockManager 重建
+
+### 修改 2：mirrored_df insert 碎片（中优先级）
+**文件**：build_klines_indicators.py 行 119-131
+**问题**：两次 insert(0, ...) 触发两次全量内存拷贝
+**改法**：mirrored_df 只保留 base_cols，在 DuckDB INSERT SELECT 中用参数注入 coin/interval
+```python
+# 旧
+mirrored_df = pd.DataFrame(mirrored_candles)[base_cols].copy()
+mirrored_df.insert(0, "coin", mirror_coin)
+mirrored_df.insert(1, "interval", interval)
+con.register("tmp_mirror", mirrored_df)
+con.execute("INSERT INTO klines SELECT * FROM tmp_mirror")
+
+# 新
+mirrored_df = pd.DataFrame(mirrored_candles, columns=base_cols)
+con.register("tmp_mirror", mirrored_df)
+con.execute("""
+    INSERT INTO klines (coin, interval, time, open, high, low, close, volume)
+    SELECT ?, ?, time, open, high, low, close, volume FROM tmp_mirror
+""", [mirror_coin, interval])
+```
+**理由**：DataFrame 零列插入，DuckDB 填充常量列
+
+### 修改 3：中间转换优化（中优先级）
+**文件**：build_klines_indicators.py 行 104-115, 230-240
+**问题**：fetchdf() → to_dict("records") 多建了一个完整 DataFrame
+**改法**：用 fetchall() + zip 直接构建 list[dict]
+```python
+# 旧
+normal_df = con.execute(...).fetchdf()
+candles = normal_df.to_dict("records")
+
+# 新
+rows = con.execute(...).fetchall()
+candles = [dict(zip(base_cols, r)) for r in rows]
+```
+阶段 2 额外需要 times：
+```python
+rows = con.execute(...).fetchall()
+candles = [dict(zip(base_cols, r)) for r in rows]
+times = [r[0] for r in rows]  # time 是第 0 列
+```
+**理由**：省掉一个完整 DataFrame 的生命周期，降低内存峰值
+
+### 修改 4：连接复用（高优先级）
+**文件**：build_klines_indicators.py main 入口 + 两个阶段函数签名
+**问题**：两阶段各自 open/close，浪费冷启动开销
+**改法**：main 创建连接，传入两个阶段函数
+```python
+if __name__ == "__main__":
+    con = _open_db()
+    try:
+        build_mirror_klines(con)
+        build_indicators(con)
+    finally:
+        con.close()
+```
+两个函数签名加 `con` 参数，内部去掉 `_open_db()` 和 `con.close()`
+**理由**：buffer pool 热复用，阶段 2 读阶段 1 的数据可命中缓存
+
+### 修改 5：断点检查优化（低优先级）
+**文件**：build_klines_indicators.py 行 93-96, 217-221
+**问题**：COUNT(*) 需扫描全组数据，实际只需知道"有没有"
+**改法**：
+```python
+# 旧
+exists = con.execute("SELECT COUNT(*) FROM klines WHERE ...").fetchone()[0]
+if exists > 0:
+
+# 新
+exists = con.execute("SELECT 1 FROM klines WHERE ... LIMIT 1").fetchone() is not None
+if exists:
+```
+**理由**：LIMIT 1 找到一行就停，COUNT 要扫完
+
+### 修改 6：UPDATE FROM 参数化（低优先级）
+**文件**：build_klines_indicators.py 行 258-265
+**问题**：coin/interval 用 f-string 插入 SQL
+**改法**：用 ? 参数绑定
+```python
+con.execute(f"""
+    UPDATE klines SET {set_clauses}
+    FROM tmp_ind
+    WHERE klines.coin = ?
+      AND klines.interval = ?
+      AND klines.time = tmp_ind.time
+""", [coin, interval])
+```
+**理由**：规范做法，防 SQL 注入
+
+## 不改的部分
+
+- 两阶段结构（镜像→指标）
+- REGISTRY 指标计算 + 缓存 + 容错
+- _sanitize_value / _sanitize_series
+- 每组 commit 保障断点续传
+- register/unregister 临时表模式
+
+## 关键文件
+
+| 文件 | 改动 |
+|------|------|
+| `/Volumes/SSD-2TB/project/auto-trading/lab/src/backtest/build_klines_indicators.py` | 6 处修改 |
+
+## 验证步骤
+
+1. 修改后先跑 1 组（选一个已有指标的组，删掉指标数据后重跑），对比结果与修改前完全一致
+2. 确认 PerformanceWarning 不再出现
+3. 后台启动跑剩余 86 组
+4. 跑完后抽样验证：3 个 coin × 3 个 interval 的指标值与手动计算一致
+
+## 旧 plan（归档）
+
+| 项目 | 状态 | 备注 |
+|------|------|------|
+| DuckDB 种子全量对比 | ✅ | 23,940 combo，证明 90.8% 不同 |
+| 指标库污染发现 | ✅ | 97.4% 被镜像数据覆盖 |
+| TTP highlow 代码修复（黑丝版双价） | ✅ | 已部署到 auto-trading/lab |
+| seed_v3_ttp_highlow.db 旧数据删除 | ✅ | 735 combo 已删 |
+| mirror 策略从 list_strategies() 排除 | ✅ | 105 → 105（mirror 不再注册） |
+| 断点续传优化（预过滤） | ✅ | 跳过从 10 分钟 → 0.29 秒 |
+| K线 DuckDB 全量转换 | ✅ | 120 文件，789MB，read_json_auto |
+| klines 表加 101 列指标 | ✅ | 109 列总计 |
+| agent_gate.py（双门禁） | ✅ | 写代码检查 + model=sonnet 检查 |
+| G-013 第一性原理 | ✅ | 写入全局+项目 CLAUDE.md + rules.md |
+| 警告信 | ✅ | ~/Downloads/警告信_黑丝_20260328.md |
+| taiji-audit 插件 | ✅ | GitHub private repo + /plugin install 安装成功 |
+| sequential-thinking MCP 移除 | ✅ | 历史遗留清理 |
+| reflect MCP 移除 | ✅ | skill 版保留 |
+| AE Nitro 重启 | ✅ | MiniMax 进化循环运行中 |
+
+## 正在运行
+
+| 项目 | 位置 | 状态 |
+|------|------|------|
+| build_klines_indicators.py（重写版） | 本地 Mac | 后台运行，补 mirror K线 + 算指标写入 DuckDB |
+| AE 进化循环 | Nitro | MiniMax M2.7 运行中 |
+
+## 待做（按优先级）
+
+### P0：K线+指标 DuckDB 重构（Plan 已批准）
+- build_klines_indicators.py 跑完后验证数据
+- 改 indicator_cache.py 的 get_indicator() 读 DuckDB
+- 改 generate_seed.py 的 mirror 模式直接读 DuckDB
+- 验证回测一致性
+- 复制到 wuji-auto-trading
+
+### P1：code_gate.py — 智能门禁（hook block）
+**老板核心需求：不是让 AI 自愿遵守规则，而是系统不允许违反**
+
+一个 PreToolUse hook 在 Write/Edit 前做多项检查：
+1. 本次会话有没有先 Read/Grep？（完整性-1 查影响链路）
+2. 写的代码有没有引用文档来源？（真实性-1 不猜不编）
+3. 是不是在删关键文件？（G-003 禁止破坏性操作）
+→ 任何一个不过 → block
+
+**关键设计**：一个脚本多个检查，不装 10 道门装 1 道智能门
+
+### P2：taiji-audit 完善
+- 积分系统设计（仪表盘，不放权）
+- 审查触发场景（代码改动/报告结论/纠错信号）
+- 评分标准细化
+
+### P3：整套工具插件化
+老板要把以下工具全部做成 plugin 格式（跟 taiji-audit 一样），从 GitHub 安装：
+- reflect（已有 skill，需转 plugin）
+- 记忆系统（rules + memory + conversations.db 写入）
+- 对话种子（db_write.py + inject_rules.py + session_start.py）
+- agent_gate + code_gate（门禁系统）
+
+### P4：文档知识库
+- 先解决"强制用"（code_gate block）再做工具本身
+- 考虑 context7 或自建
+- 做成 plugin 安装
+
+### P5：种子架构升级（handoff_to_consultant.md）
+- 精简 paired_trades 25→11 字段
+- 引擎去 balance
+- 1m 分段并行（依赖 K线+指标 DuckDB 完成）
+- 双持仓引擎
+
+## 关键发现（今天）
+
+1. **indicator_cache.db 97.4% 污染** — 镜像数据覆盖了正常指标
+2. **TTP_HIGHLOW 是死代码** — 但两个种子数据 90.8% 不同（其他原因导致）
+3. **DuckDB read_json_auto 比 executemany 快 190 倍**
+4. **断点续传慢的根因** — K线+mirror+regime 在跳过检查前就执行了
+5. **AI 看规则但不执行** — 唯一 100% 有效的是 hook block 硬拦截
+
+## 关键文件
+
+| 文件 | 用途 |
+|------|------|
+| `~/.claude/scripts/agent_gate.py` | 双门禁（agent 类型 + model=sonnet） |
+| `~/.claude/skills/audit/` | taiji-audit 插件源码 |
+| `lab/src/backtest/data/klines.duckdb` | K线 + 指标（101列） |
+| `lab/src/backtest/data/indicator_col_map.json` | 指标列名映射 |
+| `lab/src/backtest/build_klines_indicators.py` | 构建脚本（DuckDB 原生） |
+| `lab/src/backtest/generate_seed.py` | 已改：load_candles DuckDB + 预过滤断点 + TTP highlow |
+| `~/Downloads/警告信_黑丝_20260328.md` | 黑丝正式警告 |

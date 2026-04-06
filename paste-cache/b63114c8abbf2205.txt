@@ -1,0 +1,115 @@
+验证了文件删除并审查待清理项目。
+验证了文件删除并审查待清理项目。
+bitmex_race.py 删了 ✅。现在逐项检查 4 个清理项：
+
+
+评估了四项代码清理任务的完成度。
+评估了四项代码清理任务的完成度。
+审查结果：
+
+✅ 第 2 项（strategy_runner 注释）：docstring 改了。第 190 行日志还说"靠软件止损"但那是失败兜底场景（SL 挂不上时才触发），可以接受。
+
+✅ 第 3 项（断线恢复记交易）：加了 self.logger.log_trade(strategy, 'DISCONNECT', ...)，完整。
+
+✅ 第 4 项（删 bitmex_race.py）：已删。
+
+⚠️ 第 1 项（feed_gateway.py 死代码）：只做了一半。
+
+_on_ws_table 里的处理逻辑删干净了 ✅。但 _rep_loop（第 313-353 行）还有 5 个死的查询处理器：
+
+BALANCE    → 返回空的 self._margin（永远是空的）
+POSITIONS  → 返回空的 self._positions（永远是空的）
+EXECUTIONS → 返回空的 self._executions（永远是空的）
+INSTRUMENT → 返回空的 self._instruments（永远是空的）
+ORDERBOOK  → 读 WS 的 _orderbook（不存在）
+加上第 110-115 行的变量初始化也还在：
+
+python
+self._positions: Dict[str, dict] = {}    # 永远空
+self._margin: dict = {}                  # 永远空
+self._instruments: Dict[str, dict] = {}  # 永远空
+这些不会导致 bug（查了就返回空），但违反你说的完整性——代码说有这些功能，实际永远返回空数据。有人查 BALANCE 会得到 {}，以为 Gateway 坏了，其实是 Gateway 根本不收集这些数据。
+
+让她把 _rep_loop 里只保留 KLINES 和 PRICE 两个有效的查询，其他全删。变量也删。
+
+你先完整排查一下这个gateway还有没有其他问题，等下一次过handoff给她
+
+23:50
+
+审视了网关文件的全面问题排查。
+审视了网关文件的全面问题排查。
+完整排查结果：
+
+feed_gateway.py — 6 个问题
+问题 1：_rep_loop 死查询处理器（刚才说的）
+第 313-353 行，5 个查询返回永远是空的：
+
+BALANCE → 返回空 {}
+POSITIONS → 返回空 []
+EXECUTIONS → 返回空 []
+INSTRUMENT → 返回空 {}
+ORDERBOOK → 读 self._ws._orderbook，这个属性在无认证模式下可能不存在，会炸
+修：_rep_loop 只保留 KLINES 和 PRICE，其他全删。
+
+问题 2：死变量（配合问题 1 一起删）
+第 110-116 行：
+
+python
+self._positions: Dict[str, dict] = {}
+self._margin: dict = {}
+self._executions: deque = deque(maxlen=100)
+self._instruments: Dict[str, dict] = {}
+永远是空的，浪费内存。删掉。
+
+问题 3：_rep_loop docstring 还列着 7 个命令
+第 285-292 行列了 KLINES / BALANCE / POSITIONS / PRICE / EXECUTIONS / INSTRUMENT / ORDERBOOK 七个命令。删完后只剩 KLINES 和 PRICE，docstring 要同步更新。
+
+问题 4：_load_history 还在传 api_key
+第 136 行 self._load_history(api_key, api_secret, testnet)，第 207-214 行每次调都创建一个新的 BitMEXAdapter 实例。
+
+这在启动时没问题（只跑一次）。但重连时也会调（第 142 行 _on_reconnect_callback），每次重连都新建一个 adapter 实例。
+
+不是 bug（功能正确），但如果 API key 是空的（无认证模式），REST 拉历史 K 线可能失败。第 407 行她加了 warning 但没加 fallback。
+
+实际上：GET /api/v1/trade/bucketed 是公开端点，不需要 API key。但 adapter 初始化时如果 key 为空，签名函数可能报错。需要确认 adapter 在 key 为空时 REST 请求是否正常。
+
+建议：暂时保留（主网 .env 里有 key），但后面确认无 key 时 REST 能不能用。
+
+问题 5：ORDERBOOK 查询会崩
+第 341-353 行访问 self._ws._orderbook，但 websocket.py 可能没有 _orderbook 属性（因为没订阅 orderBookL2_25）。如果有人通过 REQ/REP 发 ORDERBOOK SOL，会报 AttributeError。
+
+虽然当前没人调，但这是一个潜在的崩溃风险——_rep_loop 的 try/except 会捕获，返回 []，不会真的崩。但 error 日志会很混乱。
+
+修：删掉 ORDERBOOK 处理（问题 1 的一部分）。
+
+问题 6：主循环太空
+第 185-191 行：
+
+python
+while self._running:
+    time.sleep(1)
+主线程只是空转 sleep。所有工作都在回调线程和 daemon 线程里。这不是 bug，但如果主线程意外退出（比如未捕获的异常），daemon 线程会一起死，Gateway 静默消失。
+
+不需要改——gateway_monitor.sh 会检测进程死亡并重启。但记录一下这个行为。
+
+总结：需要改的 3 件事 + 3 个不改但记录的
+需要改：
+
+_rep_loop 删 5 个死查询（BALANCE / POSITIONS / EXECUTIONS / INSTRUMENT / ORDERBOOK）
+删 4 个死变量（_positions / _margin / _executions / _instruments）
+_rep_loop docstring 只留 KLINES 和 PRICE
+不改但记录： 4. _load_history 每次创建新 adapter 实例（功能正确，后面优化） 5. 无 API key 时 REST 能不能用（主网有 key，暂时不影响） 6. 主循环空转（monitor 兜底）
+
+哇靠，怎么还有那么多纰漏？？？
+
+23:51
+
+承认了问题并准备坦诚相待。
+承认了问题并准备坦诚相待。
+别紧张，这 6 个都不会导致交易出错。
+
+真正的情况是：3 个要删的是垃圾代码，3 个不改的是记录备忘。 没有任何一个会影响开仓、平仓、止损、信号。
+
+之所以还有这些，是因为 feed_gateway.py 最早是为"全功能"设计的（Gateway 既收数据又查仓位余额），后来我们改成"只收公开数据"的精简模式，她砍了订阅和处理逻辑，但查询接口那一层忘了砍干净。就像搬家搬走了家具但忘了几个纸箱。
+
+一个 handoff 全部清完，5 分钟的事。我写好了等她改完，你重新上传我做最终确认。

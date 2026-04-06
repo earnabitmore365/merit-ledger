@@ -1,0 +1,97 @@
+# 方案：多策略虚拟仓位池（初熊战队）
+
+## Context
+
+当前每个币种只跑1个策略（mean_reversion_mirror），初熊下锁死不开单。数据证明该策略在初熊只做多赚钱，SELL_ONLY锁住了盈利方向。
+
+老板想法：初熊下放3-5个赚钱的策略同时跑，各自管自己的仓位，到BitMEX按净仓位下单。
+
+## 架构
+
+```
+策略A (mean_reversion_mirror)  → 虚拟仓位: long $30
+策略B (atr_combo)              → 虚拟仓位: short $20
+策略C (volume_momentum_mirror) → 虚拟仓位: none
+                                          ↓
+                              仓位管理器（汇总净仓位）
+                                          ↓
+                              净仓位: long $10 → BitMEX 下单
+```
+
+## 改动
+
+### 核心：`lab/bitmex_race.py` 改造
+
+**1. 新增 VirtualPositionPool 类（~80行）**
+```python
+class VirtualPositionPool:
+    """多策略虚拟仓位池"""
+
+    def __init__(self, adapter, logger):
+        self.slots = {}  # {strategy_name: {direction, size, entry_price}}
+        self.adapter = adapter
+
+    def update_slot(self, name, direction, size):
+        """某策略更新自己的虚拟仓位"""
+        self.slots[name] = {'direction': direction, 'size': size}
+        self._sync_to_exchange()
+
+    def _sync_to_exchange(self):
+        """汇总净仓位，跟交易所同步"""
+        net_long = sum(s['size'] for s in self.slots.values() if s['direction'] == 'long')
+        net_short = sum(s['size'] for s in self.slots.values() if s['direction'] == 'short')
+        net = net_long - net_short
+        # net > 0 → 做多 net 金额
+        # net < 0 → 做空 |net| 金额
+        # net == 0 → 平仓
+        self._adjust_exchange_position(net)
+```
+
+**2. 改造启动逻辑**
+
+当前：`--strategy mean_reversion` 单策略
+改为：`--strategies mean_reversion_mirror,atr_combo,volume_momentum_mirror` 多策略
+
+每个策略各自独立调用 `generate_signal()`，产出信号后更新自己在 pool 中的虚拟仓位。
+
+**3. RegimeBridge 适配**
+
+Regime 切换时（如初熊→盘整）：
+- 所有虚拟仓位清零
+- 换上新 regime 对应的策略战队
+- BitMEX 净仓位归零（平仓）
+
+### 关键文件
+
+| 文件 | 改动 |
+|------|------|
+| `lab/bitmex_race.py` | 新增 VirtualPositionPool + 改启动逻辑 + 多策略循环 |
+| `lab/src/trading/system.py` | 信号输出改为返回给 pool，不直接下单 |
+| `lab/src/trading/position_sizing.py` | 每个策略独立分配资金（总资金/策略数） |
+
+### 初熊战队候选（从数据中选出）
+
+| 币种 | 策略 | 方向优势 | 初熊PnL |
+|------|------|---------|---------|
+| SOL | mean_reversion_mirror | 多赚 | +16.6 |
+| SOL | volume_momentum_mirror | 双向赚 | +2.4 |
+| ETH | mean_reversion_mirror | 多赚 | +12.2 |
+| ETH | mass_index_mirror | 双向赚 | +1.3 |
+| XRP | mean_reversion_mirror | 多赚 | +28.1 |
+| XRP | atr_combo | 双向赚 | +10.9 |
+
+每个币种2个策略，各分一半资金。
+
+## 部署
+
+1. 改代码 + py_compile
+2. SCP 到 Nitro
+3. 杀旧进程，process_guard.sh 更新启动命令
+4. 验证日志：多策略各自出信号 + 净仓位同步
+
+## 验证
+
+1. 日志显示每个策略独立出信号
+2. 虚拟仓位汇总正确（net = long_total - short_total）
+3. BitMEX 实际仓位与净仓位一致
+4. Regime 切换时所有虚拟仓位清零 + 平仓

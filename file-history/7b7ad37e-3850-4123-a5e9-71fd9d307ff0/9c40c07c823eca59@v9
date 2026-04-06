@@ -1,0 +1,205 @@
+# 指标库整合进 K线 DuckDB — 实施计划
+
+## Context
+
+**问题**：indicator_cache.db（19GB SQLite，zlib JSON BLOB）每次回测都要解压指标，1m 分段并行时每段重算指标导致比串行更慢。
+**目标**：把 70 个指标条目的数据从 SQLite BLOB 迁移到 klines.duckdb 的原生 DOUBLE 列，实现：
+1. 回测时直接读列值，零解压零解析
+2. 分段切片时指标跟着 K线一起切，worker 不重算
+3. 新指标自动 ALTER TABLE ADD COLUMN 存入
+4. 最终删除 indicator_cache.db
+
+**老板原话**："指标库直接存入种子里，反正指标是跟着K线跑，是不会变的。到时候切片分出时间段时，连同所有的指标一起切。"
+
+---
+
+## Step 1：生成列名映射表
+
+**目标**：把 70 个 (indicator, params) 条目展开为 DuckDB 列名，多值指标拆成多列。
+
+**已验证确切数据**：70 条目 → **101 列**
+
+**命名规范**：`{指标}_{参数缩写}__{子字段}`
+- 双下划线 `__` 分隔指标名和子字段（如 `macd_f12_s26_sg9__histogram`）
+- 单值指标无 `__` 后缀（如 `rsi_p14`）
+- 含 source 参数时编码进列名（如 `sma_p20_svolume` vs `sma_p20`），已验证不冲突
+
+**多值指标拆分**：
+| 指标 | 子字段数 | 列名示例 |
+|------|---------|---------|
+| macd ×2 | 3 | macd_f12_s26_sg9__macd / __signal / __histogram |
+| bb ×4 | 3 | bb_p20_s2__upper / __middle / __lower |
+| adx | 3 | adx_p14__adx / __plus_di / __minus_di |
+| aroon ×2 | 3 | aroon_p25__up / __down / __osc |
+| stochastic | 2 | stochastic_d3_k5__k / __d |
+| fvg | 6 | fvg_l20_m0001__bull_signal / __bear_signal / ... |
+| 其他多值 | 2 | klinger__ko/__signal, vortex__vi_plus/__vi_minus 等 |
+
+---
+
+## Step 2：在 klines.duckdb 建 indicators 表
+
+先建只有主键的空表，然后逐列 ALTER TABLE ADD COLUMN（已验证：ADD COLUMN 0.007s，UPDATE 2.1M行 0.025s，极快）：
+
+```sql
+CREATE TABLE indicators (
+    coin VARCHAR,
+    interval VARCHAR,
+    time BIGINT
+);
+-- 然后动态加 101 列
+ALTER TABLE indicators ADD COLUMN sma_p20 DOUBLE;  -- 0.007s
+ALTER TABLE indicators ADD COLUMN rsi_p14 DOUBLE;
+...
+```
+
+**确切列数**：101 列（已验证）
+**DuckDB 列存储**：未使用列不增加查询成本
+
+---
+
+## Step 3：从 K线重算指标，写入 indicators 表
+
+**不迁移旧数据**——indicator_cache.db 已确认 97.4% 被 mirror 污染，直接丢弃。从干净的 K线重新计算全部指标。
+
+**流程**：
+```
+1. 建 indicators 表骨架（coin, interval, time）
+   INSERT INTO indicators SELECT coin, interval, time FROM klines
+
+2. 加镜像 K线到 klines 表
+   对每个 (coin, interval)：
+     a. 读正常K线
+     b. mirror_candles() 翻转
+     c. 存为 {coin}_mirror 到 klines 表
+
+3. 对每个 (coin, interval)（含 _mirror 版）：
+   a. 读该组 K线
+   b. 用 indicator_cache.py 的 compute_xxx() 函数算 101 个指标
+   c. 逐列 ALTER TABLE ADD COLUMN + UPDATE
+   d. COMMIT
+
+4. 骨架行补充 _mirror 的 time
+   INSERT INTO indicators SELECT coin, interval, time FROM klines WHERE coin LIKE '%_mirror'
+```
+
+**性能预估**：
+- 24 币种（12正常 + 12镜像）× 10 周期 = 240 组
+- 每组：加载K线 + 算 101 个指标 + 逐列写入
+- 1m 最慢（210万根），其他周期秒级
+- 预计总耗时：30-60 分钟（后台运行）
+
+**断点续传**：按 (coin, interval) 为单位 COMMIT，重跑时检查已有数据跳过
+
+---
+
+## Step 4：修改 indicator_cache.py 的 get_indicator()
+
+**改动文件**：`/Users/allenbot/project/auto-trading/lab/src/core/indicator_cache.py`
+
+**新的查找顺序**（3 层，去掉 SQLite）：
+```
+1. 内存缓存（现有，不变）
+2. DuckDB indicators 表（新增，替代 SQLite）
+3. 现场计算 + ALTER TABLE ADD COLUMN 写入 DuckDB
+```
+**不保留 SQLite fallback**——迁移完就删，不做过渡期兼容。
+
+**DuckDB 读取逻辑（新增）**：
+```python
+# 生成列名
+col_name = _make_col_name(name, params)  # 如 "sma_p20" 或 "macd_f12_s26_sg9"
+
+# 检查列是否存在
+if col_name in _duckdb_columns:
+    # 单值指标：读一列
+    result = con.execute(
+        f"SELECT {col_name} FROM indicators WHERE coin=? AND interval=? ORDER BY time",
+        [coin, interval]
+    ).fetchnumpy()[col_name].tolist()
+
+    # 多值指标：读多列（macd__macd, macd__signal, macd__histogram）
+    sub_cols = [c for c in _duckdb_columns if c.startswith(col_name + "__")]
+    if sub_cols:
+        result = {}
+        data = con.execute(...)
+        for col in sub_cols:
+            key = col.split("__")[1]
+            result[key] = data[col].tolist()
+```
+
+**新指标自动存入 DuckDB（新增列）**：
+```python
+# 计算完新指标后
+if isinstance(result, list):
+    con.execute(f"ALTER TABLE indicators ADD COLUMN {col_name} DOUBLE")
+    # 批量更新该列
+elif isinstance(result, dict):
+    for key, values in result.items():
+        full_col = f"{col_name}__{key}"
+        con.execute(f"ALTER TABLE indicators ADD COLUMN {full_col} DOUBLE")
+        # 批量更新
+```
+
+**关键约束**：
+- get_indicator() 的返回格式不变（list 或 dict），策略代码零改动
+- init_cache() 增加 DuckDB 连接初始化
+- flipped namespace（镜像数据）仍走内存计算，不存 DuckDB
+
+---
+
+## Step 5：修改 generate_seed.py
+
+**改动文件**：`/Users/allenbot/project/auto-trading/lab/src/backtest/generate_seed.py`
+
+**改动点**：
+1. `load_candles()` 已改为优先读 klines.duckdb（已完成）
+2. 分段切片时：SQL WHERE time BETWEEN 切段起止，indicators 跟着切
+3. init_cache() 传入 DuckDB 路径，让指标从 DuckDB 读
+
+---
+
+## Step 6：验证
+
+1. **数据正确性**：随机抽 5 个 (coin, interval, indicator)，对比 DuckDB 列值 vs SQLite BLOB 解压值，必须完全一致
+2. **回测一致性**：用同一策略（如 BTC/1h/macd_fast）分别用 DuckDB 指标和 SQLite 指标跑回测，交易结果必须完全一致
+3. **性能对比**：DuckDB 加载指标 vs SQLite BLOB 解压，计时对比
+4. **新指标自动存储**：手动添加一个新参数（如 sma(period=99)），验证自动 ALTER TABLE + 写入
+
+---
+
+## Step 7：清理
+
+1. 删除 indicator_cache.db（19GB，已确认 97.4% 污染）
+2. 删除 indicator_cache_flipped.db
+3. 删除 klines_1m_7coins.duckdb（临时文件，已被 klines.duckdb 替代）
+4. 更新 MEMORY.md 和 handoff 文件
+
+---
+
+## 关键文件清单
+
+| 文件 | 改动 |
+|------|------|
+| `lab/src/core/indicator_cache.py` | get_indicator() 加 DuckDB 层 + 自动存新指标 |
+| `lab/src/backtest/generate_seed.py` | 已改 load_candles()，需改 init_cache 传 DuckDB 路径 |
+| `lab/src/backtest/data/klines.duckdb` | 新增 indicators 表 |
+| `lab/reports/indicator_cache.db` | 数据源（迁移后删除） |
+
+## 镜像数据处理
+
+**镜像 K线 + 镜像指标一起存入 DuckDB**（本次范围内）。
+- 镜像 K线存为 `{coin}_mirror`（如 `BTC_mirror`）
+- 镜像指标在 indicators 表里，同样用 `BTC_mirror` 的 coin 维度
+- 分段切片时：`WHERE coin='BTC_mirror'` 一刀切，K线 + 指标一起带走
+
+## 风险
+
+| 风险 | 应对 |
+|------|------|
+| 列名冲突（sma_p20 ×2） | 已验证：source=volume 编码为 sma_p20_svolume，不冲突 |
+| ALTER TABLE 性能 | 已验证：ADD COLUMN 0.007s，UPDATE 2.1M行 0.025s |
+| 旧指标库污染 | 已确认 97.4% 污染，不迁移，从 K线全部重算 |
+| 计算内存 | 逐列写入（~16MB/列），不逐行组装 |
+| 确切列数 | 已验证：101 列（非估算） |
+| 镜像 K线数据量翻倍 | 正常，DuckDB 压缩后可控 |

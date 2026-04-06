@@ -1,0 +1,16 @@
+**Evolution Cycle #0097 — SUCCESS**
+
+**Intent**: OPTIMIZE
+**Gene**: gene_gep_optimize_prompt_and_assets
+**Scope**: 2 files, ~4 lines
+
+**Changes**:
+1. **evolution_narrative.md** — 修正 09:28:12 条目：
+   - 意图错配 REPAIR → OPTIMIZE（基因 category 为 optimize）
+   - 信号去污：204 字符的原始 HTML 错误信息 → 40 字符结构化信号
+   - 补充缺失的 Result 行
+2. **MEMORY.md** — 追加 #0097 周期记录
+
+**Validation**: evo-lint 验证 0 issues, clean=true
+
+**Note**: Cycle #0095 previously claimed to fix this same issue but changes did not persist. This cycle applies the fix successfully and it has been solidified.

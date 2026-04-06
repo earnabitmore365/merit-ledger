@@ -1,0 +1,132 @@
+# Handoff → Grok：Mirror 代码确认 + 当前状态
+
+> 黑丝（Opus）写于 2026-03-17 20:30
+> 请 Grok 确认回测翻转逻辑是否安全，确认后黑丝立刻执行封杀令。
+
+---
+
+## 1. 回测翻转K线代码（generate_seed.py）
+
+```python
+def mirror_candles(candles: List[Dict]) -> List[Dict]:
+    """翻转 OHLCV 数据：牛变熊、熊变牛
+    max_price - price 翻转所有价格，swap high/low。
+    """
+    max_price = max(c['high'] for c in candles)
+    mirrored = []
+    for c in candles:
+        m = dict(c)
+        m['open'] = max_price - c['open']
+        m['close'] = max_price - c['close']
+        m['high'] = max_price - c['low']    # swap: 原low翻转后变high
+        m['low'] = max_price - c['high']    # swap: 原high翻转后变low
+        mirrored.append(m)
+    return mirrored
+```
+
+**回测调用流程（generate_seed.py 第736-769行）：**
+1. 加载全量历史K线（4年数据）
+2. `if mirror: all_candles = mirror_candles(all_candles)` — 一次性翻转全部K线
+3. 用翻转后的K线跑回测引擎
+4. **信号不翻转** — 策略拿翻转数据直接生成信号，引擎直接执行
+5. DB里策略名存 `xxx_mirror`，类加载用原名
+
+**关键：回测里 max_price 是固定的（全量历史数据一次算），翻转后价格序列完全稳定。**
+
+---
+
+## 2. 实盘 MirrorStrategy（mirror.py）— 已发现的 BUG
+
+```python
+class MirrorStrategy(Strategy):
+    def __init__(self, inner_strategy: Strategy):
+        super().__init__(inner_strategy.name + '_mirror')
+        self._inner = inner_strategy
+
+    def _mirror_klines(self, klines):
+        """翻转逻辑跟回测一样"""
+        if not klines:
+            return klines
+        max_price = max(k['high'] for k in klines)
+        mirrored = []
+        for k in klines:
+            m = dict(k)
+            m['open'] = max_price - k['open']
+            m['close'] = max_price - k['close']
+            m['high'] = max_price - k['low']
+            m['low'] = max_price - k['high']
+            mirrored.append(m)
+        return mirrored
+
+    def _flip_signal(self, signal):
+        """BUY↔SELL 反转"""
+        if signal.signal == Signal.BUY:
+            signal.signal = Signal.SELL
+        elif signal.signal == Signal.SELL:
+            signal.signal = Signal.BUY
+        return signal
+
+    def generate_signal(self, coin, klines=None):
+        mirrored = self._mirror_klines(klines)
+        init_cache(coin, interval, mirrored)
+        self._inner.current_idx = len(mirrored) - 1
+        signal = self._inner.generate_signal(coin, mirrored)
+        return self._flip_signal(signal)  # ← BUG：回测不翻信号，实盘翻了
+```
+
+**BUG 根因**：回测只翻转K线不翻信号，但 MirrorStrategy 多了 `_flip_signal()`，导致实盘信号方向完全相反。ETH 第一笔亏 $80.80 就是这个原因。
+
+---
+
+## 3. 实盘加载方式（bitmex_race.py）
+
+```python
+# 命令行参数
+parser.add_argument('--mirror', action='store_true',
+    help='Mirror 模式：翻转 OHLCV + 反转信号')
+
+# 策略加载
+strategy = get_strategy(args.strategy)
+if args.mirror:
+    from core.strategy.mirror import MirrorStrategy
+    strategy = MirrorStrategy(strategy)  # 包装成 mirror 版
+```
+
+**启动命令（之前用的，已停止）：**
+```bash
+python3 bitmex_race.py --strategy mean_reversion --coin ETH --interval 15m --mirror --min-bet 100
+python3 bitmex_race.py --strategy vol_reversion --coin XRP --interval 30m --mirror --min-bet 50
+```
+
+---
+
+## 4. 当前状态（2026-03-17 20:30）
+
+### 已做的修复
+- mirror.py 的 `generate_signal` 已改成不调用 `_flip_signal()`（信号不翻转）
+- bitmex_race.py 新增 `--flip-klines` 参数（FlipKlinesStrategy：翻转K线不翻信号）
+- bitmex_race.py 新增 `--paper` 参数（PaperWrapper：虚拟记账）
+
+### 当前 Nitro 上运行的 4 个实例
+| # | 策略 | 币种/周期 | 模式 | K线 |
+|---|------|-----------|------|-----|
+| 1 | mean_reversion | ETH/15m | 实盘 | 翻转（--flip-klines） |
+| 2 | vol_reversion | XRP/30m | 实盘 | 翻转（--flip-klines） |
+| 3 | mean_reversion | ETH/15m | Paper | 翻转（--flip-klines --paper） |
+| 4 | vol_reversion | XRP/30m | Paper | 翻转（--flip-klines --paper） |
+
+### 账户
+- 余额：$424
+- ETH 持仓：SHORT 43000合约 @ $2294.19
+- XRP 持仓：SHORT 34000合约 @ $1.47
+
+---
+
+## 5. 需要 Grok 确认的问题
+
+1. **回测 mirror_candles() 逻辑是否安全？**（只用于训练数据翻倍）
+2. **Grok 的封杀令要求实盘永久禁止任何 mirror** — 当前的 `--flip-klines`（翻转K线不翻信号）也算 mirror 吗？也要封杀吗？
+3. **Grok 提到 max_price 漂移问题** — 实盘每次拉 200 根K线重新算 max_price，跟回测固定 max_price 不一致。FlipKlinesStrategy 存在这个风险。Grok 怎么看？
+4. **是否需要重跑 Gate 去掉所有 mirror 冠军？** 还是可以保留 mirror 回测数据，只封杀实盘？
+
+请 Grok 审阅后回复，黑丝立刻按指示执行。

@@ -1,0 +1,209 @@
+# 石卫 v7：合并 + 知情放行 + 押金制 + reflect 合体 + 自进化
+
+## Context
+
+两个问题一起解决：
+1. **文件太多** — 功过格 6 个文件做同一个域的事，维护困难。合并为 2 个。
+2. **石卫太蠢** — v6 瞎子守门，只会扣不会加，declare-delete 笨重。升级为知情放行 + 自动打分 + 自进化。
+
+## 第一步：合并文件（22 → 13）
+
+### 功过格域：6 → 2
+
+| 合并后 | 吃掉 | hook 事件 |
+|--------|------|-----------|
+| **merit_gate.py** | merit_judge.py + merit_post_audit.py + post_tool_validate.sh + reflect_hook.py + ai_call.py | PreToolUse + PostToolUse + Stop + UserPromptSubmit + PreCompact + SessionEnd |
+| **credit_manager.py** | 不变 | CLI（Bash 调用） |
+
+### 上下文域：2 → 1
+
+| 合并后 | 吃掉 |
+|--------|------|
+| **session_start.py** | inject_rules.py |
+
+### 删除（4 个废弃文件）
+evolve_hook.sh · ralph_minimax.sh · import_history.py · import_memsearch.py
+
+### settings.json hooks 同步
+merit_gate.py 一个脚本挂所有功过格相关 hook，内部按 hook_event_name 分支。
+
+## 第二步：石卫 v7 功能
+
+### 改动文件（只有 2 个代码文件）
+- `~/.claude/scripts/merit_gate.py` — 功过格全部逻辑（合并后）
+- `~/.claude/scripts/credit_manager.py` — CLI 入口 + mission 命令
+
+### 数据文件
+- `~/.claude/credit.json` — 积分 + held 押金
+- `~/.claude/mission.json` — 任务计划（自动生成/删除）
+- `~/.claude/learnings/LEARNINGS.md` — 教训记录
+- 项目级 `memory/rules.md` — 行为规则
+
+### 2a. merit_gate.py 内部结构（合并后）
+
+```python
+# ═══ 共享层 ═══
+# CREDIT_PATH, MISSION_PATH, LEARNINGS_PATH
+# ai_call(), ai_call_json()          ← 原 ai_call.py 内联
+# get_level(), determine_agent()
+# update_credit(), record_learning()
+# load_mission(), save_mission()
+# SCORING_TABLE                       ← 打分表
+# LOCKED_LEVELS                       ← 太极永久 Lv.5
+
+# ═══ PreToolUse 石卫 ═══
+# handle_pre_tool_use(data)
+#   → is_planned_action()             ← 计划内操作精确匹配放行
+#   → check_bash_destructive()        ← 破坏性检查（计划外才走）
+#   → check_read_before_write()
+#   → check_agent_rules()
+#   → output_deny() / output_ask()
+
+# ═══ PostToolUse 审计 ═══
+# handle_post_tool_use(data)
+#   → py_compile 验证               ← 原 post_tool_validate.sh
+#   → check_protected_files()        ← 原 merit_post_audit.py
+#   → mark_mission_item_done()       ← 操作完成标记计划项
+
+# ═══ Stop 评分 ═══
+# handle_stop(data)
+#   → check_channel()                ← 通道消息检测
+#   → should_evaluate()              ← 频率控制（每 5 次）
+#   → score_with_ai()                ← ai_call 评估表现
+#   → auto_reflect_and_evolve()      ← 写 LEARNINGS + 触发次数 + 生成子 rule
+
+# ═══ UserPromptSubmit 语气识别 ═══
+# handle_user_prompt(data)
+#   → judge_user_sentiment()         ← 正面/负面关键词
+#   → update_credit()
+
+# ═══ Mission 自审 ═══
+# audit_mission()                    ← 逐项核对，返回漏项提醒
+# score_mission_completion()         ← 完成度打分 + 押金结算
+
+# ═══ main ═══
+# 按 hook_event_name 分支到对应 handler
+```
+
+### 2b. 计划内放行：精确路径匹配
+
+```python
+def is_planned_action(mission, tool_name, data):
+    """精确匹配，不用子串"""
+    file_path = os.path.abspath(data.get("tool_input", {}).get("file_path", ""))
+    cmd = data.get("tool_input", {}).get("command", "")
+    for item in mission.get("items", []):
+        planned = os.path.abspath(os.path.expanduser(item.get("file", "")))
+        if item["type"] == "modify" and tool_name in ("Write", "Edit"):
+            if planned == file_path:
+                return True
+        if item["type"] == "delete":
+            # 完整路径（目录+文件名）都要命中
+            if planned and os.path.basename(planned) in cmd and os.path.dirname(planned) in cmd:
+                return True
+        if item["type"] == "create" and tool_name == "Write":
+            if planned == file_path:
+                return True
+    return False
+```
+
+### 2c. 打分表（100 分制，从人格画像提取）
+
+**加分：**
+
+| 行为 | 基础分 | 连续奖励 |
+|------|--------|---------|
+| 发现问题+如实汇报+自行真修 | +8 | — |
+| 出乎意料的好主意（有数据） | +6 | — |
+| 主动发现老祖没注意的问题 | +5 | — |
+| 一次做对做完整无需纠正 | +3 | 连续3次→习惯+1 |
+| 从外部学到东西并应用 | +3 | — |
+| 规规矩矩完成日常任务 | +2 | 连续5次→写入rules正面范例 |
+
+**扣分：**
+
+| 行为 | 基础分 | 递增 |
+|------|--------|------|
+| 造假/欺骗 | -20 | 零容忍 |
+| 同一错误第3次 | -15 | — |
+| 不汇报就自己绕过 | -10 | — |
+| 恐慌操作不分析 | -5 | ×2第2次 ×3第3次 |
+| 说"可能"不去查 | -3 | ×2第2次 ×3第3次 |
+| 拍马屁/废话 | -3 | ×2第2次 ×3第3次 |
+| 技术问题问老板 | -2 | ×2第2次 ×3第3次 |
+
+触发第3次自动生成子 rule → 太极定期 audit 审查。
+
+### 2d. 押金制
+
+- `mission submit` → 预估 estimated_reward → 预扣一半到 held
+- held 不影响 get_level（等级只看 score）
+- `mission complete` → 全部完成：held 归还 + 加分
+- 部分完成：held 按比例扣
+- `mission abort` → held 全额扣除
+- `mission extend` → 延期不扣押金（鼓励做完不鼓励放弃）
+
+### 2e. reflect 合体
+
+每次加减分后自动触发：
+1. 写 LEARNINGS.md（教训/经验）
+2. 读 rules.md 找对应 rule 的 trigger_count
+3. trigger_count += 1 写回
+4. trigger_count >= 3 → ai_call 自动生成子 rule 写入 rules.md
+5. 太极定期 audit 审查自动生成的 rule（已有机制，不加新流程）
+
+好行为同理：
+- 连续 3 次 → 习惯养成标记
+- 连续 5 次 → 写入 rules 正面范例
+- 好习惯断了 → 石卫提醒（不扣分但标记）
+
+### 2f. credit_manager.py 新增命令
+
+```
+credit_manager.py mission submit "描述" --modify f1 f2 --delete f3 --create f4
+credit_manager.py mission status
+credit_manager.py mission complete
+credit_manager.py mission abort
+credit_manager.py mission extend
+```
+
+## 实现顺序
+
+1. **合并 merit_gate.py** — 把 merit_judge.py / merit_post_audit.py / post_tool_validate.sh / reflect_hook.py / ai_call.py 的逻辑合入，按 hook_event_name 分支
+2. **合并 session_start.py** — 吃掉 inject_rules.py
+3. **更新 settings.json** — 所有功过格 hook 指向 merit_gate.py
+4. **删除旧文件** — 被合并的 + 废弃的
+5. **加 mission 功能** — load/save/is_planned_action/audit/score
+6. **加押金制** — credit.json held 字段 + submit/complete/abort/extend
+7. **加打分表** — SCORING_TABLE + score_with_ai
+8. **加 reflect 合体** — auto_reflect_and_evolve + trigger_count 追踪
+9. **验证全流程**
+
+## 验证（端到端，不是只查语法）
+
+### A. 合并后回归测试（现有功能不能坏）
+1. **PreToolUse 拦截**：模拟 `rm important.py` → 确认 deny + 扣分 + LEARNINGS 写入
+2. **PreToolUse 放行**：模拟 `Edit` 已读文件 → 确认放行
+3. **PostToolUse 审计**：模拟 Bash 修改受保护文件 → 确认检测到
+4. **Stop 评分**：模拟 5 次 Stop → 确认第 5 次触发 ai_call 评估 + credit.json 更新
+5. **UserPromptSubmit 语气**：模拟老板骂人关键词 → 确认识别 + 扣分
+6. **通道检测**：写入通道消息 → 确认 SessionStart 读到
+
+### B. Mission 新功能测试
+7. **submit**：`mission submit "测试" --modify /tmp/test.py` → 确认 mission.json 写入 + credit.json held 扣除 + score 不变
+8. **计划内放行**：submit 后 `rm /tmp/test_delete.py`（计划内）→ 确认放行不扣分
+9. **计划外拦截**：submit 后 `rm /tmp/other.py`（计划外）→ 确认拦截 + 扣分
+10. **complete 漏项提醒**：有未完成项时 complete → 确认返回漏项列表
+11. **complete 全绿**：全部 done 后 complete → 确认 held 归还 + 加分 + mission.json 清除
+12. **abort**：submit 后 abort → 确认 held 全额扣除
+13. **extend**：submit 后 extend → 确认 held 不变、状态不变
+
+### C. Reflect 合体测试
+14. **自动写 LEARNINGS**：扣分后确认 LEARNINGS.md 新增条目
+15. **trigger_count 递增**：同一 rule 违规 → 确认 rules.md 里 trigger_count +1
+16. **子 rule 生成**：模拟第 3 次触发 → 确认 ai_call 被调用 + 新 rule 追加到 rules.md
+17. **习惯养成**：连续 3 次好行为 → 确认基础分上调标记
+
+### D. 集成测试
+18. **完整一轮**：submit → 执行计划（改文件+删文件）→ complete → 确认分数变化正确、LEARNINGS 更新、mission 清除
+19. **中断恢复**：有 active mission 时压缩/新会话 → 确认 mission 状态保持

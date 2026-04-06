@@ -1,0 +1,1 @@
+/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/debugging-toolkit/agents/debugger.md

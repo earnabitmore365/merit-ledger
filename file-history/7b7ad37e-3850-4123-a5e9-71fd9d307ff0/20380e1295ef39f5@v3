@@ -1,0 +1,212 @@
+"""K线分发器: 预加载 + 聚合 + 分发.
+
+职责:
+1. 启动时 REST 预下载各周期 250 根历史K线
+2. 对齐 UTC 时间边界(预填聚合 buffer)
+3. 收到 1m K线后聚合成 5m/15m/30m/1h
+4. 分发给对应周期的策略
+
+关联:
+- team_config.py → 读取需要哪些 coin×interval 组合
+- unified_trader.py → 调用 startup() 和 on_1m_bar()
+- Feed Gateway → ZMQ SUB 接收 1m K线
+
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from collections import deque
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Any
+
+    from exchange.bitmex.adapter import BitMEXAdapter
+
+from team_config import get_needed_intervals
+
+logger = logging.getLogger(__name__)
+
+# 各周期需要的 1m bar 数量
+BAR_COUNTS = {"5m": 5, "15m": 15, "30m": 30, "1h": 60}
+
+
+class KlineDispatcher:
+    """K线预加载 + 聚合 + 分发."""
+
+    def __init__(self, on_bar_callback: Callable[..., Any]) -> None:
+        """Initialize KlineDispatcher.
+
+        Args:
+            on_bar_callback: 收到完整K线时的回调
+                签名: callback(coin, interval, bar, klines)
+                - bar: 当前这根K线 dict
+                - klines: 该 coin×interval 的完整窗口 list
+
+        """
+        self._callback = on_bar_callback
+        self._needed = get_needed_intervals()  # {coin: {intervals}}
+
+        # K线历史窗口：{(coin, interval): deque(maxlen=250)}
+        self._windows: dict[tuple[str, str], deque[dict[str, Any]]] = {}
+
+        # 聚合 buffer：{(coin, interval): [bar, ...]}
+        # 只有高周期（5m/15m/30m/1h）才有 buffer，1m 直接分发
+        self._buffers: dict[tuple[str, str], list[dict[str, Any]]] = {}
+
+        # 初始化 windows 和 buffers
+        for coin, intervals in self._needed.items():
+            for iv in intervals:
+                self._windows[(coin, iv)] = deque(maxlen=250)
+                if iv != "1m":
+                    self._buffers[(coin, iv)] = []
+
+    def startup(self, adapter: BitMEXAdapter) -> bool:
+        """启动预加载: REST 下载历史 + 对齐时间边界.
+
+        Args:
+            adapter: BitMEXAdapter 实例(用于 REST 拉K线)
+
+        Returns:
+            bool: 是否成功
+
+        """
+        logger.info("KlineDispatcher 启动中...")
+
+        # Step 1: REST 预下载各周期历史
+        download_count = 0
+        for coin, intervals in self._needed.items():
+            for iv in sorted(intervals):
+                try:
+                    klines = adapter.get_klines(coin, iv, limit=250)
+                    if klines:
+                        self._windows[(coin, iv)] = deque(klines, maxlen=250)
+                        download_count += 1
+                        logger.info("预加载: %s/%s = %d 根", coin, iv, len(klines))
+                    else:
+                        logger.warning("预加载失败: %s/%s 返回空", coin, iv)
+                except Exception:
+                    logger.exception("预加载异常: %s/%s", coin, iv)
+
+                # 错峰：每次请求间隔1秒，避免429
+                time.sleep(1)
+
+        logger.info("预下载完成: %d 个 coin×interval", download_count)
+
+        # Step 2: 对齐 UTC 时间边界，预填聚合 buffer
+        for coin, iv in self._buffers:
+            n_needed = BAR_COUNTS.get(iv, 0)
+            if n_needed == 0:
+                continue
+
+            # 从 1m 历史窗口取最近的 K 线
+            key_1m = (coin, "1m")
+            if key_1m not in self._windows or not self._windows[key_1m]:
+                continue
+
+            recent_1m = list(self._windows[key_1m])
+            if not recent_1m:
+                continue
+
+            # 找当前周期的起点
+            last_minute = self._get_utc_minute(recent_1m[-1])
+            period_start = (last_minute // n_needed) * n_needed
+
+            # 从起点开始的 1m bar 填入 buffer
+            pre_fill = []
+            for bar in recent_1m:
+                bar_minute = self._get_utc_minute(bar)
+                if bar_minute >= period_start:
+                    pre_fill.append(bar)
+
+            self._buffers[(coin, iv)] = pre_fill
+            logger.info("对齐: %s/%s 预填 %d/%d 根", coin, iv, len(pre_fill), n_needed)
+
+        logger.info("KlineDispatcher 启动完成，等待实时 K 线...")
+        return True
+
+    def on_1m_bar(self, coin: str, bar: dict[str, Any]) -> None:
+        """收到一根 1m K 线，聚合 + 分发.
+
+        Args:
+            coin: 币种
+            bar: 1m K线 dict（需含 time/open/high/low/close/volume）
+
+        """
+        # 1. 直接分发给该币种的 1m 策略
+        key_1m = (coin, "1m")
+        if key_1m in self._windows:
+            self._windows[key_1m].append(bar)
+            klines = list(self._windows[key_1m])
+            self._callback(coin, "1m", bar, klines)
+
+        # 2. 累积到各高周期 buffer
+        for iv in ["5m", "15m", "30m", "1h"]:
+            key = (coin, iv)
+            if key not in self._buffers:
+                continue
+
+            buf = self._buffers[key]
+            n_needed = BAR_COUNTS[iv]
+
+            # 首根必须在周期起点
+            if not buf:
+                bar_minute = self._get_utc_minute(bar)
+                if bar_minute % n_needed != 0:
+                    continue
+
+            buf.append(bar)
+
+            if len(buf) >= n_needed:
+                # 聚合
+                aggregated = {
+                    "time": buf[0].get("time", buf[0].get("timestamp", 0)),
+                    "timestamp": buf[0].get("time", buf[0].get("timestamp", 0)),
+                    "open": buf[0]["open"],
+                    "high": max(b["high"] for b in buf),
+                    "low": min(b["low"] for b in buf),
+                    "close": buf[-1]["close"],
+                    "volume": sum(b.get("volume", 0) for b in buf),
+                }
+                self._buffers[key] = []
+
+                # 分发给该周期的策略
+                self._windows[key].append(aggregated)
+                klines = list(self._windows[key])
+                self._callback(coin, iv, aggregated, klines)
+
+    def get_window(self, coin: str, interval: str) -> list[dict[str, Any]]:
+        """获取某 coin×interval 的K线窗口（断网恢复用）."""
+        key = (coin, interval)
+        if key in self._windows:
+            return list(self._windows[key])
+        return []
+
+    def on_reconnect(self, adapter: BitMEXAdapter) -> None:
+        """Gateway 重连 → 跟初启一样重新来过.
+
+        清空所有聚合 buffer，重新 REST 预下载 250 根，
+        断线期间的数据直接丢弃。
+        """
+        logger.warning("Gateway 重连，按初启流程恢复...")
+
+        # 清空所有聚合 buffer
+        for key in self._buffers:
+            self._buffers[key] = []
+
+        # 重新预下载
+        self.startup(adapter)
+
+    def _get_utc_minute(self, bar: dict[str, Any]) -> int:
+        """从K线提取 UTC 总分钟数（从 epoch 开始，不是小时内分钟）.
+
+        修了 FeedClient 的 bug：FeedClient 用 % 3600 只取小时内分钟（0-59），
+        做 1h 聚合会出问题。这里用 UTC 总分钟数，所有周期都正确。
+        """
+        ts = bar.get("time", bar.get("timestamp", 0))
+        if ts > 1e12:
+            ts = ts / 1000  # 毫秒→秒
+        return int(ts) // 60

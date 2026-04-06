@@ -1,0 +1,166 @@
+# XRP 30m Regime 策略切换 — 实盘部署
+
+## Context
+当前 BitMEX 比赛只跑 2 个均值回归策略（mean_reversion ETH/15m + vol_reversion XRP/30m），单边行情做反方向亏钱。老板要求加 regime 自动切换：不同市场状态用不同策略。
+
+XRP 30m 按 BTC 已知事实 regime 分拆后，最佳策略组合（纯信号库验证，排除 AD）：
+
+| Regime | 策略 | PnL | 交易数 | 胜率 |
+|--------|------|-----|--------|------|
+| 牛市 | momentum_slope | +56.4 | 608 | 29.9% |
+| 初牛 | rsi_reversal | +14.9 | 218 | 68.8% |
+| 盘整 | vol_reversion | +3.5 | 675 | 35.3% |
+| 初熊 | williams_fast | +18.2 | 519 | 60.9% |
+| 熊市 | atr_breakout_2yi | +22.2 | 638 | 39.5% |
+
+**盘整选 vol_reversion 而非 proc**：proc PnL 更高（+8.9）但只有 35 笔交易，样本不够。vol_reversion 有 675 笔，统计可靠。
+
+## 现有可复用代码
+
+| 模块 | 路径 | 复用方式 |
+|------|------|----------|
+| RegimeDetector | `lab/live_regime/regime_detector.py` | 直接实例化，5态状态机+JSON持久化 |
+| get_strategy() | `lab/src/core/strategy/base.py:181` | 按名字实例化策略 |
+| TradingSystem | `lab/src/trading/system.py` | 不改，self.strategy 接收元策略 |
+| adapter.get_klines | `lab/src/exchange/bitmex/adapter.py` | 已验证能拉 BTC（XBTUSDT）1h K线 |
+| close_position | `system.py:514` | 平仓逻辑已有 |
+
+**不复用旧 RegimeStrategy**（`src/trading/regime/strategy.py`）：它用 ADX 三层检测，我们用 L2 摆动追踪。新建独立的 BitmexRegimeStrategy 更干净。
+
+## 方案
+
+### 步骤1：新建 `lab/bitmex_regime_strategy.py`
+
+核心类 `BitmexRegimeStrategy(Strategy)`：
+
+```python
+class BitmexRegimeStrategy(Strategy):
+    def __init__(self, regime_map: dict, exchange, coin: str):
+        """
+        regime_map: {'牛': 'momentum_slope', '初牛': 'rsi_reversal', ...}
+        exchange: BitMEXAdapter 实例（用于拉 BTC K线）
+        coin: 交易币种（XRP）
+        """
+        self._strategies = {regime: get_strategy(name) for regime, name in regime_map.items()}
+        self._detector = RegimeDetector(initial_regime='盘整', state_file='regime_state_bitmex.json')
+        self._exchange = exchange
+        self._current_regime = '盘整'
+        self._last_regime = '盘整'
+        self._btc_klines_cache = []  # BTC K线缓存
+        self._warmed_up = False
+
+    def _update_regime(self):
+        """拉 BTC 1h K线更新 regime"""
+        if not self._warmed_up:
+            # 首次：拉 200 根预热
+            self._btc_klines_cache = self._exchange.get_klines('BTC', '1h', limit=200)
+            for k in self._btc_klines_cache:
+                self._detector.update(...)
+            self._warmed_up = True
+        else:
+            # 增量：拉最近 5 根，去重后喂新的
+            new_klines = self._exchange.get_klines('BTC', '1h', limit=5)
+            # 只喂 cache 里没有的新 K 线
+            ...
+
+        self._last_regime = self._current_regime
+        self._current_regime = self._detector.regime
+
+    def generate_signal(self, coin, klines):
+        """核心逻辑"""
+        # 1. 更新 regime（用 BTC 数据）
+        self._update_regime()
+
+        # 2. regime 变化 → 先平仓
+        if self._current_regime != self._last_regime and has_position:
+            logger.info(f"Regime 切换: {self._last_regime} → {self._current_regime}，平仓")
+            return TradingSignal(signal=Signal.CLOSE, info=f"regime切换平仓")
+
+        # 3. 选子策略，初始化 indicator_cache
+        sub_strategy = self._strategies.get(self._current_regime)
+        init_cache(coin, interval, klines)  # 确保新策略的指标可用
+
+        # 4. 委托生成信号
+        signal = sub_strategy.generate_signal(coin, klines)
+        signal.metadata['regime'] = self._current_regime
+        signal.metadata['sub_strategy'] = sub_strategy.name
+        return signal
+```
+
+**regime 切换平仓逻辑**：
+- regime 变了 + 有持仓 → 返回 CLOSE → TradingSystem 平仓
+- 下一根 K线 → regime 已经是新的 → 新策略正常生成信号 → 开仓
+- regime 变了 + 无持仓 → 直接用新策略，无需特殊处理
+
+**indicator_cache 处理**：
+- 每次 generate_signal 调用前 init_cache(coin, interval, klines)
+- 切换策略后新策略可能需要不同指标，init_cache 保证所有指标重新计算
+
+### 步骤2：改 `lab/bitmex_race.py` — 加 `--regime` 参数
+
+```python
+parser.add_argument('--regime', action='store_true', help='启用 regime 策略切换')
+
+if args.regime:
+    from bitmex_regime_strategy import BitmexRegimeStrategy, XRP_30M_REGIME_MAP
+    strategy = BitmexRegimeStrategy(
+        regime_map=XRP_30M_REGIME_MAP,
+        exchange=adapter,
+        coin=args.coin,
+    )
+else:
+    strategy = get_strategy(args.strategy)
+```
+
+改动仅在策略加载部分，其余流程（TradingSystem、TTP、WebSocket）不动。
+
+### 步骤3：部署到 Nitro
+
+```bash
+# 1. 同步新文件到 Nitro
+scp -P 2222 lab/bitmex_regime_strategy.py pc_heisi_claude@localhost:/home/pc_heisi_claude/trading/
+
+# 2. 停掉旧 XRP 实例（先平仓）
+# ⚠️ 需要先手动平掉 XRP 持仓，或等策略自动平仓后再停
+ssh -p 2222 pc_heisi_claude@localhost "pkill -f 'bitmex_race.*XRP'"
+
+# 3. 启动 regime 模式
+ssh -p 2222 pc_heisi_claude@localhost "cd /home/pc_heisi_claude/trading && \
+  nohup /home/pc_heisi_claude/trading-env/bin/python3 \
+  bitmex_race.py --regime --coin XRP --interval 30m --min-bet 50 \
+  >> bitmex_race_xrp.log 2>&1 &"
+```
+
+## 已知风险
+
+1. **回测 vs 实盘偏差**：回测按 BTC 事实标签（已知的21段历史）分拆，实盘用 RegimeDetector 摆动追踪实时判断。两者不完全一致，实盘 regime 判断可能有延迟或误判
+2. **regime 检测频率**：RegimeDetector 按 1h K线更新，交易按 30m。regime 变化可能滞后 0-60 分钟
+3. **首次预热**：启动时需拉 200 根 BTC 1h K线（~API 1次），不影响正常运行
+
+## 回退方案
+如果 regime 切换表现不好，直接改回单策略：
+```bash
+pkill -f 'bitmex_race.*XRP'
+nohup python3 bitmex_race.py --strategy vol_reversion --coin XRP --interval 30m --min-bet 50 >> bitmex_race_xrp.log 2>&1 &
+```
+
+## 改动文件清单
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `lab/bitmex_regime_strategy.py` | **新建** | BitmexRegimeStrategy 类 + regime 映射配置 |
+| `lab/bitmex_race.py` | **修改** | 加 --regime 参数，策略加载分支 |
+| `lab/bitmex_race_README.md` | **修改** | 补充 regime 模式文档 |
+
+不动：system.py、adapter.py、regime_detector.py、策略文件 — 全部复用。
+
+## 验证
+
+1. `py_compile` 所有新建/修改文件
+2. 本地冒烟测试：实例化 BitmexRegimeStrategy，传入 mock exchange，调 generate_signal 确认输出正确
+3. 确认 regime_state_bitmex.json 正确写入/读取
+4. Nitro 部署后观察 2-3 根 K 线（60-90 分钟），确认：
+   - 日志输出当前 regime + 使用的子策略
+   - BTC K线正常拉取
+   - 信号正常生成
+5. 收尾：更新 CHECKPOINT #93 + Nitro 部署文档

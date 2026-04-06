@@ -1,0 +1,23 @@
+進化週期完成。以下是本次優化的摘要：
+
+---
+
+**Evolution Cycle #0092（優化）**
+
+**信號**：`protocol_drift` + `user_feature_request: monitor.command`
+
+**基因**：`gene_gep_optimize_prompt_and_assets`（optimize）
+
+**改動文件**：`skills/monitor-command/index.js`（1 文件，~12 行）
+
+**優化內容**：改進 monitor-command 技能生成的 bash 腳本模板：
+
+| 問題 | 修復 |
+|------|------|
+| SSH 無超時，連不上時會無限掛起 | 添加 `-o ConnectTimeout=5` |
+| 非交互環境可能彈密碼提示 | 添加 `-o BatchMode=yes` |
+| `2>/dev/null` 吞掉所有 SSH 錯誤 | 移除，讓錯誤可見 |
+| `$?` 直接檢查容易被後續命令覆蓋 | 改用 `SSH_EXIT=$?` 命名變量 |
+| 刷新後不知道上次刷新時間 | 添加 `$(date '+%H:%M:%S')` 時間戳顯示 |
+
+**驗證**：`node -e "require('./skills/monitor-command')"` ✅，生成腳本包含所有改進 ✅

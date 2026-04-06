@@ -1,0 +1,9 @@
+{
+  "id": "21",
+  "subject": "收尾：删 sim_coin_margin.py + 确认实盘 + commit",
+  "description": "1. 删除 sim_coin_margin.py 2. 确认实盘进程正常 3. git commit",
+  "activeForm": "收尾",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

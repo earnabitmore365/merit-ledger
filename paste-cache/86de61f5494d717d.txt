@@ -1,0 +1,21 @@
+/Users/allenbot/.openclaw/completions/openclaw.zsh:3874: command not found: compdef
+allenbot@Echo ~ % cd "/Volumes/BIWIN NV 7400 2TB/project/auto-trading/lab" && python3 src/backtest/generate_seed.py --ttp --ttp-close --coins BTC BTC_COIN DOT ETH ETH_COIN LINK SOL XRP --intervals 1m
+
+██████████████████████████████████████████████████████████████████████████████████████████
+  TTP 全量模式：普通 + 镜像 一条过（单线程）
+  断点恢复，中断不丢进度
+██████████████████████████████████████████████████████████████████████████████████████████
+
+==========================================================================================
+  种子报告生成器 — 普通
+  检测到: 12 币种 10 周期 | 本次运行: 8 币种 1 周期
+  币种: BTC, BTC_COIN, DOT, ETH, ETH_COIN, LINK, SOL, XRP
+  周期: 1m
+  105 策略 × 8 币种 × 1 周期 = 840 组回测
+  + 8 组 regime 时间线
+  参数：全量数据 · $500 · 10x · 止损10% · TTP开 · 固定注码$1
+  成本：手续费0.035%/侧 · 滑点0.02%/侧 · 资金费0.01%/8h
+  输出：/Volumes/BIWIN NV 7400 2TB/project/auto-trading/lab/reports/seed_v3_ttp.db
+==========================================================================================
+
+

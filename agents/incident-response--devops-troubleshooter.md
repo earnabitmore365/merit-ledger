@@ -1,0 +1,1 @@
+/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/incident-response/agents/devops-troubleshooter.md

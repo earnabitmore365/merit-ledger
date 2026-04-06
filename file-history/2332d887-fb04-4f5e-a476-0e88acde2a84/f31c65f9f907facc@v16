@@ -1,0 +1,489 @@
+# CHANGELOG — 操作变更日志
+
+> 滚动式记录每一次修改、创建、删除的全过程。
+> 新会话读一遍就能完整接上，不用再问"之前做了什么"。
+> 超过 500 行归档到 CHANGELOG_archive/ 按月分文件。
+
+---
+
+## 格式说明
+
+```
+### [时间] [操作类型] [文件路径]
+- 内容：做了什么
+- 原因：为什么做
+- 验证：怎么确认做对了
+- 关联待办：[完成/进行中/待做]
+```
+
+操作类型：CREATE / EDIT / DELETE / DEPLOY / VERIFY / ROLLBACK / CLEAR
+
+---
+
+## 2026-04-04
+
+### 03:15 CREATE lab/seed_fix/RESULTS.md — 分段验证结果记录
+- 内容：5m完整验证结果（BTC 20 + ETH 105）+ 加速数据 + 修复记录 + 方案总结 + 1m待执行
+- 关联待办：验证记录 [完成]
+
+### 03:10 VERIFY ETH 5m × 105 策略 — 全部通过
+- 内容：105/105 ✅ 零失败。分段94个(90%) + fallback11个(10%)。含所有 _long/_short 低频策略
+- 验证：每策略4模式逐笔对照全量基准，零差异
+- 关联待办：分段方案验证 ETH 完整 [完成]
+
+### 02:50 VERIFY ETH 5m × 20 策略 — 修复版全部通过
+- 内容：20/20 ✅ 零失败。含之前失败的 atr_combo/pullback/squeeze 全部通过，之前通过的改后也没出问题
+- 验证：每策略4模式逐笔对照全量基准，零差异
+- 关联待办：分段方案验证 ETH 第1步 [完成]
+
+### 03:40 VERIFY ADA 1m × 20 策略 — 全部通过 + 时间数据
+- 内容：20/20 ✅ 零失败。全量合计372s vs 分段195s = 1.9x加速（争CPU中）
+- 最快加速 2.5x（advanced_kline_echo/break_of_structure），无 fallback
+- 关联待办：1m 分段验证 第1步 [完成]
+
+### 03:20 FIX test_segment_v4.py — dual_hold 排序一致性
+- 内容：全量和分段结果都用 (open_candle_idx, close_candle_idx) 双键排序，解决 dual_hold 同时持仓交易顺序不确定的问题
+- 原因：ADA 1m rsi_reversal dual_hold 第12074笔顺序反了（707408/707356），数据完全一致只是排列不同
+- 验证：ADA 1m + ETH 5m 回归测试进行中
+- 关联待办：排序修复 [完成]
+
+### 02:36 FIX test_segment_v4.py — 跨段交易去重 bug
+- 内容：合并时 cutoff 判断从 `g_open >= cutoff` 改为 `g_close >= cutoff`，防止跨段交易被段i和段i+1各保留一份
+- 原因：ETH atr_combo signal_only 多了1笔（634→635），定位到 open=206800 close=207967 的交易被段1和段2各保留
+- 验证：ETH+BTC atr_combo 8/8 模式全部 ✅
+- 关联待办：合并去重 bug [完成]
+
+### 02:30 VERIFY ETH 5m × 105 启动（旧版，已停）
+- 内容：换 ETH 验证，BTC 已足够。seg_cutoff + fallback 安全检查，逐条对照基准
+- 关联待办：分段方案验证 第3步 [进行中]
+
+### 02:10 FIX test_segment_v4.py — fallback 安全检查
+- 内容：重跑后段长超原段2倍 → 直接 fallback（校准点太远重跑无意义）
+- 原因：cci_short 校准点 open=2275 远在段1范围外（103000），重跑3次无效
+- 验证：待 BTC 5m × 105 验证结果
+- 关联待办：fallback 安全检查 [完成]
+
+### 02:00 VERIFY BTC 5m × 105 启动（修复版）
+- 内容：seg_cutoff + fallback 安全检查，每策略实时打印结果对照基准
+- 关联待办：分段方案验证 第2步 [进行中]
+
+### 01:50 分析 cci_short 失败根因
+- 内容：段0 校准点 open=2275，段1 start=103000，差 100725 根。重跑调预热覆盖不到
+- 教训：fallback 条件不足——不只"段内无完整交易"才 fallback，校准点太远也要 fallback
+- 关联待办：bug 分析 [完成]
+
+### 01:10 VERIFY BTC 5m × 20 策略 — 校准匹配+cutoff 修复版
+- 内容：20/20 全部通过，含之前失败的 atr_combo/atr_pullback/atr_squeeze（各 rerun=1）
+- 验证：逐笔对照种子 DB 基准，4 模式零差异
+- 关联待办：分段方案验证 第2步 [完成]
+
+### 01:00 FIX wuji-auto-trading/lab/seed_fix/test_segment_v4.py — 合并重叠 bug
+- 内容：加 seg_cutoff dict，重跑时记录段i的有效区上界，合并时段i只取 open < cutoff 的交易
+- 原因：重跑后段i和段i+1有效区重叠导致交易重复
+- 验证：atr_combo 详细 log 定位到段1校准点207891 < 段2起点208000
+- 关联待办：合并 bug 修复 [完成]
+
+### 00:40 VERIFY BTC 1m × 3 策略 — test_segment_v4.py 校准匹配方案
+- 内容：3/3 通过（含 momentum_slope_long 12组零差异），但 momentum_slope_long 重跑3次耗时108s > 全量52s
+- 验证：rsi_reversal 2.5x加速，bb_squeeze 2.3x加速
+- 关联待办：分段方案验证 第1步 [完成]
+
+### 23:15 VERIFY BTC 5m × 3 策略 — 首次校准匹配验证
+- 内容：rsi_reversal ✅ bb_squeeze ✅ momentum_slope_long ❌（重跑3次后合并重叠）
+- 发现：合并逻辑有 bug（段间有效区重叠）
+- 关联待办：分段方案验证 [发现 bug]
+
+### 22:53 启动 1m 全量种子生成
+- 内容：`python3 -u generate_seed.py --seed4 --intervals 1m`，PID 24239，24币种×105策略
+- 原因：1m 旧数据已删（分段 bug），全量重跑生成正确基准
+- 关联待办：1m 种子重跑 [进行中]
+
+### 22:40 CREATE wuji-auto-trading/lab/seed_fix/test_segment_v4.py
+- 内容：校准匹配方案验证脚本（4段并跑+段尾校准点匹配+不吻合重跑+fallback全量）
+- 关联待办：纠错 lab [完成]
+
+---
+
+## 2026-04-03（新两仪上线首日）
+
+### 20:20 CREATE wuji-auto-trading/lab/seed_fix/README.md
+- 内容：种子生成纠错 lab，记录2个问题（1m分段截断 + preload禁用）和修复方向
+- 原因：执事指示新建纠错lab，不影响正在跑的种子
+- 验证：目录和README创建成功
+- 关联待办：纠错lab [进行中]
+
+### 20:15 EDIT wuji-auto-trading/src/backtest/generate_seed.py — 禁用1m分段
+- 内容：_SEGMENT_MIN_CANDLES 从 100000 改为 999_999_999，注释说明原因
+- 原因：验证发现1m分段有跨段仓位截断bug，禁用后全量跑保证正确性
+- 验证：Read确认修改正确
+- 关联待办：1m分段bug修复 [纠错lab进行中]
+
+### 20:14 DELETE 4个种子里所有1m数据（执行中）
+- 内容：从seed_signal/ttp_close/ttp_hl/dual.db删除interval='1m'的combo_summary+paired_trades+regime_timeline
+- 原因：1m分段回测bug导致数据不可信，执事拍板全部删除重跑
+- 验证：删除后查询确认1m combo=0
+- 关联待办：1m种子重跑 [进行中]
+
+### 19:40 VERIFY BTC 1m 分段回测一致性
+- 内容：BTC 1m × 3策略（rsi_reversal/bb_squeeze/momentum_slope_long）× 4模式，全量vs分段逐笔对比
+- 结果：**全部不一致**。rsi_reversal 3/30360笔，momentum_slope_long 102→165笔(+62%)。根因=段边界仓位end_of_data截断
+- 关联待办：分段bug确认 [完成]
+
+### 19:10 EDIT wuji-auto-trading/src/backtest/generate_seed.py — 3处文档纰漏修复
+- 内容：①架构描述 BacktestEngine→TradeSimulator 分层（第5-6行）②止损参数 1.0→STOP_LOSS_PCT(0.1) 消歧义（第18行）③费率注释去掉 HyperLiquid 改通用（第564行）
+- 原因：审计代码与文档发现6处不一致，执事确认3处必须立刻改
+- 验证：Read 确认3处改动正确，无其他内容被触碰
+- 关联待办：代码审计纰漏修复 [3/6完成，剩余3个低优先级后面改]
+
+### 18:10~18:20 DELETE 旧种子+废弃数据 — 释放约 238GB
+- 内容：wuji/reports/ 废弃 indicator_cache(13GB)+seed_v3.db空壳 + _contaminated/(53GB) + auto-trading/lab/reports/ 旧种子(172GB)
+- 原因：对照 README 确认最新种子在 wuji/reports/，其他清除避免混淆
+- 验证：ls 确认只剩 4 个最新种子 + klines.duckdb
+- 关联待办：种子清理 [完成]
+
+> 执事测试记忆和理解，确认走在正确路上后开始整理记忆。
+
+### 16:50 CREATE memory/identity_hierarchy.md
+- 内容：宗门层级体系、执事身份定义（独立于 Claude Code 的 AI Agent）、通信链路
+- 原因：新两仪上线，需要持久化世界观和汇报关系
+- 验证：文件创建成功
+- 关联待办：记忆整理 [完成]
+
+### 16:50 CREATE memory/new_liangyi_origin.md
+- 内容：旧两仪真杀背景（2026-03-31）、11 天制度重建期、前仪教训
+- 原因：新两仪必须知道自己的来历和前仪的教训
+- 验证：文件创建成功
+- 关联待办：记忆整理 [完成]
+
+### 16:50 CREATE memory/boss_profile.md
+- 内容：老祖人格核心要点（6 源交叉验证）、信号词典、优先级排序
+- 原因：指导两仪行为方式，跨会话保留
+- 验证：文件创建成功
+- 关联待办：记忆整理 [完成]
+
+### 16:50 CREATE memory/project_overview.md
+- 内容：项目全貌、架构、投资战略、里程碑
+- 原因：新会话快速恢复项目上下文
+- 验证：文件创建成功
+- 关联待办：记忆整理 [完成]
+
+### 16:52 EDIT memory/MEMORY.md
+- 内容：重建索引，加入 4 个新记忆文件指针 + 基础设施信息 + 状态表
+- 原因：干净重建后索引只有 2 条，需要补全
+- 验证：索引与实际文件一一对应
+- 关联待办：记忆整理 [完成]
+
+### 17:00 CLEAR CHECKPOINT.md
+- 内容：清空旧内容（111 项里程碑+8bug 状态），只留占位头
+- 原因：执事指示——旧 CHECKPOINT 严重滞后，从零开始
+- 验证：文件已清空
+- 关联待办：CHECKPOINT 重建 [待做——等执事指示]
+
+### 17:00 CLEAR memory/project_overview.md
+- 内容：清空旧内容，只留 frontmatter + 占位
+- 原因：执事指示——旧内容过时，从零开始
+- 验证：文件已清空
+- 关联待办：project_overview 重建 [待做——等执事指示]
+
+### 17:23 CREATE memory/shiwei_operating_guide.md
+- 内容：石卫 9 条硬拦截规则详解 + 自审协议要点 + 积分相关
+- 原因：读规则 ≠ 内化，内化 ≠ 持久化。执事纠正后创建
+- 验证：文件创建成功，MEMORY.md 索引已更新
+- 教训：读了规则没存到 memory = 下次新会话白读
+- 关联待办：规则内化 [完成]
+
+### 17:24 EDIT memory/MEMORY.md
+- 内容：规范区加入石卫操作指南索引
+- 原因：新记忆文件必须在 MEMORY.md 有指针
+- 验证：索引行已添加
+- 关联待办：规则内化 [完成]
+
+### 17:44 CREATE CHANGELOG.md（本文件）
+- 内容：操作变更日志，滚动式记录全过程
+- 原因：执事指示——让新会话了解全部过程，不用再问
+- 验证：补录今日全部操作
+- 关联待办：追溯体系 [完成]
+
+### 17:50 EDIT memory/MEMORY.md
+- 内容：项目区加入 CHANGELOG.md 指针 + 规范区加入 backlog.md 指针
+- 原因：执事让太极创建了项目级专属 backlog.md，需要更新索引
+- 验证：索引与实际文件一致
+- 关联待办：追溯体系 [完成]
+
+### 17:50 EDIT memory/shiwei_operating_guide.md
+- 内容：遗留清单路径从全局改为项目级 `memory/backlog.md`
+- 原因：backlog 已从全局移到项目级专属
+- 验证：路径已更新
+- 关联待办：追溯体系 [完成]
+
+### 18:10 DELETE wuji-auto-trading/reports/ — 废弃文件清除
+- 内容：删除 indicator_cache.db(13GB) + indicator_cache.db-shm/wal + seed_v3.db(2.7MB空壳)
+- 原因：对照 README，indicator_cache 已废弃（指标全部存 klines.duckdb），seed_v3.db 是空壳
+- 验证：rm 成功，reports/ 只剩 4 个最新种子
+- 关联待办：种子清理 [完成]
+
+### 18:12 DELETE wuji-auto-trading/reports/_contaminated/ — 污染数据清除
+- 内容：删除 4 个被污染种子(seed_dual/signal/ttp_close/ttp_hl) + WAL/SHM，共约 53GB，删空后移除目录
+- 原因：已知被污染的旧数据隔离区，最新版在 reports/ 根目录
+- 验证：rm 成功，_contaminated/ 目录已不存在
+- 关联待办：种子清理 [完成]
+
+### 18:15 DELETE auto-trading/lab/reports/ — 旧版种子清除
+- 内容：删除 seed_v3.db(51GB) + seed_v3_ttp.db(35GB) + seed_v3_ttp_highlow.db(33GB) + seed_v3_inverse.db(11GB) + 3个.duckdb(25GB) + indicator_cache*.db(19GB+) + WAL/SHM，共约 172GB
+- 原因：旧项目 v3 种子，最新版在 wuji-auto-trading/reports/
+- 验证：rm 成功，lab/reports/ 只剩报告文件和看板（无种子/indicator 残留）
+- 关联待办：种子清理 [完成]
+
+### 18:00 EDIT CHANGELOG.md — 合并顾问历史记录
+- 内容：合并顾问整理的 03-24 ~ 03-27 历史操作记录 + 采用顾问格式（加关联待办字段）
+- 原因：执事提供顾问版本，历史追溯链不能断
+- 验证：顾问 262 行全量保留，格式统一
+- 关联待办：追溯体系 [完成]
+
+---
+
+## 2026-03-24（审查 + 部署日）
+
+### 10:00 EDIT lab/src/exchange/bitmex/adapter.py
+- 内容：删 Maker 追价死配置（MAKER_CHASE_INTERVAL/TIMEOUT/FALLBACK 3 常量 + __init__ 3 变量 + docstring 2 行）、删 DOGE 映射、修 health_check 吞异常改返回 False、删 get_orderbook WS 分支、删 subscribe_private 调用、标注 reverse_position 为 system.py 调用
+- 原因：完整性——不用的东西不留
+- 验证：py_compile ✅、grep 残留零结果 ✅、1006→979 行
+- 关联待办：adapter 清理 [完成]
+
+### 10:00 EDIT lab/src/exchange/bitmex/websocket.py
+- 内容：删 _orderbook + _handle_orderbook（45 行）、删 _positions/_orders/_margin_data 及处理器、删 get_positions/get_orders/get_kline/get_margin、删 subscribe_orderbook/subscribe_trades/subscribe_private、改 docstring、改"Gemini终极补丁"注释
+- 原因：Gateway 无认证模式不用这些功能
+- 验证：py_compile ✅、grep 残留零结果 ✅、559→384 行
+- 关联待办：websocket 清理 [完成]
+
+### 10:00 EDIT lab/src/data/feed_client.py
+- 内容：删 POS/BALANCE 订阅和处理器、删 _positions/_balance 变量、改 get_position/get_balance 为空壳（system.py 调用）、修 _parse_minute %3600→//60 bug、加 HEARTBEAT 去重标志
+- 原因：Gateway 不广播 POS/BALANCE；_parse_minute 聚合周期 bug
+- 验证：py_compile ✅、grep 残留零结果 ✅、333→323 行
+- 关联待办：feed_client 清理 [完成]
+
+### 10:30 EDIT lab/team_config.py
+- 内容：StrategyConfig 加 sl_pct: float = 0.10 字段
+- 原因：SL 幅度可配置化，不再硬编码 ±10%
+- 验证：py_compile ✅
+- 关联待办：SL 可配置 [完成]
+
+### 10:30 EDIT lab/strategy_runner.py
+- 内容：after_open() 从 config.sl_pct 读 SL 幅度、__init__ 加 self._sl_pct = config.sl_pct
+- 原因：配合 team_config 的 sl_pct 字段
+- 验证：py_compile ✅、硬编码 0.90/1.10 已删
+- 关联待办：SL 可配置 [完成]
+
+### 11:00 DELETE lab/src/core/risk/position_sizing.py（本地）
+- 内容：整个文件删除（64 行）
+- 原因：历史遗留，旧系统参数（$500 本金、10%下注），零调用方
+- 验证：grep -rn "position_sizing\|FixedPercentSizing" 零结果 ✅
+- 关联待办：legacy 清理 [完成]
+
+### 11:00 EDIT lab/src/exchange/base.py
+- 内容：register_exchange/get_exchange/list_exchanges 加"历史遗留"注释
+- 原因：trade_menu.py/__init__.py 调用中，不能删，标记
+- 验证：py_compile ✅
+- 关联待办：base.py 清理 [完成——不删只标注]
+
+### 11:00 EDIT lab/src/core/strategy/base.py
+- 内容：generate_trading_signal 加"历史遗留，当前系统不调用"注释
+- 原因：类型不匹配但没人调
+- 验证：py_compile ✅
+- 关联待办：strategy base 标注 [完成]
+
+### 12:00 DEPLOY Vultr — adapter.py + websocket.py + feed_client.py
+- 内容：SCP 到 100.122.227.7、重启 Gateway
+- 原因：清理代码部署
+- 验证：Gateway 空跑一晚 → 进程在 ✅、ERROR=42（全是重复订阅警告）✅、9/9 币种 KLINE ✅
+- 关联待办：Gateway 稳定性 [完成]
+
+### 15:00 CREATE lab/trader_report.py（371 行）
+- 内容：交易解说员——9 种 Telegram 通知（开仓/SL/TTP激活/TTP更新/平仓/熔断/断线恢复/每小时摘要/信号原因分析）、8 种策略分析方法（_analyze_xxx）、urllib.request（零依赖）
+- 原因：实时了解每笔交易的状态和原因
+- 验证：py_compile ✅
+- 关联待办：Telegram 通知 [完成]
+
+### 15:00 EDIT lab/unified_trader.py — 9 处 report 接入
+- 内容：__init__ 初始化 TraderReport、开仓通知+信号分析、SL 挂单通知、TTP 激活/更新通知、平仓通知、熔断通知（num_positions 在循环前数好）、断线恢复平仓通知、每小时摘要
+- 原因：所有关键事件都推 Telegram
+- 验证：py_compile ✅、9 处 self.report 调用确认 ✅
+- 关联待办：Telegram 通知 [完成]
+
+### 16:00 CREATE lab/trader_bot.py（443 行）
+- 内容：Telegram /command bot——/status /pnl /trades /summary /win /help、Inline Keyboard 三入口（按策略类型/按时间周期/全部）、两层按钮、SQLite 查询、长轮询 getUpdates
+- 原因：手机上查策略状态和战绩
+- 验证：py_compile ✅、/help 响应 ✅、/status 显示策略 ✅
+- 关联待办：Telegram bot [完成]
+
+### 16:30 EDIT lab/src/exchange/bitmex/adapter.py — get_trade_fee
+- 内容：新增 get_trade_fee(order_id) 方法，用 filter={'orderID': order_id} 精确查询
+- 原因：按 order_id 查手续费，避免同币种多策略混淆
+- 验证：py_compile ✅
+- 关联待办：手续费记录 [完成]
+
+### 16:30 EDIT lab/limit_executor.py — order_id 返回
+- 内容：4 个成功返回点都加 'order_id' 字段
+- 原因：unified_trader 平仓后需要 order_id 查手续费
+- 验证：py_compile ✅、4 处返回点确认 ✅
+- 关联待办：手续费记录 [完成]
+
+### 16:30 EDIT lab/unified_trader.py — fee 记录
+- 内容：_close_position 和 _on_gateway_disconnect 两处 log_trade 从 fee=0 改为 adapter.get_trade_fee(order_id)
+- 原因：实际手续费写入 SQLite
+- 验证：py_compile ✅、grep "log_trade" 两处都用 fee 变量 ✅
+- 关联待办：手续费记录 [完成]
+
+### 17:00 EDIT lab/unified_trader.py — 幽灵仓位两层检查
+- 内容：_startup_recovery 步骤 6——第 1 层按 SL 订单状态（Filled=重置 idle）、第 2 层 coin 级别兜底；_close_position 的 no_position 快速重置
+- 原因：停机期间 SL 触发导致内部状态不同步；同币种多策略 coin 级别检查不精确
+- 验证：py_compile ✅、重启后 SOL 幽灵检测到并重置 ✅
+- 关联待办：幽灵仓位 [完成]
+
+### 17:30 EDIT lab/limit_executor.py — ReduceOnly 快速失败
+- 内容：检测到 "position is 0" 立即返回 {'success': False, 'reason': 'no_position'}
+- 原因：不浪费 5 次重试
+- 验证：py_compile ✅、SOL 幽灵不再产生 5 个弹窗 ✅
+- 关联待办：快速失败 [完成]
+
+### 18:00 EDIT lab/unified_trader.py — 价格 fallback
+- 内容：_execute() 和 _check_ttp() 两处，TICK 缓存空时用 kline close
+- 原因：ADA/LINK 5m 策略重启后 TICK 未到导致"无法获取价格"
+- 验证：ADA 5m 开仓成功（fallback 生效）✅
+- 关联待办：价格 fallback [完成]
+
+### 18:30 EDIT lab/limit_executor.py — 挂单偏移 2 tick
+- 内容：OFFSET_TICKS = 2 常量、BUY 从 bid +2tick（不越过 ask）、SELL 从 ask -2tick（不越过 bid）
+- 原因：提高 Maker 成交率，减少 Taker 兜底
+- 验证：py_compile ✅
+- 关联待办：挂单优化 [完成]
+
+### 18:30 EDIT lab/src/exchange/bitmex/adapter.py — get_tick_size
+- 内容：新增 get_tick_size(coin) 方法，带缓存
+- 原因：limit_executor 需要 tick_size 计算偏移
+- 验证：py_compile ✅
+- 关联待办：挂单优化 [完成]
+
+### 19:00 DEPLOY Vultr — 全量部署 + 21 策略上线
+- 内容：trader_report.py、trader_bot.py、unified_trader.py、limit_executor.py、adapter.py、strategy_runner.py、team_config.py、start_trading.sh、stop_trading.sh
+- 原因：21 策略全量上线
+- 验证：策略数量 21/21 ✅、VERIFY_MODE=OFF ✅、Telegram bot /help 响应 ✅
+- 关联待办：全量上线 [完成]
+
+### 19:30 EDIT lab/strategy_runner.py — Mirror 改 SMA(200)（紧急）
+- 内容：_flip_klines 从 max_price 改为 SMA(200) 翻转（2×sma200 - price）
+- 原因：max_price 在 250 根实盘窗口翻转后价格接近 0（AVAX $9.55→$0.068），指标全废。16 个 mirror 策略在用垃圾信号交易
+- 验证：AVAX 翻转 close 从 0.068 变为 9.598 ✅
+- 关联待办：Mirror 修复 [完成]
+
+### 20:00 CREATE lab/fix_fees.py（一次性脚本）
+- 内容：从 BitMEX execution/tradeHistory 拉手续费，补录 SQLite 里 fee=0 的 49 条记录
+- 原因：fee tracking 上线前的历史交易没有手续费
+- 验证：48/49 匹配成功 ✅、1 条未匹配（3/23 旧数据 API 范围外）
+- 关联待办：历史 fee 补录 [完成]
+
+### 20:00 DELETE lab/fix_fees.py
+- 内容：一次性脚本用完即删
+- 原因：RUL-005
+- 验证：本地+远端都已删 ✅
+- 关联待办：历史 fee 补录 [完成]
+
+### 20:30 EDIT lab/start_trading.sh + stop_trading.sh
+- 内容：加 trader_bot 启动/停止
+- 原因：Bot 随系统一起管理
+- 验证：start_trading.sh 输出 Bot PID ✅
+- 关联待办：脚本更新 [完成]
+
+### 21:00 ROLLBACK lab/src/data/feed_client.py — HEARTBEAT 去重
+- 内容：回滚 _heartbeat_subscribed 标志，恢复每次 subscribe 都订阅 HEARTBEAT
+- 原因：怀疑导致 Trader 收不到 K 线（最终确认不是这个原因，是重启太多次 ZMQ 残留）
+- 验证：py_compile ✅
+- 关联待办：feed_client [回滚]
+
+---
+
+## 2026-03-25~27（种子重跑）
+
+### EDIT lab/src/backtest/generate_seed.py — Mirror 改 SMA(200)
+- 内容：mirror_candles() 从 max_price 改为 SMA(200) 滚动翻转、SMA_MIRROR_PERIOD 常量、@see 改函数名、删 44.8x 注释噪音
+- 原因：回测和实盘翻转方法统一
+- 验证：py_compile ✅、与 strategy_runner._flip_klines 一致 ✅
+- 关联待办：种子 SMA(200) [完成]
+
+### EDIT lab/src/backtest/backtest.py — TTP 改 High/Low
+- 内容：TTP 检查从 close 改为每根 K 线两次调用——LONG: high 更新追踪 + low 检查触发、SHORT: low 更新追踪 + high 检查触发。第一次触发后跳过第二次（防 reset 后静默丢弃）。BUY/SELL 80 行 copy-paste 合并为统一 38 行
+- 原因：K 线内极值更准确反映盈亏
+- 验证：py_compile ✅、code-reviewer 审查通过 ✅
+- 关联待办：TTP High/Low [完成]
+
+### EDIT lab/src/backtest/generate_seed.py — Parquet 自动转换
+- 内容：main() 末尾调 sqlite_to_parquet.convert()（importlib.util 加载）
+- 原因：DuckDB 读取加速
+- 验证：py_compile ✅、import 路径验证 ✅
+- 关联待办：DuckDB 集成 [部分完成——自动转换有了，读取层未改]
+
+### EDIT K 线历史数据 — 裁剪到 4 年
+- 内容：12 币种所有周期删 2022-03-01 之前的数据，共删 547,232 根
+- 原因：老板要求只保留 4 年数据
+- 验证：全部文件最早 ≥ 2022-03-01 ✅
+- ⚠️ 注意：seed_v3.db（纯信号种子）未裁剪，数据从 2017 年开始。seed_v3_ttp.db 和 seed_v3_ttp_highlow.db 是新跑的已经是 4 年
+- 关联待办：数据裁剪 [K 线完成，seed_v3.db 未裁]
+
+### EDIT lab/src/core/strategy/strategy_renko.py — brick_size 下限
+- 内容：brick_size 加 MIN_BRICK_SIZE=1e-6 下限 + abs(close) 防负值 + while 循环加 MAX_BRICKS=10000 安全上限
+- 原因：SMA(200) 翻转后价格接近 0，brick_size≈0 导致无限循环，进程被 macOS 静默杀掉
+- 验证：py_compile ✅
+- 关联待办：renko 修复 [完成]
+
+### EDIT lab/src/backtest/generate_seed.py — --ttp-close 参数
+- 内容：新增 --ttp-close CLI 参数，设 TTP_HIGHLOW=False
+- 原因：直接跑 seed_v3_ttp 不用走 --matrix 跳过
+- 验证：py_compile ✅
+- 关联待办：种子 CLI [完成]
+
+---
+
+## 待办追踪
+
+### 进行中
+- [ ] 种子重跑：seed_v3_ttp_highlow.db mirror 轮在跑
+- [ ] 种子重跑：seed_v3_ttp.db mirror + 1m 补漏
+- [ ] 信号-执行解耦（TradeSimulator）——已设计已批准未实现
+- [ ] 1m 时间段拆分并行——已设计已批准未实现
+
+### 待做
+- [ ] generate_seed.py 指标预算 + Parquet 存储 → 分段读取不重算
+- [ ] seed_v3.db 旧数据处理（2017 年数据未裁）
+- [ ] sim_21_team.py 跑 5 个原版策略回测
+- [ ] sim_21_team.py 跑 SMA(200) 版本全量回测对比
+- [ ] 回测和实盘策略信号是否依赖持仓状态（解耦前提确认）
+- [ ] CHANGELOG 归档机制（>500 行自动归档）
+- [ ] CHECKPOINT.md 重建（等执事指示）
+- [ ] project_overview.md 重建（等执事指示）
+- [ ] wuji-auto-trading 子项目关系记录（等执事说明）
+
+### 已完成
+- [x] 三层代码审查（Gateway/Adapter/业务逻辑）
+- [x] adapter.py 清理（Maker 追价/DOGE/health_check/WS 分支）
+- [x] websocket.py 清理（orderbook/positions/orders/margin 全套）
+- [x] feed_client.py 清理（POS/BALANCE/_parse_minute）
+- [x] SL 可配置化（sl_pct）
+- [x] position_sizing.py 删除
+- [x] base.py 标注历史遗留
+- [x] strategy base.py 标注
+- [x] trader_report.py（9 种通知 + 8 种策略分析）
+- [x] trader_bot.py（/command + Inline Keyboard 三入口）
+- [x] 手续费按 order_id 记录
+- [x] 历史 fee 补录（48/49）
+- [x] 幽灵仓位两层检查
+- [x] ReduceOnly 快速失败
+- [x] 价格 fallback
+- [x] 挂单偏移 2 tick
+- [x] Mirror 改 SMA(200)（实盘 + 回测）
+- [x] TTP 改 High/Low（回测）
+- [x] K 线裁剪 4 年
+- [x] renko brick_size 下限
+- [x] 21 策略全量上线 → 全平（种子重跑中）
+- [x] 记忆文件整理（identity/origin/boss/shiwei guide）
+- [x] CHANGELOG 创建 + 历史合并
+- [x] backlog.md 项目级专属

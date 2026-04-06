@@ -1,0 +1,6 @@
+{
+  "name": "evo-cycle-guard",
+  "version": "1.0.0",
+  "description": "Pre-flight validator for proposed evolution cycles",
+  "main": "index.js"
+}

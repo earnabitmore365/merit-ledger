@@ -1,0 +1,9 @@
+{
+  "id": "20",
+  "subject": "验证（单笔手算 + BNB 全量对比 + 费用明细）",
+  "description": "补充测试1: Mirror 30组对比 + 补充测试2: 做多做空分拆 + 补充测试3: 费用明细5笔",
+  "activeForm": "验证测试",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

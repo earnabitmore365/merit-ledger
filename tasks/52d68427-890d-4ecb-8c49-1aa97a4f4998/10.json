@@ -1,0 +1,9 @@
+{
+  "id": "10",
+  "subject": "py_compile + 72小时回放测试",
+  "description": "语法检查所有文件 + 用历史数据回放验证切换/熔断/冷却",
+  "activeForm": "验证测试",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,23 @@
+---
+name: precompact_haiku_plan
+description: PreCompact hook 改用 Haiku 生成结构化摘要的方案（待实施）
+type: project
+---
+
+## PreCompact Haiku 摘要方案（待实施）
+
+**现状**：`pre_compact_save.py` 只做原始消息提取（最近 30 条），质量远不如结构化摘要。
+
+**改造方向**：PreCompact 触发时，调 `claude -p --model haiku` 生成结构化任务摘要（当前任务、已完成改动、待做、关键数据），保存到 compact_context.md。
+
+**关键设计**：
+- Spawn 新 Claude 实例（当前 context 已满，没空间总结）
+- 用 Haiku（最便宜最快）
+- 同步执行（压缩等 hook 完成再跑）
+- 延迟 ~几秒，成本极低
+
+**参考**：mvara-ai/precompact-hook（现成方案）
+
+**Why**：老板看了黑丝的 `/compact` 结构化指令，认为 30 条原始消息远不如一段结构化摘要有用。
+
+**How to apply**：等 subagent 并行执行跑通后再做（Phase 4）。改 pre_compact_save.py 加 claude -p 调用。

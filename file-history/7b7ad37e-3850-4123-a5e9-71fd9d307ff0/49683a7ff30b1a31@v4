@@ -1,0 +1,163 @@
+#!/bin/bash
+# evolve_rules.sh — Rules 自动进化循环
+#
+# 用法:
+#   chmod +x evolve_rules.sh
+#   ./evolve_rules.sh
+#
+# 停止:
+#   touch STOP
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+# MiniMax M2.7 配置（不消耗 Anthropic 配额）
+export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+export ANTHROPIC_API_KEY="$(cat ~/.claude/.minimax_key)"
+unset ANTHROPIC_AUTH_TOKEN 2>/dev/null || true
+
+if [ ! -f exam_runner.py ]; then
+    echo "❌ 找不到 exam_runner.py"
+    exit 1
+fi
+
+if [ ! -f rules.md ]; then
+    echo "❌ 找不到 rules.md"
+    exit 1
+fi
+
+# 初始化 git
+if [ ! -d .git ]; then
+    git init
+    git add -A
+    git commit -m "evolve: 初始快照"
+fi
+
+# 清理残留 STOP
+[ -f STOP ] && rm STOP
+
+echo "============================================================"
+echo "  Agent Evolution — Rules 自动进化"
+echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "  停止: touch STOP"
+echo "============================================================"
+echo ""
+
+# 基线考试
+echo "━━━ 基线考试 ━━━"
+python3 exam_runner.py
+BASELINE=$(python3 -c "import json; d=json.load(open('exam_result.json')); print(d['percentage'])")
+BEST=$BASELINE
+ROUND=0
+STALL=0
+
+echo ""
+echo "基线: ${BASELINE}%"
+echo ""
+
+while [ ! -f STOP ]; do
+    ROUND=$((ROUND + 1))
+    echo "━━━ Evolution Round $ROUND ━━━ $(date '+%H:%M:%S')"
+
+    # 备份
+    cp rules.md rules_backup.md
+
+    # 变异：找最弱的 rule，改措辞
+    claude -p "读 rules.md 和 exam_result.json。
+
+exam_result.json 的 rule_breakdown 显示每条 rule 的考试通过率。
+找到通过率最低的那条 rule。
+
+分析为什么考生读了这条 rule 还是违反——是措辞太模糊？太长？缺少具体行动指引？
+
+然后改写这条 rule 的【规则】正文部分。
+
+改写原则：
+- 用具体动作替代抽象描述（'先 grep 搜索全部引用' 比 '检查影响' 好）
+- 加入强制检查步骤（'做 X 之前，必须先完成 Y'）
+- 如果太长就拆成带编号的子步骤
+- 不改老板原话、不改元数据（日期/出现次数/优先级）
+- 不加新 rule，只改现有 rule 的措辞
+
+只改 rules.md 里这一条。改完说明：改了哪条、改了什么、为什么这样改。" \
+        --model MiniMax-M2.7-highspeed \
+        --allowedTools "Edit,Read" \
+        --max-turns 30
+
+    # 语法验证（rules.md 是 markdown 不需要 compile，但检查没被截断）
+    if [ ! -s rules.md ]; then
+        echo "⚠️  rules.md 为空，回滚"
+        cp rules_backup.md rules.md
+        continue
+    fi
+
+    # 重新考试
+    echo "重新考试..."
+    python3 exam_runner.py --score-only > /tmp/new_score.txt 2>/dev/null
+    NEW=$(cat /tmp/new_score.txt)
+
+    echo "分数: ${BEST}% → ${NEW}%"
+
+    IMPROVED=$(echo "$NEW > $BEST" | bc 2>/dev/null || echo "0")
+    if [ "$IMPROVED" -eq 1 ]; then
+        echo "✅ 改进！保留变异"
+        BEST=$NEW
+        STALL=0
+        DELTA=$(echo "$NEW - $BASELINE" | bc)
+        git add rules.md exam_result.json
+        git commit -m "evolve R${ROUND}: ${NEW}% (+${DELTA}% vs baseline)"
+    else
+        echo "❌ 没改进，回滚"
+        cp rules_backup.md rules.md
+        STALL=$((STALL + 1))
+    fi
+
+    rm -f rules_backup.md
+
+    # 每 10 轮跑测试集检查过拟合
+    if [ $((ROUND % 10)) -eq 0 ] && [ -f exam_test.json ]; then
+        echo ""
+        echo "━━━ 过拟合检查（测试集）━━━"
+        RULES_PATH=rules.md python3 exam_runner.py --test --score-only > /tmp/test_score.txt 2>/dev/null
+        TEST_SCORE=$(cat /tmp/test_score.txt)
+        echo "训练集: ${BEST}% | 测试集: ${TEST_SCORE}%"
+
+        # 训练集比测试集高 15% 以上 = 过拟合警告
+        GAP=$(echo "$BEST - $TEST_SCORE" | bc)
+        OVERFIT=$(echo "$GAP > 15" | bc 2>/dev/null || echo "0")
+        if [ "$OVERFIT" -eq 1 ]; then
+            echo "⚠️  过拟合警告！训练-测试差距 ${GAP}%"
+        fi
+    fi
+
+    # 收敛检测
+    if [ "$STALL" -ge 5 ]; then
+        echo ""
+        echo "🏁 连续 5 轮无改进，收敛停止"
+        touch STOP
+    fi
+
+    echo "━━━ Round $ROUND 完成 ━━━"
+    echo ""
+    sleep 2
+done
+
+# 最终报告
+echo ""
+echo "============================================================"
+echo "  进化结束"
+echo "  基线: ${BASELINE}% → 最终: ${BEST}%"
+echo "  提升: $(echo "$BEST - $BASELINE" | bc)%"
+echo "  轮数: $ROUND"
+echo ""
+echo "  改进记录:"
+git log --oneline --grep="evolve" | head -20
+echo ""
+
+# 最终测试集验证
+if [ -f exam_test.json ]; then
+    echo "  最终测试集验证:"
+    python3 exam_runner.py --test
+fi
+
+echo "============================================================"

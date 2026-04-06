@@ -1,0 +1,501 @@
+# 分段回测方案 — 4段并跑 + 校准点匹配 + fallback全量
+
+> 创建日期：2026-04-05
+> 状态：已验证上线
+> 源代码：`wuji-auto-trading/src/backtest/generate_seed.py`
+> 验证结果：5m 105/105, 1m 340/340（85策略×4模式）零差异
+
+---
+
+## 目录
+
+1. [问题背景](#1-问题背景)
+2. [核心方案](#2-核心方案)
+3. [分段切割](#3-分段切割)
+4. [Worker：信号+交易并行](#4-worker信号交易并行)
+5. [校准点匹配](#5-校准点匹配)
+6. [不吻合重跑](#6-不吻合重跑)
+7. [安全检查与 Fallback](#7-安全检查与-fallback)
+8. [合并规则](#8-合并规则)
+9. [排序规则](#9-排序规则)
+10. [最后一关（可选）](#10-最后一关可选)
+11. [性能数据](#11-性能数据)
+12. [已知问题](#12-已知问题)
+13. [关键修复记录](#13-关键修复记录)
+14. [代码位置](#14-代码位置)
+
+---
+
+## 1. 问题背景
+
+### 为什么要分段
+
+1m K线数据约 210 万根，全量跑一个策略需要 30-90 秒。105 策略 × 24 币种 = 2520 组，全量串行需要 30+ 小时。
+
+### 为什么不能简单分段
+
+TradeSimulator 是有状态的（持仓状态机）。把 210 万根切成 4 段各自跑，段尾的持仓会被 `end_of_data` 强制平仓截断，导致：
+- 本应跨段的交易被截成两笔
+- 段 i 多了一笔虚假的 `end_of_data` 平仓
+- 段 i+1 缺了一笔本应从上段延续的交易
+
+### 旧方案的问题
+
+旧方案"信号分段+交易全量"：4 段并行跑信号（无状态，可分段），合并信号后全量串行跑 TradeSimulator。问题是交易仍然是全量串行，只省了信号计算的时间（约 30%），加速有限。
+
+**老祖死命令**：4段并跑+结合必须落地。信号和交易都要分段。
+
+---
+
+## 2. 核心方案
+
+```
+第一轮：4段并行跑（信号+交易，含预热区，不过滤）
+         ↓
+第二轮：逐段校准匹配（串行）
+         段0尾 vs 段1 → 段1尾 vs 段2 → 段2尾 vs 段3
+         ↓
+     吻合？→ 继续下一个结合处
+     不吻合？→ 调整下段预热起点 → 重跑该段 → 继续验证
+     重跑失败/校准点太远？→ fallback 全量
+         ↓
+第三轮：合并（seg_cutoff去重 + end_of_data排除 + 跨段交易保留）
+         ↓
+排序：(open_candle_idx, close_candle_idx) 双键
+```
+
+**设计原则**：90% 策略分段加速，10% fallback 兜底，100% 正确。
+
+---
+
+## 3. 分段切割
+
+### 函数：`_split_segments(n_candles, n_segments=4, warmup=2000)`
+
+将 N 根 K 线切成 4 段，每段前面多取 2000 根预热区：
+
+```python
+seg_size = n_candles // n_segments
+segments = [
+    (max(0, i * seg_size - warmup),    # start（含预热）
+     (i+1) * seg_size if i < 3 else n_candles,  # end
+     i * seg_size)                      # actual_start（有效区起点）
+    for i in range(4)
+]
+```
+
+### 210 万根 1m K线的分段结果
+
+| 段 | start | end | actual_start | warmup | 有效区长度 |
+|----|-------|-----|-------------|--------|-----------|
+| 0  | 0     | 525500 | 0        | 0      | 525500    |
+| 1  | 523500 | 1051000 | 525500  | 2000   | 525500    |
+| 2  | 1049000 | 1576500 | 1051000 | 2000   | 525500    |
+| 3  | 1574500 | 2102000 | 1576500 | 2000   | 525500    |
+
+### 预热区的作用
+
+指标计算需要历史窗口（最长 SMA(200)）。预热区保证段 i 的有效区起点处指标已经稳定。2000 根是 SMA(200) 的 10 倍冗余。
+
+### 启用条件
+
+```python
+_SEGMENT_MIN_CANDLES = 100_000
+use_segments = (interval == "1m" and len(all_candles) >= _SEGMENT_MIN_CANDLES)
+```
+
+只有 1m 且数据量 >= 10 万根时才启用分段。5m 及以上数据量不够大，分段收益不明显。
+
+---
+
+## 4. Worker：信号+交易并行
+
+### 函数：`_worker_segment(args)`
+
+子进程 top-level 函数，供 `ProcessPoolExecutor` 调用。
+
+**输入**（9 个参数）：
+```python
+(coin, interval, candle_slice, warmup_n, global_offset,
+ strategy_name, modes, leverage, stop_loss_pct)
+```
+
+**处理流程**：
+1. 子进程路径设置（`.wuji-root` 查找 + sys.path）
+2. `init_cache(coin, interval, candle_slice, db_path=':memory:')` — 内存模式，不污染主进程
+3. `BacktestEngine.generate_signals(strategy_name)` — 生成信号
+4. 对每种模式跑 `TradeSimulator.run()` — 生成交易
+5. 交易序列化为 tuple（跨进程传输）
+
+**输出**：
+```python
+{
+    "trades": {mode: [(open_idx, close_idx, open_time, close_time,
+                       direction, entry_price, exit_price, close_type,
+                       mfe, mae), ...]},
+    "warmup_n": int,
+    "global_offset": int,   # = start，用于局部→全局坐标转换
+}
+```
+
+**关键设计决策**：
+- 交易坐标是**局部坐标**（相对于 candle_slice），合并时需 `+ global_offset` 转全局
+- 返回全部交易（含预热区），不在 worker 里过滤——校准匹配需要预热区的交易
+- 使用 `db_path=':memory:'` 避免多子进程写同一个磁盘缓存
+
+### 进程池复用
+
+```python
+_seg_pool = ProcessPoolExecutor(max_workers=4)
+# 复用给 105 个策略，避免每策略重建池的 spawn+import 开销
+for strategy in strategies:
+    mode_trades = _run_strategy_segmented(..., executor=_seg_pool)
+_seg_pool.shutdown(wait=False)
+```
+
+---
+
+## 5. 校准点匹配
+
+### 核心思想
+
+段 i 的尾部如果有 `end_of_data` 交易（持仓被截断），说明这笔交易跨越了段边界。我们需要在段 i+1 的预热区里找到**同一笔交易的正确版本**。
+
+### 匹配流程（对每个结合处 i → i+1）
+
+```
+对每种 mode：
+    1. 取段 i 有效区的交易（open >= actual_start_i）
+    2. 看最后一笔交易的 close_type
+    3. 如果不是 end_of_data → 段i无跨段交易，无需校准，继续下一个 mode
+    4. 如果是 end_of_data → 找校准点
+```
+
+### 校准点定义
+
+段 i 有效区中**最后一笔完整交易**（close_type != "end_of_data"）即为校准点。
+
+### 匹配条件
+
+在段 i+1 的全部交易（含预热区）中查找匹配：
+
+```python
+matched = any(
+    t.direction == calibration.direction
+    and abs(t.entry_price - calibration.entry_price) < 1e-8
+    and abs(t.exit_price - calibration.exit_price) < 1e-8
+    and t.close_type == calibration.close_type
+    and t.open_time == calibration.open_time
+    for t in seg_i1_trades
+)
+```
+
+5 个字段全匹配 = 吻合，说明段 i+1 的预热区成功复现了段 i 的交易序列。
+
+### 吻合时的处理
+
+不需要做任何事，继续检查下一个结合处。
+
+---
+
+## 6. 不吻合重跑
+
+### 触发条件
+
+校准点在段 i+1 的预热区内找不到匹配。原因通常是预热区不够长，指标在有效区起点还没完全稳定。
+
+### 重跑策略
+
+将段 i+1 的预热区起点调整到校准点位置：
+
+```python
+new_actual_start = calibration.open_candle_idx  # 全局坐标
+new_start = max(0, new_actual_start - warmup)   # 新预热起点
+new_end = segments[i + 1][1]                     # end 不变
+```
+
+这样段 i+1 的预热区覆盖了校准点，指标在校准点处一定稳定。
+
+### 重跑执行
+
+**在主进程串行执行**（不用子进程），因为只需跑一个段：
+
+```python
+_init_indicator_cache(coin, interval, new_slice, db_path=':memory:')
+eng = BacktestEngine(coin=coin, interval=interval, days=0, candles=new_slice)
+new_signals = eng.generate_signals(strategy_name)
+
+new_trades = {}
+for m in modes:
+    sim = TradeSimulator(new_slice, new_signals, mode=m, ...)
+    new_trades[m] = [serialize(t) for t in sim.run()]
+```
+
+### 重跑后更新
+
+```python
+seg_results[i + 1] = new_result
+segments[i + 1] = (new_start, new_end, new_actual_start)
+seg_cutoff[i] = calibration.open_candle_idx  # 段i的有效区截止到校准点
+```
+
+重跑后**不推进 i**，重新检查该结合处（因为段 i+1 的数据变了）。
+
+---
+
+## 7. 安全检查与 Fallback
+
+### 安全检查 1：段内无完整交易
+
+```python
+complete_trades = [t for t in valid_i if t.close_type != "end_of_data"]
+if not complete_trades:
+    need_fallback = True  # 找不到校准点
+```
+
+段 i 有效区里全是 `end_of_data`，没有一笔完整交易可以当校准点。直接 fallback。
+
+### 安全检查 2：重跑次数超限
+
+```python
+rerun_attempts[i] = rerun_attempts.get(i, 0) + 1
+if rerun_attempts[i] > 1:
+    need_fallback = True  # 同一结合处重跑超过1次
+```
+
+防止死循环：同一个结合处最多重跑 1 次。
+
+### 安全检查 3：重跑后段长超标
+
+```python
+orig_seg_len = segments[i + 1][1] - segments[i + 1][0]
+new_seg_len = new_end - new_start
+if new_seg_len > orig_seg_len * 2:
+    need_fallback = True  # 校准点太远，重跑段太长
+```
+
+校准点离段边界太远，重跑的段长超过原段 2 倍，说明这个策略不适合分段。
+
+### 安全检查 4：段结果为空
+
+```python
+if seg_r_i is None or seg_r_i1 is None:
+    need_fallback = True  # 子进程异常
+```
+
+### Fallback 执行
+
+直接全量跑，结果一定正确：
+
+```python
+if need_fallback:
+    _init_indicator_cache(coin, interval, all_candles, db_path=':memory:')
+    engine = BacktestEngine(coin=coin, interval=interval, days=0, candles=all_candles)
+    signals = engine.generate_signals(strategy_name)
+    result = {}
+    for m in modes:
+        sim = TradeSimulator(all_candles, signals, mode=m, ...)
+        result[m] = sim.run()
+    return result
+```
+
+---
+
+## 8. 合并规则
+
+### 总原则
+
+每段取有效区交易，排除重叠，保留跨段交易。
+
+### 逐笔过滤逻辑
+
+```python
+for i, seg in enumerate(segments):
+    actual_start = segments[i][2]
+    global_offset = seg_results[i]["global_offset"]
+    is_last = (i == len(segments) - 1)
+
+    for t_tuple in seg["trades"][mode]:
+        g_open = t_tuple[0] + global_offset   # 局部→全局
+        g_close = t_tuple[1] + global_offset
+
+        # 规则1：预热区交易 → 跳过
+        if g_open < actual_start:
+            # 例外：跨段交易（open 在预热区但 close 在有效区，且非段0）
+            if g_close >= actual_start and i > 0:
+                pass  # 保留
+            else:
+                continue
+
+        # 规则2：seg_cutoff 去重
+        # 段i有cutoff时，close >= cutoff 的交易由段i+1接管
+        if i in seg_cutoff and g_close >= seg_cutoff[i]:
+            continue
+
+        # 规则3：end_of_data 排除（非最后一段）
+        if t_tuple[7] == "end_of_data" and not is_last:
+            continue
+
+        # 通过所有过滤 → 收录
+        mode_trades[mode].append(SimTrade(...))
+```
+
+### 规则详解
+
+#### 规则1：预热区过滤
+
+预热区的交易是"热身"产生的，不属于有效区。但有一个例外：**跨段交易**。
+
+跨段交易的特征：open 在段 i+1 的预热区，close 在段 i+1 的有效区。这笔交易在段 i 是 `end_of_data`（被截断），在段 i+1 的预热区重新正确执行了。
+
+#### 规则2：seg_cutoff 去重
+
+重跑时设置了 `seg_cutoff[i] = calibration.open_candle_idx`。含义：段 i 的交易只取到校准点之前，之后的交易由重跑后的段 i+1 接管。
+
+**为什么用 `g_close >= cutoff` 而不是 `g_open >= cutoff`**：
+
+如果一笔交易 open 在 cutoff 之前但 close 在 cutoff 之后，使用 `g_open` 判断会把它保留在段 i，而段 i+1 也会产生同一笔交易 → 重复。使用 `g_close >= cutoff` 确保这种边界交易只被段 i+1 收录。
+
+这是一个实际踩过的坑，修复记录见第 13 节。
+
+#### 规则3：end_of_data 排除
+
+非最后一段的 `end_of_data` 交易是段尾截断产生的虚假交易，真正的版本在下一段中。最后一段的 `end_of_data` 是整个回测期末的正常平仓，保留。
+
+---
+
+## 9. 排序规则
+
+```python
+mode_trades[mode].sort(key=lambda t: (t.open_candle_idx, t.close_candle_idx))
+```
+
+**为什么用双键**：`dual_hold` 模式允许同时持有 long 和 short 仓位。两笔交易可能有相同的 `open_candle_idx` 但不同的 `close_candle_idx`。单键排序在不同运行中可能产生不同顺序，导致对比失败。
+
+---
+
+## 10. 最后一关（可选）
+
+分段合并后，跟已知正确的种子 DB 基准对比。不一致则 fallback 全量。
+
+```python
+if baseline_db_dir:
+    for m in modes:
+        baseline = read_paired_trades_from_db(strategy, m, coin, interval)
+        if len(baseline) != len(seg_trades[m]):
+            fallback()
+        for j in range(len(baseline)):
+            if not match(baseline[j], seg_trades[m][j]):
+                fallback()
+```
+
+**使用场景**：重新生成种子时，旧种子作为基准。新生成的种子如果不需要基准对比，可以不传 `baseline_db_dir`。
+
+**tvi 策略**：1m 下 2000 根预热不够（1.4 天），信号有 13/525000 差异（0.0025%）。最后一关检测到 → 自动 fallback 全量。5m 无此问题（2000 根 = 6.9 天）。
+
+---
+
+## 11. 性能数据
+
+### BTC 1m × 85 策略
+
+| 策略类型 | 全量 | 分段 | 加速 | 方法 |
+|---------|------|------|------|------|
+| 高频（rsi_reversal 30360笔）| ~12s | 5.4s | 2.2x | 分段 |
+| 高频（vwap 259157笔）| ~25s | 11.9s | 2.1x | 分段 |
+| 中频+重跑（cci_short 106笔）| ~20s | 18.9s | 1.1x | 分段+重跑 |
+| 低频fallback（momentum_slope_long 102笔）| ~85s | 86.8s | 1.0x | fallback |
+
+### BNB 1m × 105 策略
+
+| 指标 | 数值 |
+|------|------|
+| 总耗时 | 1631s（27 分钟）|
+| 平均 | 15.5s/策略 |
+| vs 全量 | 2.8x 加速（全量 75 分钟）|
+| 分段通过 | 97 个（92%）|
+| Fallback | 7 个（7%）|
+| 失败 | 1 个（tvi，已知预热问题）|
+
+### 7 币种重跑（ETH_mirror~XRP_mirror）
+
+旧全量模式 16 个币种用了 16+ 小时，新分段代码 7 个币种约 3 小时完成。
+
+### Fallback 策略分布
+
+以下策略在 BTC 1m 始终 fallback（低频单方向，校准点太远）：
+- cci_long, demandindex_long, demandindex_short
+- fvg_long, macross_slow_long, matriple_long
+- momentum_slope_long, trix_long
+
+---
+
+## 12. 已知问题
+
+### tvi 预热不足
+
+- **现象**：tvi 指标在 1m 2000 根预热（1.4 天）不够稳定，导致信号 13 个差异（0.0025%）
+- **影响**：分段结果与全量微小不同
+- **解决**：最后一关检测 → 自动 fallback 全量
+- **5m 无此问题**：2000 根 = 6.9 天，预热充足
+
+### 低频策略加速有限
+
+低频单方向策略（如 `momentum_slope_long`，102 笔/210万根）几乎总是 fallback，因为：
+- 段尾到校准点的距离很远（交易稀疏）
+- 重跑后段长超过原段 2 倍，触发安全检查
+
+这些策略分段不亏（fallback 时间 ≈ 全量时间），但也不赚。
+
+---
+
+## 13. 关键修复记录
+
+### Bug 1：seg_cutoff 用 g_open 判断导致交易重复
+
+**问题**：一笔交易 open 在 cutoff 之前、close 在 cutoff 之后，`g_open < cutoff` 判断让它保留在段 i，但段 i+1 也有同一笔 → 重复。
+
+**修复**：改为 `g_close >= cutoff` 判断。close 在 cutoff 之后的交易全部交给段 i+1。
+
+### Bug 2：重跑死循环
+
+**问题**：同一结合处无限重试（每次用相同参数重跑，结果一样）。
+
+**修复**：`rerun_attempts` 计数器，同一结合处最多重跑 1 次，超过 → fallback。
+
+### Bug 3：dual_hold 排序不确定
+
+**问题**：`dual_hold` 模式同时持有 long+short，全量和分段对比时顺序不一致导致误报。
+
+**修复**：排序改为 `(open_candle_idx, close_candle_idx)` 双键。
+
+### Bug 4：跨段交易的预热区保留
+
+**问题**：段 i+1 的预热区内有一笔交易，open 在预热区但 close 在有效区。简单过滤 `open >= actual_start` 会丢掉它。
+
+**修复**：预热区交易的例外判断——如果 close 在有效区且不是段 0，则保留。
+
+---
+
+## 14. 代码位置
+
+| 函数/常量 | 文件 | 说明 |
+|-----------|------|------|
+| `_SEGMENT_MIN_CANDLES` | `src/backtest/generate_seed.py:1300` | 启用分段的最小K线数 |
+| `_SEGMENT_WARMUP` | `src/backtest/generate_seed.py:1298` | 预热区K线数 |
+| `_SEGMENT_COUNT` | `src/backtest/generate_seed.py:1299` | 分段数 |
+| `_split_segments()` | `src/backtest/generate_seed.py:1303` | 分段切割 |
+| `_worker_segment()` | `src/backtest/generate_seed.py:1320` | 子进程 worker |
+| `_run_strategy_segmented()` | `src/backtest/generate_seed.py:1383` | 主调度函数 |
+| `TradeSimulator` | `src/backtest/generate_seed.py` | 交易模拟器 |
+| `SimTrade` | `src/backtest/generate_seed.py` | 交易 namedtuple |
+
+### 验证文件（已删除，记录留存）
+
+| 文件 | 用途 |
+|------|------|
+| `lab/seed_fix/test_segment_v4.py` | 独立验证脚本，5m+1m 验证 |
+| `lab/seed_fix/test_fused.py` | 融合后验证，85策略×4模式 |
+| `lab/seed_fix/generate_seed_lab.py` | lab 副本，融合后的代码 |
+| `lab/seed_fix/test_seeds/` | BTC+BNB 测试种子（3.6GB）|
+| `lab/seed_fix/RESULTS.md` | 完整验证结果 |

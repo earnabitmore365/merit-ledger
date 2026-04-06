@@ -1,0 +1,64 @@
+# 回测引擎机制 & 分析规矩
+
+> 最后更新：2026-03-16 白纱
+> 做回测分析时必读，防止踩基础性坑
+
+---
+
+## 回测引擎基本机制（必须烂熟于心，不要跑数据才想到）
+
+1. **平仓只有三种方式**：signal close（反向信号平仓）、stop_loss（10%止损，10x杠杆=价格反向1%）、end_of_data（数据结束强平）
+2. **永远单方向信号 = 永远不会 signal close**：alwayslong 永远 BUY → 永远不发 SELL → 多仓只能被止损或数据结束平仓。alwaysshort 同理。这类策略不是在"交易"，是在"持仓直到止损"。
+3. **高频信号 = 手续费杀手**：信号太碎（每根K线翻仓）→ 手续费+滑点吃掉一切。小周期（1m/5m/15m）尤其严重。
+4. **分析结果时先查最基本的**：平仓类型分布 → 信号方向分布 → 按周期拆分。不要上来就查 regime，先搞清楚策略到底在做什么。
+5. **汇报数据必须说清楚是什么维度的**：全周期合计 vs 单周期，全 regime vs 单 regime，不要混着报。老板问"这是什么周期的数据"说明漏了这个基本信息。
+
+---
+
+## 分析数据的规矩（老板反复强调，每次分析前必须对照）
+
+1. **按周期分开看**：专考是按周期分表的（gate2_1m ~ gate2_1d），每个周期独立。不要把10个周期混在一起算总R，那个数字没有意义。
+2. **不混币种**：13个币种不要加总成一个数。要看就按币种单独看，或者至少说清楚"这是XX币种/XX周期的数据"。
+3. **用已有的报告**：专考成绩单、组考结果、照妥镜结果都已经存在 gate_v41_report.db 里了。分析时从报告里查，不要自己从 paired_trades 重新算——已有的报告是经过验证的，自己算容易出错还容易漏细节。
+4. **README.md 是目录**：`lab/results/gate_v41/README.md` 写了31张表的完整说明和常用查询，分析前先看一眼，确认从哪张表查。
+5. **各周期有不同的计算方式**：初考X值（短期500/中期350/长期200）、门槛、评分标准都按周期浮动。这是老板反复强调的设计，不要忽略。
+
+---
+
+## 回测报告格式规范（给用户看的格式）
+
+**顶层结构：**
+```json
+{
+  "strategy": "策略名/币种/周期",
+  "config": { "coin", "interval", "leverage", "initial_balance", "bet_formula", "note" },
+  "balance": 最终余额（数字）,
+  "results": {
+    "total_trades", "winning_trades", "win_rate",
+    "final_balance", "peak_balance", "max_drawdown_pct",
+    "days_to_double", "sharpe"
+  },
+  "trades": [ ... ]
+}
+```
+
+**trades 每条记录（开仓行 + 平仓行成对出现）：**
+```json
+{ "time": "YYYY-MM-DD HH:MM", "order_type": "BUY/SELL", "price": ..., "capital": ..., "pnl": 0, "balance": 开仓时余额, "withdraw": 0 }
+{ "time": "YYYY-MM-DD HH:MM", "order_type": "CLOSE_BUY/CLOSE_SELL", "price": ..., "capital": ..., "pnl": 净盈亏, "balance": 平仓后余额, "withdraw": 0 }
+```
+
+**用户验证方式（自己对数）：**
+- 开仓行 pnl = 0（开仓时不产生盈亏）
+- 开仓余额 + pnl = 平仓余额
+- 平仓余额 = 下一笔开仓余额
+- pnl 已含 fee/funding/slippage（净盈亏）
+
+---
+
+## 关键数据路径
+
+- **唯一正确种子库**：`lab/reports/seed_v3.db`（35.8GB，TTP版：`seed_v3_ttp.db`）
+- **Gate 选拔报告**：`lab/results/gate_v41/gate_v41_report.db`（纯信号）
+- **TTP Gate 报告**：`lab/results/gate_v41_ttp/gate_v41_ttp_report.db`（TTP版，查比赛候选用这个）
+- 根目录 `reports/seed_report_v2_ttp_true.db` 是旧版备份，`reports/seed_v3.db` 是空壳 — **不要用**

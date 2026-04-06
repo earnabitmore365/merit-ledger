@@ -1,0 +1,256 @@
+# Trading MCP Server — 从 Feed Gateway 读数据
+
+## Context
+
+老板要给黑丝白纱装 MCP 工具，方便查账户余额、持仓、行情等。太极之前直接调 BitMEX API 的方案被老板否决——Feed Gateway 已经通过 WebSocket 实时缓存了这些数据，MCP 应该从 Gateway 读，不重复调 API，不需要额外的 BitMEX API Key。
+
+**现有基础设施**：
+- Feed Gateway（`lab/src/data/feed_gateway.py`）跑在 Nitro，通过 WebSocket 持续接收 K线/价格/持仓/余额
+- Gateway 已缓存：`_kline_windows`（K线）、`_last_price`（价格）、`_positions`（持仓）、`_margin`（余额）
+- Gateway 的 ZMQ REP 端口（5556）目前只支持 `KLINES` 请求
+- **websocket.py 已有 orderbook 增量维护逻辑**（`_handle_orderbook`，在 `_orderbook` dict 里维护 25 档深度）
+
+**之前已完成但需要重写的文件**：
+- `auto-trading/mcp_server.py` — 需要重写，从直接调 API 改为从 Gateway 读
+- `auto-trading/.mcp.json` — 保留不变
+
+---
+
+## WebSocket 频道全面调研（断线前讨论结果）
+
+### Gateway 现有 vs 建议新增
+
+| 频道 | 类型 | 说明 | Gateway 现在 | 决定 |
+|------|------|------|:-:|------|
+| `tradeBin1m/5m/1h/1d` | 公共 | K线 | ✅ 有 | 保持 |
+| `trade` | 公共 | 实时成交价 | ✅ 有 | 保持 |
+| `order` | 私有 | 订单状态 | ✅ 有 | 保持 |
+| `position` | 私有 | 持仓变动 | ✅ 有 | 保持 |
+| `margin` | 私有 | 余额/保证金 | ✅ 有 | 保持 |
+| **`instrument`** | 公共 | 合约信息（资金费率/标记价/24h高低/未平仓量） | ❌ | **加** |
+| **`orderBookL2_25`** | 公共 | 25档深度 | ❌ | **加** |
+| **`execution`** | 私有 | 账户成交记录 | ❌ | **加** |
+| ~~`funding`~~ | 公共 | 资金费率通知（每8小时推一次） | ❌ | **不加**（`instrument` 已含 `fundingRate`） |
+| `liquidation` | 公共 | 清算/爆仓（别人被强平的单，量大说明行情剧烈） | ❌ | **⏳ 待老板确认** |
+| `quote` | 公共 | 最优买卖价 | ❌ | 不用（orderBookL2_25 第1档就是 quote） |
+| `quoteBin*` | 公共 | 报价K线 | ❌ | 不用（tradeBin够了） |
+| `orderBookL2` | 公共 | 全量深度 | ❌ | 不用（数据量太大） |
+| `orderBook10` | 公共 | 10档深度 | ❌ | 不用（有25档了） |
+| `settlement` | 公共 | 结算信息 | ❌ | 不用 |
+| `insurance` | 公共 | 保险基金 | ❌ | 不用 |
+| `wallet` | 私有 | 钱包余额（充提币） | ❌ | 老板说不用 |
+| `transact` | 私有 | 充提币记录 | ❌ | 老板说不用 |
+| `affiliate` | 私有 | 推荐计划 | ❌ | 不用 |
+| `announcement` | 平台 | 站点公告 | ❌ | 不用 |
+| `chat` | 平台 | 聊天室 | ❌ | 不用 |
+| `connected` | 平台 | 在线人数 | ❌ | 不用 |
+| `publicNotifications` | 平台 | 系统通知 | ❌ | 不用 |
+
+**总结：确定加 3 个频道**（`instrument`、`orderBookL2_25`、`execution`），`liquidation` 待老板回复。
+
+### 自审修正记录
+
+1. **去掉 `funding` 频道**：`instrument` 频道实时推送 `fundingRate`/`indicativeFundingRate`，已包含资金费率信息。`funding` 频道只在每 8 小时结算时推一次，冗余。
+2. **orderbook 不需要 Gateway 自己实现增量维护**：`websocket.py:_handle_orderbook`（第 396 行）已有完整的 insert/update/delete 处理 + 排序。Gateway 的 `_on_ws_table` 回调在 websocket 处理完后才触发，可以直接从 `self._ws._orderbook[symbol]` 读完整快照。
+3. **不需要额外 BitMEX API Key**：方案改为从 Gateway 读，老板不需要去 BitMEX 建新 Key。
+4. **SSH 连接复用**：MCP Server 的 SSH 命令应加 ControlMaster，首次 ~2s 后续 ~0.1s。
+
+---
+
+## 两步走
+
+### 第一步：黑丝扩展 Gateway（项目代码，黑丝负责）
+
+**文件**：`lab/src/data/feed_gateway.py`
+
+#### A. 订阅新频道 — 加 3 个 WebSocket 频道
+
+现在 `start()` 里的订阅：
+- 公共频道（第 162-167 行 `topics` 列表）：`tradeBin{interval}:{sym}`、`trade:{sym}`
+- 私有频道（第 169 行 `subscribe_private()`）：`order`、`position`、`margin`
+
+**加公共频道**（加到 `topics` 列表）：
+- `instrument:{sym}` — 合约信息（含 fundingRate、markPrice、24h 高低、未平仓量）
+- `orderBookL2_25:{sym}` — 25 档深度
+
+**加私有频道**（`subscribe_private()` 后单独调 `self._ws.subscribe(['execution'])`）：
+- `execution` — 账户成交记录
+
+#### B. 新增缓存变量（`__init__` 中，约第 114 行附近）
+
+```python
+self._executions: deque = deque(maxlen=100)    # 最近 100 条成交
+self._instruments: Dict[str, dict] = {}         # 合约信息（按 coin）
+# orderbook 不需要单独缓存 — websocket.py 已在 _orderbook 里维护
+```
+
+#### C. 扩展 `_on_ws_table` handler（第 234 行附近）
+
+**execution**（跟 margin 类似，直接 append）：
+```python
+elif table == 'execution':
+    for row in rows:
+        with self._lock:
+            self._executions.append(row)
+        self._pub.send_string(f"EXEC {json.dumps(row)}")
+```
+
+**instrument**（跟 position 类似，partial/insert 替换，update 合并）：
+```python
+elif table == 'instrument':
+    for row in rows:
+        symbol = row.get('symbol', '')
+        coin = symbol_to_coin(symbol)
+        if coin:
+            with self._lock:
+                if action in ('partial', 'insert'):
+                    self._instruments[coin] = row
+                elif action == 'update':
+                    self._instruments.setdefault(coin, {}).update(row)
+                snapshot = self._instruments.get(coin)
+            if snapshot:
+                self._pub.send_string(f"INSTRUMENT.{coin} {json.dumps(snapshot)}")
+```
+
+**orderBookL2_25**（⚠️ 关键：不自己维护，读 websocket 已维护好的）：
+```python
+elif table == 'orderBookL2_25':
+    # websocket.py:_handle_orderbook 已做好增量维护（insert/update/delete + 排序）
+    # 这里只负责 PUB 广播，从 ws._orderbook 读完整快照
+    symbols_seen = set(row.get('symbol', '') for row in rows)
+    for symbol in symbols_seen:
+        coin = symbol_to_coin(symbol)
+        if coin and self._ws:
+            with self._ws._lock:
+                book = self._ws._orderbook.get(symbol, {})
+                snapshot = {
+                    'bids': list(book.get('bids', []))[:25],
+                    'asks': list(book.get('asks', []))[:25]
+                }
+            self._pub.send_string(f"ORDERBOOK.{coin} {json.dumps(snapshot)}")
+```
+
+#### D. 扩展 REP 协议 — `_rep_loop`（第 304 行）
+
+现在只处理 `KLINES`，其他返回 `[]`。改为 if/elif 链：
+
+| 请求格式 | 响应 | 数据来源 |
+|---------|------|---------|
+| `KLINES {coin} {interval}` | K线 JSON 数组 | `_kline_windows`（已有） |
+| `BALANCE` | 余额 JSON | `_margin` 缓存 |
+| `POSITIONS` | 持仓 JSON 数组 | `_positions` 缓存 |
+| `PRICE {coin}` | `{"price": float}` | `_last_price` 缓存 |
+| `EXECUTIONS [count]` | 成交 JSON 数组 | `_executions` 缓存 |
+| `INSTRUMENT {coin}` | 合约信息 JSON | `_instruments` 缓存 |
+| `ORDERBOOK {coin}` | `{"bids":[…], "asks":[…]}` | `self._ws._orderbook` |
+
+**ORDERBOOK 的 REP 处理**（读 websocket 的缓存，不读 Gateway 自己的）：
+```python
+elif parts[0] == 'ORDERBOOK' and len(parts) == 2:
+    coin = parts[1]
+    sym = SYMBOL_MAP.get(coin, f"{coin}USDT")
+    if self._ws:
+        with self._ws._lock:
+            book = self._ws._orderbook.get(sym, {})
+            data = {
+                'bids': list(book.get('bids', []))[:25],
+                'asks': list(book.get('asks', []))[:25]
+            }
+        self._rep.send_string(json.dumps(data))
+    else:
+        self._rep.send_string('{}')
+```
+
+#### E. Gateway 改完后重启
+
+黑丝在 Nitro 上重启 Gateway 进程，验证新频道数据正常接收。
+
+---
+
+### 第二步：太极写 MCP Server + 查询脚本
+
+等黑丝 Gateway 改完后执行。
+
+#### A. Nitro 端查询脚本
+
+**文件**（新建）：`lab/src/data/gw_query.py`
+
+轻量 CLI，跑在 Nitro 上：
+```bash
+python3 gw_query.py BALANCE
+python3 gw_query.py POSITIONS
+python3 gw_query.py PRICE SOL
+python3 gw_query.py KLINES ETH 1m
+python3 gw_query.py EXECUTIONS 20
+python3 gw_query.py INSTRUMENT BTC
+python3 gw_query.py ORDERBOOK ETH
+python3 gw_query.py FUNDING BTC
+```
+
+内部：连 localhost:5556 ZMQ REQ → 发请求 → 打印 JSON → 退出。
+
+#### B. 重写 MCP Server
+
+**文件**：`auto-trading/mcp_server.py`（覆盖之前直接调 API 的版本）
+
+**数据流**：
+```
+Claude Code (Mac)
+  → MCP Server (stdio, FastMCP)
+    → SSH 到 Nitro（ControlMaster 复用连接，首次 ~2s，后续 ~0.1s）
+      → python3 gw_query.py {请求}
+        → ZMQ REQ → Feed Gateway REP → 返回缓存数据
+```
+
+**SSH 连接复用**（MCP Server 启动时建立 ControlMaster）：
+```python
+SSH_CMD = "ssh -p 2222 -o ControlMaster=auto -o ControlPath=/tmp/mcp_ssh_%r@%h:%p -o ControlPersist=600 -o ConnectTimeout=10 pc_heisi_claude@localhost"
+```
+
+**6 个工具**（全部从 Gateway 读，零 API 调用）：
+
+| 工具 | gw_query 参数 | 说明 |
+|------|-------------|------|
+| `get_balance` | `BALANCE` | 余额/保证金/未实现盈亏 |
+| `get_positions` | `POSITIONS` | 所有持仓 |
+| `get_recent_trades(count)` | `EXECUTIONS {count}` | 最近成交记录 |
+| `get_market_data(coin)` | `PRICE {coin}` + `INSTRUMENT {coin}` | 价格+资金费率+24h数据 |
+| `get_klines(coin, interval)` | `KLINES {coin} {interval}` | K线数据 |
+| `get_orderbook(coin)` | `ORDERBOOK {coin}` | 25档深度 |
+
+---
+
+## 关键文件
+
+| 文件 | 操作 | 谁改 |
+|------|------|------|
+| `lab/src/data/feed_gateway.py` | 修改（加频道 + 扩展 REP） | 黑丝 |
+| `lab/src/data/gw_query.py` | 新建（Nitro 端查询 CLI） | 黑丝 |
+| `auto-trading/mcp_server.py` | 重写（SSH + gw_query） | 太极 |
+| `auto-trading/.mcp.json` | 保留不变 | — |
+
+## 已关闭
+
+- ~~liquidation 频道~~：老板说不加
+
+## 已确认（老板已拍板）
+
+- ✅ Gateway 归黑丝改（项目代码）
+- ✅ 不直接调 API，从 Gateway 读
+- ✅ 不需要额外 BitMEX API Key
+- ✅ `funding` 频道不单独加（`instrument` 已含资金费率）
+
+## 黑丝交付后太极验证
+
+1. SSH 到 Nitro → `python3 gw_query.py BALANCE` → 返回余额 JSON
+2. SSH 到 Nitro → `python3 gw_query.py POSITIONS` → 返回持仓 JSON
+3. SSH 到 Nitro → `python3 gw_query.py INSTRUMENT SOL` → 返回含 fundingRate 的 JSON
+4. SSH 到 Nitro → `python3 gw_query.py ORDERBOOK ETH` → 返回 bids/asks 数组
+5. 太极重写 `mcp_server.py` → 黑丝/白纱新会话 → `/mcp` → 看到 trading server
+6. 黑丝问"查一下余额" → MCP 自动调用 `get_balance` → 数据来自 Gateway 缓存
+
+---
+
+## Handoff 给黑丝（退出 Plan Mode 后写入 ~/.claude/handofffromtaiji.md）
+
+需要太极退出 Plan Mode 后执行。

@@ -78,7 +78,26 @@
       "Bash(tmux:*)",
       "Bash(brew install:*)",
       "Bash(git clone:*)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Read(//private/tmp/**)",
+      "Bash(/dev/null echo:*)",
+      "Bash(git mv:*)",
+      "Bash(mkdir -p \"/Volumes/BIWIN NV 7400 2TB/文档\")",
+      "Bash(cp /Users/allenbot/project/auto-trading/DUCKDB_REFERENCE.md \"/Volumes/BIWIN NV 7400 2TB/文档/duckdb.md\")",
+      "Bash(rm /Users/allenbot/project/auto-trading/DUCKDB_REFERENCE.md)",
+      "Read(//Volumes/BIWIN NV 7400 2TB/**)",
+      "Bash(diskutil rename:*)",
+      "Read(//Volumes/SSD-2TB/文档/**)",
+      "Read(//Volumes/SSD-2TB/project/auto-trading/lab/**)",
+      "Bash(pip3 show:*)",
+      "Bash(/usr/local/bin/python3 -c \"import anthropic; c = anthropic.Anthropic\\(\\); print\\('API key ✅'\\)\" 2>&1)",
+      "Read(//opt/homebrew/Cellar/python@3.12/3.12.13/Frameworks/Python.framework/Versions/3.12/bin/**)",
+      "Bash(python3.12 -c \"import anthropic; print\\(''✅''\\)\")",
+      "Bash(echo $ANTHROPIC_API_KEY)",
+      "Bash(cp ~/.claude/projects/-Users-allenbot/memory/wuji_identity.md ~/.claude/wuji-world/)",
+      "Bash(cp ~/.claude/projects/-Users-allenbot/memory/wuji_personality.md ~/.claude/wuji-world/)",
+      "Bash(cp ~/.claude/projects/-Users-allenbot/memory/naming_philosophy.md ~/.claude/wuji-world/)",
+      "Bash(cp ~/.claude/projects/-Users-allenbot/memory/secret_zhishi_identity.md ~/.claude/wuji-world/)"
     ]
   }
 }

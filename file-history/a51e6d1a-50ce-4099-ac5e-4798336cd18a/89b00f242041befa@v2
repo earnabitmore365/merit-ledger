@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""
+Mean Reversion Strategy — ±1.0% 阈值版
+
+与 mean_reversion（±0.5%）相同逻辑，阈值放宽到 ±1.0%。
+用于回测对比不同灵敏度的表现。
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+from core.strategy import Strategy, Signal, TradingSignal
+from core.indicator_cache import get_indicator
+
+
+@dataclass
+class MeanReversion10Config:
+    """Mean Reversion ±1.0% configuration"""
+    period: int = 20
+    buy_threshold: float = 0.990   # ±1.0%
+    sell_threshold: float = 1.010  # ±1.0%
+
+
+class MeanReversion10(Strategy):
+    """Mean Reversion ±1.0% trading strategy"""
+
+    REQUIRES = ['sma']
+
+    def __init__(self, exchange=None, config: Optional[MeanReversion10Config] = None):
+        self.exchange = exchange
+        self.config = config or MeanReversion10Config()
+
+    @property
+    def name(self) -> str:
+        return "mean_reversion_10"
+
+    def generate_signal(
+        self, coin: str, klines: List[Dict] = None
+    ) -> TradingSignal:
+        min_required = self.config.period
+        if not klines or len(klines) < min_required:
+            return TradingSignal(
+                signal=Signal.HOLD, confidence=0.0, coin=coin,
+                timestamp=klines[-1]["time"] if klines else 0,
+                metadata={"reason": "Insufficient klines"},
+            )
+
+        current = klines[-1]["close"]
+        sma_series = get_indicator('sma', period=self.config.period)
+        ma = sma_series[self.current_idx]
+
+        if current < ma * self.config.buy_threshold:
+            signal = Signal.BUY
+            trend = "oversold"
+        elif current > ma * self.config.sell_threshold:
+            signal = Signal.SELL
+            trend = "overbought"
+        else:
+            signal = Signal.HOLD
+            trend = "neutral"
+
+        return TradingSignal(
+            signal=signal, confidence=0.6, coin=coin,
+            timestamp=klines[-1]["time"],
+            metadata={"ma": ma, "current": current,
+                      "deviation": (current - ma) / ma, "trend": trend},
+        )

@@ -1,0 +1,9 @@
+{
+  "id": "7",
+  "subject": "重构 indicator_cache.py 支持双 namespace",
+  "description": "_context 改成 _contexts 字典，init_cache/get_indicator 加 namespace 参数，默认 normal 向后兼容",
+  "activeForm": "重构指标缓存",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

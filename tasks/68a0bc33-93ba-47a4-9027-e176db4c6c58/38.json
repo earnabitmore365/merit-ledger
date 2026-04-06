@@ -1,0 +1,9 @@
+{
+  "id": "38",
+  "subject": "Phase 1-2: kline_dispatcher.py",
+  "description": "REST预下载 + UTC对齐 + 1m→高周期聚合 + 分发",
+  "activeForm": "写kline_dispatcher",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

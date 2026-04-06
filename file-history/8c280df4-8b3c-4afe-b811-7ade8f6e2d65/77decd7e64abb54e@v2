@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""
+MiniMax 审查员 — GP 毕业生翻译 + 过拟合检测
+
+毕业后自动调用 MiniMax M2.7-highspeed：
+1. 把表达式树翻译成人话
+2. 判断是否过拟合（常数规则/单指标依赖/数据特定模式）
+3. 输出审查报告追加到毕业生 JSON
+
+零 Anthropic 配额消耗。
+"""
+
+import json
+import os
+import subprocess
+import sys
+
+
+def review_graduate(grad_filepath):
+    """审查单个毕业生，返回审查结果 dict"""
+    with open(grad_filepath) as f:
+        grad = json.load(f)
+
+    formula = grad.get("formula", "")
+    direction = grad.get("direction", "")
+    tree_size = grad.get("tree_size", 0)
+    tree_depth = grad.get("tree_depth", 0)
+    graduation = grad.get("graduation", {})
+
+    train_return = graduation.get("train_return", 0)
+    avg_test_return = graduation.get("avg_test_return", 0)
+    overfit_score = graduation.get("overfit_score", 0)
+    degradation = graduation.get("degradation", 0)
+    window_returns = graduation.get("window_returns", [])
+
+    dir_label = "做多" if direction == "long" else "做空"
+
+    prompt = f"""你是量化策略审查员。用中文。
+
+## 毕业生表达式树
+```
+{formula}
+```
+
+## 基本信息
+- 方向：{dir_label}
+- 节点数：{tree_size}，深度：{tree_depth}
+- 训练集收益：{train_return:+.4f}
+- 测试集平均收益：{avg_test_return:+.4f}
+- 衰减比：{degradation:.2f}x（测试/训练，越接近1越好）
+- 过拟合评分：{overfit_score:.2f}（0=无过拟合，1=完全过拟合）
+- 各窗口收益：{window_returns}
+
+## 任务
+
+### 1. 翻译（把表达式树翻译成交易者能懂的一句话）
+例："当 RSI(14) 低于 30 且成交量放大 2 倍时做多"
+
+### 2. 过拟合检测（判断以下风险）
+- 常数规则：表达式实际上总是输出同一个值（永远 true/false）
+- 单指标依赖：整棵树只用了一个指标，其他都是装饰
+- 数据特定：逻辑依赖特定价格区间，换数据就失效
+- 复杂度泡沫：节点很多但逻辑可以简化成几行
+
+### 3. 综合评价
+- 通过 / 警告 / 不推荐
+- 一句话理由
+
+严格输出 JSON：
+{{"translation": "一句话翻译", "overfit_risks": ["风险1", "风险2"], "verdict": "通过/警告/不推荐", "reason": "一句话理由"}}
+"""
+
+    try:
+        result = subprocess.run(
+            ["claude", "-p", prompt, "--model", "MiniMax-M2.7-highspeed", "--max-turns", "1"],
+            capture_output=True, text=True, timeout=30,
+            env={
+                **os.environ,
+                "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
+                "ANTHROPIC_API_KEY": open(os.path.expanduser("~/.claude/.minimax_key")).read().strip(),
+            },
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            text = result.stdout.strip()
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            if start >= 0 and end > start:
+                review = json.loads(text[start:end])
+                return review
+    except Exception as e:
+        return {"error": str(e)}
+
+    return {"error": "MiniMax 审查超时或失败"}
+
+
+def review_and_save(grad_filepath):
+    """审查毕业生并把结果写回 JSON"""
+    review = review_graduate(grad_filepath)
+
+    # 写回毕业生 JSON
+    with open(grad_filepath) as f:
+        grad = json.load(f)
+
+    grad["minimax_review"] = review
+
+    with open(grad_filepath, "w") as f:
+        json.dump(grad, f, indent=2, ensure_ascii=False)
+
+    # 输出结果
+    formula = grad.get("formula", "")[:80]
+    translation = review.get("translation", "")
+    verdict = review.get("verdict", "")
+    reason = review.get("reason", "")
+    risks = review.get("overfit_risks", [])
+
+    print(f"\n{'='*60}")
+    print(f"  MiniMax 审查报告")
+    print(f"{'='*60}")
+    print(f"  公式: {formula}...")
+    print(f"  翻译: {translation}")
+    print(f"  判定: {verdict}")
+    print(f"  理由: {reason}")
+    if risks:
+        print(f"  风险: {', '.join(risks)}")
+    print(f"{'='*60}\n")
+
+    return review
+
+
+# CLI
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("用法: python3 minimax_review.py <毕业生JSON路径>")
+        print("      python3 minimax_review.py graduates/  （批量审查目录下所有）")
+        sys.exit(1)
+
+    target = sys.argv[1]
+
+    if os.path.isdir(target):
+        files = sorted(f for f in os.listdir(target) if f.endswith(".json"))
+        print(f"批量审查 {len(files)} 个毕业生...")
+        for fname in files:
+            fpath = os.path.join(target, fname)
+            with open(fpath) as f:
+                grad = json.load(f)
+            if "minimax_review" in grad:
+                print(f"  ⏭️ {fname} 已审查，跳过")
+                continue
+            print(f"  📝 审查 {fname}...")
+            review_and_save(fpath)
+    else:
+        review_and_save(target)

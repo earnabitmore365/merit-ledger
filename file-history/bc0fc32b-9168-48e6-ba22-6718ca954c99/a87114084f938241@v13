@@ -1,0 +1,132 @@
+# Plan: build_seed_report.py 重做 — 按顾问 Handoff 完整实现
+
+## Context
+
+之前的 build_seed_report.py 是半成品：
+- paired_trades 只搬了 11 字段，没做 15 个逐笔后算（r_value/holding_bars/pnl 等）
+- combo_summary 只做了 14 个后算，漏了 14 个（drawdown_duration/recovery_factor/ulcer_index/skewness/kurtosis/tail_ratio 等）
+
+顾问给了完整的字段参考：`文档/种子/seed_report_field_reference.md`
+
+完整目标：
+- paired_trades：11 → 26 列（+15 逐笔后算）
+- combo_summary：10 基础 + 28 汇总后算 = 38 列
+
+## 参考文档
+
+`/Volumes/SSD-2TB/文档/种子/seed_report_field_reference.md`（完整字段清单+公式+用途）
+
+## 修改文件
+
+| 文件 | 操作 |
+|------|------|
+| `backtest/build_seed_report.py` | 重写：paired_trades 26列 + combo_summary 38列 |
+
+## paired_trades 逐笔后算（15 字段）
+
+导入 4 SQLite 后，给 paired_trades 加 15 列：
+
+| # | 字段 | 公式 |
+|---|------|------|
+| 12 | holding_bars | close_candle_idx - open_candle_idx |
+| 13 | holding_hours | holding_bars × bar_minutes / 60 |
+| 14 | capital | FIXED_BET_AMOUNT = 1.0 |
+| 15 | position_size | capital × LEVERAGE |
+| 16 | raw_pnl_pct | long: (exit-entry)/entry×leverage; short: (entry-exit)/entry×leverage |
+| 17 | fee | FEE_RATE × 2 = 0.0007 |
+| 18 | slippage_cost | SLIPPAGE_PCT × 2 = 0.0004 |
+| 19 | funding_count | holding_bars // bars_per_funding |
+| 20 | funding_cost | FUNDING_RATE_8H × funding_count |
+| 21 | pnl | raw_pnl_pct - fee - slippage - funding_cost |
+| 22 | pnl_amount | pnl × capital |
+| 23 | r_value | 同 pnl（历史兼容名） |
+| 24 | balance_after | INITIAL_CAPITAL + cumsum(pnl_amount) |
+| 25 | risk_reward_ratio | mfe / mae（mae=0 时 None） |
+| 26 | regime_at_open | JOIN regime_timeline |
+
+### 实现方式
+
+大部分用 DuckDB SQL 批量算（快），balance_after 和 regime_at_open 需要特殊处理：
+
+```sql
+-- 批量加列（除 balance_after 和 regime_at_open）
+ALTER TABLE paired_trades ADD COLUMN holding_bars INTEGER;
+ALTER TABLE paired_trades ADD COLUMN holding_hours DOUBLE;
+-- ... 其他列
+
+UPDATE paired_trades SET
+    holding_bars = close_candle_idx - open_candle_idx,
+    holding_hours = (close_candle_idx - open_candle_idx) * :bar_minutes / 60.0,
+    capital = 1.0,
+    position_size = 10.0,
+    raw_pnl_pct = CASE WHEN direction = 'long'
+        THEN (exit_price - entry_price) / NULLIF(entry_price, 0) * 10
+        ELSE (entry_price - exit_price) / NULLIF(entry_price, 0) * 10 END,
+    fee = 0.0007,
+    slippage_cost = 0.0004,
+    funding_count = (close_candle_idx - open_candle_idx) // :bpf,
+    funding_cost = 0.0001 * ((close_candle_idx - open_candle_idx) // :bpf),
+    pnl = raw_pnl_pct - 0.0007 - 0.0004 - 0.0001 * ((close_candle_idx - open_candle_idx) // :bpf),
+    pnl_amount = pnl * 1.0,
+    r_value = pnl,
+    risk_reward_ratio = CASE WHEN mae > 0 THEN mfe / mae ELSE NULL END
+WHERE interval = :interval;
+```
+
+注意：per-interval 执行（bars_per_funding 不同）。
+
+**坑 1：UPDATE 不能引用同语句刚 SET 的列**。DuckDB UPDATE SET 用的是更新前的值。必须拆两次：
+- 第一次：算 raw_pnl_pct、fee、slippage_cost、funding_count、funding_cost、holding_bars、holding_hours
+- 第二次：算 pnl（引用第一次算好的 raw_pnl_pct/fee/slippage/funding）、pnl_amount、r_value
+
+或者用 CASE 表达式把 raw_pnl_pct 公式内联到 pnl 里（一条 UPDATE 搞定但 SQL 更长）。
+
+**balance_after**：用 DuckDB 窗口函数，不用子查询（子查询在亿级数据极慢）：
+```sql
+UPDATE paired_trades SET balance_after = 500.0 +
+    SUM(pnl_amount) OVER (
+        PARTITION BY seed_type, combo_id
+        ORDER BY open_candle_idx, close_candle_idx
+        ROWS UNBOUNDED PRECEDING
+    )
+```
+
+**坑 2：DuckDB UPDATE SET 不支持窗口函数**。如果不支持，用 Python 逐 combo 算 balance_after。
+
+**regime_at_open**：从 SQLite 种子的 regime_timeline 表获取。导入 DuckDB 时 ATTACH 时一起导入 regime_timeline 表，然后 JOIN 推算。
+
+**skewness/kurtosis**：手算（3阶/4阶中心矩），不用 scipy。handoff 明确要求。
+
+## combo_summary 汇总后算（28 字段）
+
+从 paired_trades（已有 26 列）聚合，Python 逐 combo 算。
+
+新增的（之前漏的）：
+- drawdown_duration_bars：最长连续低于前高的 bar 数
+- recovery_factor：net_profit / max_drawdown
+- ulcer_index：sqrt(mean(drawdown²))
+- avg_win_pnl / avg_loss_pnl：平均单笔盈亏
+- best_trade_pnl / worst_trade_pnl：最大单笔盈亏
+- max_consecutive_wins / max_consecutive_losses
+- avg_holding_bars
+- skewness / kurtosis / tail_ratio
+
+## 验证
+
+1. wuji-verify 四件套
+2. 抽查 BTC 1m rsi_reversal：
+   - paired_trades 26 列全部非空
+   - r_value 跟 pnl 相等
+   - balance_after 单调递增+递减（不是全 0）
+   - regime_at_open 非 unknown
+3. combo_summary 新增字段非零检查
+4. Gate MC 干跑：读 seed_report.duckdb 的 r_value + holding_bars 不报错
+
+## 自审
+
+- **✅ 完整**：按顾问 handoff 文档完整覆盖 26 + 38 列
+- **✅ 真实**：公式来自参考文档，不猜
+- **✅ 有效**：DuckDB SQL 批量算 + Python 逐 combo 补充
+- **✅ 知常**：之前做半成品的根因是不知道完整清单又不问，这次有完整参考
+- **✅ 静制动**：先读完参考文档再出 plan，不急
+- **遗留**：无

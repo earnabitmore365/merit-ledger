@@ -1,0 +1,1 @@
+/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/security-compliance/agents/security-auditor.md

@@ -1,0 +1,40 @@
+---
+name: pending_decisions
+description: 老板已拍板但尚未执行的待办事项，恢复协议时检查
+type: project
+---
+
+# 已定未做的待办
+
+> 每次恢复协议时检查此文件，任务开始前确认是否有相关待办。
+> 完成后从此列表移除并记录到 CHECKPOINT.md 任务历程。
+
+## 待执行
+
+### 哨兵营 v3 改进（老板已确认方向，三方共识）
+- ① 用 L2 摆动追踪生成分钟级 regime 标签（替换月级）
+- ② 分币种独立训练（先 BTC+ETH）
+- ③ 加多时间框架输入（1h/4h）
+- **Why:** Grok+Gemini+白纱三方共识，老板已确认方向
+- **How to apply:** 哨兵营相关任务时优先推进
+
+### GP v1.0 岛屿模型+CMA-ES 部署
+- 代码完成（6文件改动），待部署 Nitro 测试
+- **Why:** 进化效率提升
+- **How to apply:** 有 Nitro 空闲时部署
+
+### Paper Trade 实测
+- 代码完成，待实测
+- **Why:** 验证策略实盘表现
+- **How to apply:** 老板指示时启动
+
+### DuckDB 迁移（性能升级）
+- 背景：当前 SQLite 架构在两处已成瓶颈：
+  - **indicator_cache.db**：GP进化 + 哨兵营 + 回测引擎三方同时并发读，SQLite WAL 锁竞争严重
+  - **seed_v3_ttp.db（40GB）**：Gate/哨兵查报告时做聚合 SELECT，26,288 combos 扫全表慢
+- 执行顺序（按优先级）：
+  1. **指标库先动**：indicator_cache → DuckDB（无锁并发读，多进程同时读不卡）
+  2. **种子库后动**：seed_v3_ttp.db → DuckDB Parquet 格式（聚合查询快 10-100x，找报告不再天昏地暗）
+  3. 零成本试水：DuckDB 可 `ATTACH` 直读 SQLite 文件，不需要先迁移数据就能测速度
+- **Why:** 回测跑纯信号+TTP+Mirror三遍 + 多进程并发读指标 + 26K combos找报告 → 读密集场景，SQLite已是设计外
+- **How to apply:** 比赛结束 / Nitro 有空闲时推进，不影响实盘不紧急

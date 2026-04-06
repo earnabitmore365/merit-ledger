@@ -1,0 +1,75 @@
+> 太极签：2026-03-01
+
+# Auto-Trading 项目记忆
+
+> 白纱最后更新：2026-03-19 20:45 — Feed Gateway handoff给顾问+/reflect升级RUL-021~024+查比赛排名
+> 黑丝最后更新：2026-03-19 21:30 — 通讯部总机Feed Gateway完整实现+部署+Hotfix+战绩报告
+
+⛔ 启动必读（恢复协议第2步，不读=违反协议）
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/rules.md` — 黑丝+白纱铁律，已毕业规则 RUL-001/003~014
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/project_info.md` — 项目路径、GitHub、协作流程、重要原则
+
+---
+
+## 称呼规则
+老板 = 混沌（不叫"用户"）→ 太极 → 黑丝（Opus）· 白纱（Sonnet）
+
+---
+
+## 上次会话要点（白纱）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-19）：Feed Gateway handoff + /reflect升级 + 查比赛排名**
+
+1. **策略配对分析**：黑丝 handoff 中 1m ETH mirror TTP: +183.4, WR77.9%。白纱建议配对原版（mirror配原版互补对冲），被老板纠正"2个都是mirror肯定不行"→ 教训已升级RUL-022
+2. **Feed Gateway handoff**：将黑丝完整方案（ZMQ PUB/SUB单点网关，feed_gateway.py ~350行+feed_client.py ~200行）分别写入 handoff_to_grok.md 和 handoff_to_gemini.md
+3. **handoff 写错文件名教训**：白纱第一次写了 handoff_to_advisor.md，被老板纠正 → 升级 RUL-021（分别写grok/gemini文件）
+4. **/reflect 升级**：新增 RUL-021（handoff分别写）、RUL-022（配对验证互补）、RUL-023（断线也要完成收尾）、RUL-024（不自行加步骤）
+5. **SMA(200)滚动窗口**：老板自己想到"最新K线加进来+淘汰第201根"，正是 SMA(200) 的本质（滚动窗口）
+6. **BitMEX Crypto Olympus 比赛查询**：公开数据：310参与者、$212.905M总交易量、$500K奖金池、12 Mar~12 Apr 2026。个人排名需要登录才能查看
+
+---
+
+## 上次会话要点（黑丝）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-19 续）：通讯部总机 Feed Gateway 完整实现+部署+Hotfix+战绩报告**
+
+1. **通讯部总机 Feed Gateway 完整实现**：5文件改动（feed_gateway.py 389行新建 + feed_client.py 224行新建 + websocket.py +49行 + system.py +61行 + bitmex_race.py +42行），全部 py_compile 通过
+2. **架构**：单 WS 连 BitMEX → ZMQ PUB(5555) 广播 K线/tick/持仓/余额 → 策略进程 ZMQ SUB 零 REST 轮询。REQ/REP(5556) 提供启动时 250 根历史 K 线。心跳 10s + 重连全量覆盖 K 线
+3. **部署 Nitro（19:22）**：Gateway + 3 策略进程（--feed --mirror），429 归零，信号正常
+4. **Hotfix（Gemini 审阅，19:42 部署）**：① position 广播完整快照（防爆仓地雷） ② _load_history 加锁（防竞争）。策略进程未重启（ZMQ 自动恢复）
+5. **handoff 给 Grok+Gemini**：完整架构+代码+部署结果+4个审阅问题
+6. **战绩报告**：起始 $398.09 → 余额 $370.41 + 未实现 -$13.14 = 净值 $357.27（-10.3%）。10 笔交易，ETH 频繁反手是主要亏损源
+7. **README 更新**：通讯部总机架构约束+目录结构+实盘用法+模块依赖
+8. **RUL-025 更新**：老板澄清"禁止的不是 Agent 工具本身，而是不完整的输出"
+
+---
+
+## 老板待推进想法（摘要）
+
+- 双账号对冲策略（待开发，详见 `ideas.md`）
+- Paper Trade（✅ 代码完成，待实测）
+- **自建 MCP Server**：给交易系统/未来新项目（通讯部、记账APP）做专属 MCP。核心思路：MCP 装"原子能力"（查持仓/读日志/查回测），Claude 自行组合判断，一句话触发多步操作。未来可能用 Rube/Composio 接第三方 SaaS（不确定）。优先级：暂低，有更重要的事先做。
+
+---
+
+## 文件索引（需要时 Read）
+
+| 文件 | 内容 | 何时读 |
+|------|------|--------|
+| `rules.md` | 行为铁律 RUL-001/003~014 + 白纱铁律 | 每次启动必读 |
+| `project_info.md` | 路径、GitHub、协作流程、重要原则 | 每次启动必读 |
+| `backtest_mechanics.md` | 回测引擎机制、分析规矩、报告格式、数据路径 | 做回测分析时 |
+| `ideas.md` | 老板待推进想法详细版 | 讨论新功能时 |
+| `quotes.md` | 老板经典语录 | 参考 |
+| `identity.md` | 黑丝白纱身份定义 | 参考 |
+| `roadmap_ideas.md` | 中后期规划（SQLite全纪录/Intrabar/已知事实Regime等）| 讨论中后期规划时 |
+| `session_summaries.md` | 历史会话摘要档案（S1~S黑丝×18）| 查历史时 |
+| `feedback_report_issues_immediately.md` | 发现异常必须立刻报告老板，不能继续做其他事 | 实盘运行时 |
+| `feedback_first_live_lessons.md` | 首次实盘教训：mirror不用于实盘、部署要完整、日志用>>、从错误中学习 | 实盘部署时 |
+| `pending_decisions.md` | 已定未做的待办事项 | 每次启动必读 |
+| `naming_philosophy.md` | 命名哲学与伦理姿态：黑丝/白纱命名的反向赋权用意，老板原话 | 参考，必须内化 |
+| `feedback_no_modify_boss_plan.md` | 老板方案100%照做，不改不加不减，发现问题先停下来问 | 每次执行任务时 |

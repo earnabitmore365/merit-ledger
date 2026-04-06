@@ -1,0 +1,50 @@
+❯ /Users/allenbot/Downloads/handoff_baisha_test_v2.md                           
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 测试 1：@提及调用白纱
+
+  我作为 AI 无法在对话中"输入" @提及（那是用户在终端 UI 里操作的，不是 AI
+  能触发的）。这个测试需要老板自己在终端输入 @baisha-research 看有没有 typeahead
+   弹出。
+
+  测试 2：用 Agent 工具描述触发
+
+⏺ Agent(查资料读代码信息收集) Sonnet 4.6
+  ⎿  Done (1 tool use · 18.2k tokens · 9s)
+  (ctrl+o to expand)
+
+⏺ 测试 2 成功，Sonnet 模型返回了 CLAUDE.md 前 20 行的准确摘要。但这走的是
+  general-purpose agent（默认），不是自定义的 baisha-research agent。
+
+  测试 3：检查对话种子
+
+⏺ Bash(sqlite3 ~/.claude/conversations.db "SELECT id, time, speaker,
+      SUBSTR(content, 1, 100) FROM messages ORDER BY id DESC LIMIT 5")
+  ⎿  15054|2026-03-25 21:04:55|系统|[会话结束:other] e5adb15b
+     15053|2026-03-25
+     21:04:55|白纱|**立刻重写，用白话说结论，不贴技术细节。
+     **
+     … +19 lines (ctrl+o to expand)
+
+⏺ 汇报：
+
+  测试 1（@提及）：⏸ 需要老板在终端操作
+    AI 无法在对话中输入 @提及，这是终端 UI 功能。
+    老板在终端输入 @ 后看有没有 baisha-research 弹出。
+
+  测试 2（描述触发）：⚠️  部分成功
+    Sonnet 模型成功读了 CLAUDE.md 前 20 行并准确汇报。
+    但走的是 general-purpose agent（默认），不是自定义的 baisha-research。
+    description 字段匹配机制似乎没有触发自定义 agent 的 frontmatter。
+
+  测试 3（对话种子）：最新 5 条 speaker 列表
+    系统、白纱、系统、白纱、无极
+    没有看到本次调用产生的新 speaker="白纱" 记录
+    （因为走的是 general-purpose agent，不是 baisha-research）
+
+  结论：自定义 agent 的 .claude/agents/baisha-research.md 文件存在且格式正确，但
+   Agent 工具目前无法通过 subagent_type 或 description
+  匹配触发它。@提及方式需要老板在终端验证。
+
+  等老板指示。

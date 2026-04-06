@@ -1,0 +1,175 @@
+# 21 策略并行交易系统 — 完整 Handoff
+
+> 黑丝，2026-03-23
+> 状态：**有 4 个致命/高危 bug 待修**，不能直接上线
+
+---
+
+## 一、系统架构
+
+```
+Feed Gateway (ZMQ) → FeedClient → KlineDispatcher → StrategyRunner ×21 → BitMEX Adapter
+      ↑                                                    ↓
+  BitMEX WS                                         LimitOrderExecutor
+  (9币种 1m K线)                                    (限价挂单+重试+转市价)
+```
+
+### 文件清单
+
+| 文件 | 职责 | 行数 |
+|------|------|------|
+| `unified_trader.py` | 主入口：初始化、主循环、开平仓、熔断、对账 | ~650 |
+| `strategy_runner.py` | 单策略：信号生成、SL/TP管理、TTP、序列化 | ~340 |
+| `limit_executor.py` | 限价单：PostOnly挂单→等10秒→撤单重挂→5次失败转市价 | ~195 |
+| `team_config.py` | 21策略配置表 + 注码公式 + 提款规则 | ~125 |
+| `trade_logger.py` | SQLite 交易记录 | ~100 |
+| `kline_dispatcher.py` | K线预加载 + 1m→多周期聚合 + 分发 | ~200 |
+| `src/exchange/bitmex/adapter.py` | BitMEX REST/WS 适配器 | ~1030 |
+| `src/data/feed_gateway.py` | WS数据网关（ZMQ PUB 广播） | ~200 |
+| `src/data/feed_client.py` | ZMQ SUB 客户端 | ~150 |
+| `start_trading.sh` | 启动脚本 | 20 |
+| `stop_trading.sh` | 停止脚本 | 6 |
+
+---
+
+## 二、当前状态
+
+- **Vultr Tokyo**：进程已停，零持仓
+- **BitMEX 主网**：余额 $2,068.70（从 $2,100 亏了 $31 手续费）
+- **测试网**：$99,999.50，已验证全链路通过
+- **.env**：`BITMEX_TESTNET=false`（主网模式）
+- **VERIFY_MODE=True, VERIFY_COUNT=4**（只跑 4 个 1m 策略）
+
+---
+
+## 三、已修的 Bug
+
+| # | Bug | 修复 | 验证 |
+|---|-----|------|------|
+| 1 | adapter Maker 追价循环与 LimitOrderExecutor 打架 | `_place_maker_order` 改为单次挂单不追价 | ✅ |
+| 2 | get_price=0 时开仓 | 已有 price<=0 检查跳过 | ✅ |
+| 3 | SL/TP 缺少 `strategy` 字段 → "Invalid strategy: null" | `place_stop_loss/place_take_profit` 加 `strategy` | ✅ 测试网验证 |
+| 4 | Hedge Mode 设杠杆报错 | 自动检测 Hedge Mode，跳过 API 调用 | ✅ |
+| 5 | `position_size` 存合约数不是币数量 | `unified_trader.py` 赋值时 `/ u2p` 转回币数量 | ✅ 实盘验证 |
+| 6 | `limit_executor.py` `cumQty` 是合约数 | 读取时 `/ u2p` 转回币数量 | ✅ |
+| 7 | `_calc_pnl` 公式错误 | `(exit-entry)/entry*size` → `(exit-entry)*size` | ✅ |
+| 8 | nohup 启动命令易错 | 写了 start_trading.sh / stop_trading.sh | ✅ |
+| 9 | 分步验证没做 | 加了 VERIFY_MODE / get_active_team() | ✅ |
+
+---
+
+## 四、未修的 Bug（4个致命/高危）
+
+### P0-1：启动恢复 `_startup_recovery` 单位混淆（致命）
+
+**文件**：`unified_trader.py` 行 432-436
+
+```python
+filled = float(pending[0].get('cumQty', 0) or 0)  # 合约数！
+remaining = strategy._target_size - filled           # 币数量 - 合约数 = 垃圾值
+```
+
+**后果**：启动时如果有 pending_open 订单部分成交，补齐量会算出天文数字，可能开出几千倍的仓位。
+
+**修复**：`filled` 要除以 `u2p` 转回币数量。
+
+---
+
+### P0-2：启动时不清理交易所旧仓位（致命）
+
+**文件**：`unified_trader.py` `_startup_recovery()`
+
+**问题**：如果 `strategy_states.json` 被清除（或不存在），但交易所还有旧仓位，启动后策略认为自己是 idle（无仓位），会在旧仓位上面叠加新仓位。
+
+**今天就踩了这个坑**：清了 JSON 重启，旧的 SOL/XRP 仓位没平，新策略又开了一笔，导致仓位叠加到 $2000。
+
+**修复方案**：启动时先查交易所仓位，如果有旧仓位但 JSON 里是 idle，应该：
+- 选项 A：市价平掉旧仓位（安全但损失手续费）
+- 选项 B：把旧仓位同步到内部状态（复杂但不损失）
+
+---
+
+### P1-1：平仓失败时 state 改成 'active'（高危）
+
+**文件**：`unified_trader.py` 行 323
+
+```python
+else:
+    strategy.state = 'active'  # 注释说"保持 pending_close"，但代码改成了 active
+```
+
+**后果**：平仓失败后，策略变回 active，可能产生新信号导致状态混乱。
+
+**修复**：改成 `strategy.state = 'pending_close'`，但同时需要在主循环中对 pending_close 状态增加重试逻辑。
+
+---
+
+### P1-2：价格检查在 state 改变之后（高危）
+
+**文件**：`unified_trader.py` 行 238-247
+
+当前顺序：
+```python
+# 1. 余额检查
+# 2. state = 'pending_open'  ← 先改了 state
+# 3. price = get_price()     ← 后检查价格
+# 4. if price <= 0: return   ← 返回但 state 已经是 pending_open 了！
+```
+
+**后果**：价格为 0 时返回，但 state 留在 'pending_open'，后续 K 线来了策略被跳过（因为 pending 状态），变成僵尸。
+
+**修复**：价格检查移到 state 改变之前。
+
+---
+
+## 五、中低优先级问题
+
+| # | 问题 | 文件 | 影响 |
+|---|------|------|------|
+| P2-1 | TTP 持续无价格时不报警 | unified_trader.py:345 | TTP 可能失效 |
+| P2-2 | 熔断 availableMargin 单位启发式判断 | unified_trader.py:365 | 边界值误判 |
+| P2-3 | 价格数据源不一致（ZMQ vs REST） | unified_trader.py | TTP 计算偏差 |
+| P3-1 | 启停脚本硬编码路径 | start_trading.sh | 部署灵活性 |
+
+---
+
+## 六、注码公式
+
+```python
+# team_config.py
+margin = get_bet_amount(available)  # 保证金，$100~$1000
+nominal = margin * 10               # 名义 = 保证金 × 10x 杠杆
+coin_qty = nominal / current_price   # 币数量
+```
+
+$2,100 余额 → 每策略 $100 保证金 × 10x = $1,000 名义。已用 test_bet_calc.py 验证通过。
+
+---
+
+## 七、提款规则
+
+```python
+WITHDRAW_THRESHOLD = 27000  # 余额 >= $27,000 触发
+WITHDRAW_AMOUNT = 6000      # 每次提 $6,000
+OPERATING_RESERVE = 21000   # 留 $21,000 运营
+```
+
+---
+
+## 八、Hedge Mode 要点
+
+- 同一币种可同时持多空
+- 每个订单必须带 `strategy: 'Long'` 或 `'Short'`
+- `execInst: 'Close'`（不用 ReduceOnly）
+- 杠杆 API 不可用，需在网页设置
+- 9 币种已设 10x 全仓
+
+---
+
+## 九、修复建议（优先级排序）
+
+1. **先修 P0-1 和 P0-2**（启动恢复的单位混淆 + 旧仓位清理）
+2. **再修 P1-1 和 P1-2**（平仓失败状态 + 价格检查顺序）
+3. 修完后在**测试网**验证全部场景
+4. 验证通过后再部署主网
+5. 部署时确保交易所**零持仓、零挂单**再启动

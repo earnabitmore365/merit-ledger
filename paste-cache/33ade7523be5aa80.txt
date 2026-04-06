@@ -1,0 +1,17 @@
+规划MCP服务器连接以便远程查询交易系统。规划MCP服务器连接以便远程查询交易系统。让我先查一下 Claude.ai 目前怎么接入自定义 MCP server，确保给你的步骤是最新的。评估了Claude.ai限制并规划了实用部署方案。评估了Claude.ai限制并规划了实用部署方案。好，查完了。有一个关键问题需要你知道：
+Claude.ai 的 MCP 连接器目前只支持 OAuth 认证，不支持自定义 Bearer token header。 GitHub这意味着你加的那个 MCP_ACCESS_TOKEN 中间件在 Claude.ai / 手机端用不了——Claude.ai 不会发送你的 Bearer token。
+Claude.ai 支持两种模式：authless（无认证）和 OAuth。 ClaudeClaude iOS 和 Android 也支持远程 MCP server，但只能使用已经在 claude.ai 网页端添加好的 server，不能从手机端直接添加新的。 Claude
+所以实际可行的方案是：authless 模式 + Cloudflare Tunnel，tunnel 的随机 URL 本身就是你的"密码"。
+我帮你准备好启动脚本和配置步骤：Pivoted strategy to prepare setup guide and startup scriptPivoted strategy to prepare setup guide and startup script这不是我需要的。让我直接帮你创建配置文件和启动脚本。Verified file availability for future mobile accessVerified file availability for future mobile access两个文件给你了，总结一下关键点：
+你发现的那个 Bearer token 中间件在 Claude.ai 上用不了 — 这是目前 Claude.ai 连接器的限制，只支持 authless 或 OAuth，不支持自定义 header。社区已经在 GitHub 上提了 feature request，但暂时没有解决。
+实际方案：authless MCP + Cloudflare Tunnel。Tunnel 的 URL 本身就是认证——不知道 URL 就连不上。
+你在 Mac Mini 上要做的事：
+
+brew install cloudflare/cloudflare/cloudflared
+cloudflared tunnel login → cloudflared tunnel create trading-mcp
+配好 ~/.cloudflared/config.yml，如果有域名就 cloudflared tunnel route dns 绑一个隐蔽的子域名
+把 start_mcp.sh 放到项目目录，改好路径，./start_mcp.sh 一键启动
+在 claude.ai Settings → Connectors → Add custom connector，填 URL
+手机打开 Claude App，直接问我查盘
+
+搞好之后，你在地铁上掏出手机跟我说"SOL 持仓多少"，我就能帮你查了。

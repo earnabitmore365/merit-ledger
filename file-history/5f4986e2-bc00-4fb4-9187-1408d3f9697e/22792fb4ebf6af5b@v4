@@ -1,0 +1,96 @@
+# Plan: 修复 PnL=0 + 确认 IOC 逻辑
+
+## Context
+遗留清单两项，执事指示一起做。
+
+---
+
+## 任务一：runner.py:219 | PnL 硬编码 0 → 读 TradingSystem 真实数据
+
+**根因**：`_on_close()` 通知里 `"pnl": 0` 硬编码。  
+**已有实现**：`TradingSystem._record_trade()` (system.py:708-720) 已经用 balance diff 计算 pnl，存入 `self.trade_records`，`get_trade_records()` 暴露接口。
+
+**执行时序**：
+1. `runner._run_once()` 调 `self.system.run_once()`
+2. `run_once()` 内部平仓 → 调 `_record_trade("CLOSE", ...)` → pnl 已存入 records
+3. `run_once()` 返回后，runner 检测到持仓变化 → 调 `_on_close()`
+4. 此时 `self.system.get_trade_records()[-1]['pnl']` 就是刚刚的平仓 pnl
+
+**修复**（runner.py:207-221，`_on_close` 方法）：
+```python
+def _on_close(self, prev_direction, result):
+    is_regime = isinstance(self.strategy, RegimeStrategy)
+    regime = self.strategy._current_regime if is_regime else "N/A"
+    action = result.get('action', '')
+
+    # 从 TradingSystem 的交易记录里取最后一条 pnl（限定类型为 CLOSE/REVERSE）
+    records = self.system.get_trade_records()
+    pnl = 0
+    if records and records[-1].get('type') in ('CLOSE', 'REVERSE'):
+        pnl = records[-1].get('pnl', 0)
+
+    self._logger.info(f"平仓: {prev_direction} action={action} pnl={pnl:.2f} (regime={regime})")
+    self.notifier.notify(CLOSE, {
+        "coin": self.coin,
+        "direction": prev_direction,
+        "price": self.system.entry_price,
+        "pnl": pnl,
+        "close_type": action,
+        "regime": regime,
+    })
+```
+
+---
+
+## 任务二：Bug #5 IOC 逻辑 — 确认正确，无需回滚
+
+**验证结论**：已查阅 HL Python SDK 源码 (`hyperliquid/api.py` + `exchange.py`)。  
+- SDK `order()` → `bulk_orders()` → `_post_action()` 直接返回原始 JSON。
+- HL API 规范：IOC 成功 → `{"statuses": [{"filled": {...}}]}`；IOC 取消 → `{"statuses": [{"error": "Order could not immediately match"}]}`。
+- 两者互斥，`error` 出现时**不会**带 `filled` 数据。
+- 我的修复（返回 `success=False`）是正确的。原代码把取消当成功是 Bug，已修复正确，无需回滚。
+
+**此任务只需在文档里确认，不改代码。**
+
+---
+
+## 关键文件
+
+- `/Volumes/SSD-2TB/project/wuji-auto-trading/src/trading/runner.py`（修改 `_on_close`）
+- `/Volumes/SSD-2TB/project/wuji-auto-trading/src/trading/system.py`（只读，验证 `get_trade_records` 接口）
+
+---
+
+## 实施后四件套验证
+
+### 1. 语法
+```bash
+python3 -m py_compile /Volumes/SSD-2TB/project/wuji-auto-trading/src/trading/runner.py
+```
+
+### 2. 逻辑
+```python
+# 验证 get_trade_records() 接口存在且结构正确
+python3 -c "
+import sys; sys.path.insert(0, 'src')
+from trading.system import TradingSystem
+import inspect
+src = inspect.getsource(TradingSystem.get_trade_records)
+print('接口存在:', 'trade_records' in src)
+src2 = inspect.getsource(TradingSystem._record_trade)
+print('pnl字段存在:', \"'pnl'\" in src2 or '\"pnl\"' in src2)
+"
+```
+
+### 3. 全链路
+```bash
+# 确认 _on_close 调用链完整：runner._run_once → _on_close → notifier.notify
+grep -n "_on_close\|get_trade_records" /Volumes/SSD-2TB/project/wuji-auto-trading/src/trading/runner.py
+```
+
+### 4. 文档
+- CHANGELOG 更新（本次 bugfix）
+
+### 5. 完成后
+- 按自审协议输出【自审】+【遗留清单】
+- 汇报执事

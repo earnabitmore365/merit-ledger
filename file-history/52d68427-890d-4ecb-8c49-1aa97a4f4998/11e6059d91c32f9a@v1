@@ -1,0 +1,337 @@
+import ccxt
+import json
+import time
+import os
+
+# ============================================================
+# download_latest_coins_2.0.py — 统一数据下载脚本（断点续传）
+#
+# 特性：
+# - 所有周期统一管理（1m/5m/15m/1h）
+# - 断点续传：检测已有数据，只补缺的部分
+# - 支持现货 + 币本位合约（delivery）
+# - 方便加新币、新交易对
+# ============================================================
+
+# === 交易所实例 ===
+# 现货/USDT（默认）
+exchange_spot = ccxt.binance({
+    'enableRateLimit': True,
+})
+
+# 币本位永续合约（delivery）
+exchange_delivery = ccxt.binance({
+    'enableRateLimit': True,
+    'options': {
+        'defaultType': 'delivery',
+    },
+})
+
+# === 币种配置 ===
+# USDT 计价（现货，主力）
+USDT_PAIRS = [
+    'BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'BNB/USDT', 'SOL/USDT',
+    'ADA/USDT', 'TRX/USDT', 'AVAX/USDT', 'LINK/USDT', 'DOT/USDT',
+]
+
+# 币本位永续合约（ccxt symbol 格式: BASE/USD:BASE）
+COIN_MARGINED_PAIRS = [
+    'BTC/USD:BTC',   # BTCUSD_PERP
+    'ETH/USD:ETH',   # ETHUSD_PERP
+    'BNB/USD:BNB',   # BNBUSD_PERP
+]
+
+# === 下载目标 ===
+DOWNLOAD_CONFIG = {
+    '1m':  2102000,  # ≈4年（有多少拉多少）
+    '5m':   420000,  # ≈4年
+    '15m':  140000,  # ≈4年
+    '1h':    70000,  # ≈8年
+}
+
+TIMEFRAME_MS = {
+    '1m':  60 * 1000,
+    '5m':  5 * 60 * 1000,
+    '15m': 15 * 60 * 1000,
+    '1h':  60 * 60 * 1000,
+}
+
+# 不同周期的请求间隔（秒），1m 数据量大用更短间隔
+SLEEP_SECONDS = {
+    '1m':  0.5,
+    '5m':  1.0,
+    '15m': 1.0,
+    '1h':  1.0,
+}
+
+# 进度打印频率（每N批打印一次）
+PRINT_EVERY = {
+    '1m':  50,
+    '5m':  20,
+    '15m': 20,
+    '1h':  20,
+}
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'src', 'backtest', 'data', 'historical')
+
+
+def get_save_dir(symbol):
+    """根据交易对决定保存目录名
+    BTC/USDT     → BTC
+    BTC/USD:BTC  → BTC_COIN（币本位）
+    ETH/BTC      → ETH_BTC
+    """
+    if ':' in symbol:
+        # 币本位合约: BTC/USD:BTC → BTC_COIN
+        base = symbol.split('/')[0]
+        return f"{base}_COIN"
+    base, quote = symbol.split('/')
+    if quote == 'USDT':
+        return base
+    else:
+        return f"{base}_{quote}"
+
+
+def get_exchange(symbol):
+    """根据交易对选择正确的交易所实例"""
+    if ':' in symbol:
+        return exchange_delivery
+    return exchange_spot
+
+
+def load_existing(file_path):
+    """加载已有数据，返回列表（按时间排序）和时间戳集合"""
+    if not os.path.exists(file_path):
+        return [], set()
+
+    try:
+        with open(file_path) as f:
+            data = json.load(f)
+        if not data:
+            return [], set()
+
+        timestamps = {d['time'] for d in data}
+        data.sort(key=lambda d: d['time'])
+        return data, timestamps
+    except (json.JSONDecodeError, KeyError):
+        print(f"  ⚠ 已有文件损坏，将重新下载")
+        return [], set()
+
+
+def download_coin(symbol, timeframe, target_rows):
+    """下载单个币种单个周期的数据，支持断点续传"""
+    ex = get_exchange(symbol)
+    coin_dir_name = get_save_dir(symbol)
+    coin_dir = os.path.join(DATA_DIR, coin_dir_name)
+    os.makedirs(coin_dir, exist_ok=True)
+    out_file = os.path.join(coin_dir, f'{timeframe}.json')
+
+    ms_per_bar = TIMEFRAME_MS[timeframe]
+    sleep_sec = SLEEP_SECONDS[timeframe]
+    print_every = PRINT_EVERY[timeframe]
+
+    # 断点续传：加载已有数据
+    existing_data, existing_ts = load_existing(out_file)
+    existing_count = len(existing_data)
+
+    if existing_count >= target_rows:
+        oldest_date = ex.iso8601(existing_data[0]['time'])[:10]
+        newest_date = ex.iso8601(existing_data[-1]['time'])[:10]
+        print(f"  ✓ 已有 {existing_count:,} 条 ({oldest_date} ~ {newest_date})，已达目标，跳过")
+        return existing_count, True
+
+    if existing_count > 0:
+        oldest_date = ex.iso8601(existing_data[0]['time'])[:10]
+        newest_date = ex.iso8601(existing_data[-1]['time'])[:10]
+        need = target_rows - existing_count
+        print(f"  断点续传：已有 {existing_count:,} 条 ({oldest_date} ~ {newest_date})，还需 ~{need:,} 条")
+
+    # 收集所有新下载的 OHLCV
+    all_ohlcv = []
+
+    # === 第一步：往前补（从已有最早时间点继续往前） ===
+    if existing_count > 0:
+        oldest_timestamp = existing_data[0]['time']
+    else:
+        # 没有已有数据，先拉最新 1000 条
+        try:
+            latest_ohlcv = ex.fetch_ohlcv(symbol, timeframe, limit=1000)
+            if not latest_ohlcv:
+                print(f"  无数据")
+                return 0, False
+
+            all_ohlcv.extend(latest_ohlcv)
+            oldest_timestamp = latest_ohlcv[0][0]
+            print(f"  初始 {len(latest_ohlcv)} 条，最早: {ex.iso8601(oldest_timestamp)[:10]}")
+        except Exception as e:
+            print(f"  初始拉取出错: {e}")
+            return 0, False
+
+    # 向前分页拉
+    total_have = existing_count + len(all_ohlcv)
+    batch_count = 0
+
+    while total_have < target_rows:
+        try:
+            since = oldest_timestamp - (1000 * ms_per_bar)
+            ohlcv = ex.fetch_ohlcv(symbol, timeframe, since=since, limit=1000)
+
+            if not ohlcv:
+                print(f"  没有更早的数据了")
+                break
+
+            new_data = [c for c in ohlcv if c[0] < oldest_timestamp]
+            if not new_data:
+                print(f"  没有更早的数据了")
+                break
+
+            all_ohlcv = new_data + all_ohlcv
+            oldest_timestamp = new_data[0][0]
+            total_have = existing_count + len(all_ohlcv)
+
+            batch_count += 1
+            if batch_count % print_every == 0:
+                pct = total_have * 100 / target_rows
+                print(f"  {total_have:>8,} / {target_rows:,} ({pct:.0f}%) 最早: {ex.iso8601(oldest_timestamp)[:10]}")
+
+            time.sleep(sleep_sec)
+
+        except Exception as e:
+            print(f"  拉取出错: {e}")
+            time.sleep(5)
+            continue
+
+    # === 第二步：往后补（从已有最新时间点拉到当前） ===
+    if existing_count > 0:
+        newest_timestamp = existing_data[-1]['time']
+        now_ms = int(time.time() * 1000)
+
+        if now_ms - newest_timestamp > ms_per_bar * 2:
+            print(f"  补充最新数据...")
+            since_forward = newest_timestamp + ms_per_bar
+
+            while since_forward < now_ms:
+                try:
+                    ohlcv = ex.fetch_ohlcv(symbol, timeframe, since=since_forward, limit=1000)
+                    if not ohlcv:
+                        break
+
+                    new_forward = [c for c in ohlcv if c[0] > newest_timestamp]
+                    if not new_forward:
+                        break
+
+                    all_ohlcv.extend(new_forward)
+                    since_forward = new_forward[-1][0] + ms_per_bar
+                    newest_timestamp = new_forward[-1][0]
+
+                    time.sleep(sleep_sec)
+                except Exception as e:
+                    print(f"  补充最新数据出错: {e}")
+                    time.sleep(5)
+                    continue
+
+    if not all_ohlcv and not existing_data:
+        print(f"  没有拉到任何数据")
+        return 0, False
+
+    # === 合并：已有 + 新下载，去重排序 ===
+    merged = {}
+
+    # 先放已有数据
+    for d in existing_data:
+        merged[d['time']] = d
+
+    # 再放新数据（OHLCV 格式转换）
+    for c in all_ohlcv:
+        ts = c[0]
+        if ts not in merged:
+            merged[ts] = {
+                "time": ts,
+                "open": c[1],
+                "high": c[2],
+                "low": c[3],
+                "close": c[4],
+                "volume": c[5],
+            }
+
+    # 排序
+    result = sorted(merged.values(), key=lambda d: d['time'])
+
+    # 只保留最近 target_rows 条
+    if len(result) > target_rows:
+        result = result[-target_rows:]
+
+    # 保存
+    with open(out_file, 'w') as f:
+        json.dump(result, f, separators=(',', ':'))
+
+    first_date = ex.iso8601(result[0]['time'])[:10]
+    last_date = ex.iso8601(result[-1]['time'])[:10]
+    added = len(result) - existing_count
+
+    print(f"  ✓ {len(result):,} 条 → {coin_dir_name}/{timeframe}.json ({first_date} ~ {last_date}) [+{added:,} 新]")
+    return len(result), True
+
+
+def main():
+    all_pairs = USDT_PAIRS + COIN_MARGINED_PAIRS
+
+    print("=" * 60)
+    print("download_latest_coins 2.0 — 断点续传 · 统一下载")
+    print("=" * 60)
+    print(f"  USDT 交易对: {len(USDT_PAIRS)} 个")
+    print(f"  币本位合约: {len(COIN_MARGINED_PAIRS)} 个")
+    print(f"  总计: {len(all_pairs)} 个")
+    for tf, rows in DOWNLOAD_CONFIG.items():
+        days = rows * TIMEFRAME_MS[tf] / 1000 / 86400
+        print(f"  {tf}: {rows:>9,} 条 (≈{days:.0f}天 / {days/365:.1f}年)")
+    print(f"  保存: {DATA_DIR}")
+    print()
+
+    # 加载 delivery 市场（币本位需要）
+    if COIN_MARGINED_PAIRS:
+        print("加载币本位合约市场...")
+        exchange_delivery.load_markets()
+        print("  ✓ 完成")
+        print()
+
+    total_files = 0
+    summary = {}
+    start_all = time.time()
+
+    for timeframe, target_rows in DOWNLOAD_CONFIG.items():
+        print(f"\n{'='*40} {timeframe} {'='*40}")
+
+        for symbol in all_pairs:
+            coin_name = get_save_dir(symbol)
+            print(f"\n--- {coin_name} {timeframe} (目标 {target_rows:,} 条) ---")
+
+            count, success = download_coin(symbol, timeframe, target_rows)
+
+            if success:
+                total_files += 1
+                summary.setdefault(coin_name, []).append(f"{timeframe}:{count:,}")
+            else:
+                summary.setdefault(coin_name, []).append(f"{timeframe}:失败")
+
+            elapsed = time.time() - start_all
+            if elapsed > 60:
+                print(f"  [累计 {elapsed/60:.1f} 分钟]")
+
+        print()
+
+    # 汇总
+    elapsed_total = time.time() - start_all
+    print(f"\n{'='*60}")
+    print(f"下载完成! 耗时 {elapsed_total/60:.1f} 分钟")
+    print(f"  交易对: {len(summary)} 个")
+    print(f"  文件: {total_files} 个")
+    print()
+    for coin in sorted(summary):
+        tfs = ', '.join(summary[coin])
+        print(f"  {coin}: {tfs}")
+
+
+if __name__ == '__main__':
+    main()

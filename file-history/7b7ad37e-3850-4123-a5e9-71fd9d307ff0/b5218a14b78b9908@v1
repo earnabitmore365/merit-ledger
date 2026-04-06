@@ -1,0 +1,660 @@
+#!/usr/bin/env python3
+"""
+GP 调度器 v1.2 — 空缺优先轮转
+
+@see lab/README.md#architecture — 指标统一调用 indicator_cache
+
+只跑没有策略覆盖的格子（自动检查 Gate冠军 + GP毕业生）。
+出了毕业生的格子下一圈自动跳过，算力集中给空缺。
+
+用法:
+  python3 gp_scheduler.py                    # 默认 4 工位，每组合 3 轮
+  python3 gp_scheduler.py --workers 2        # 2 工位（内存紧张时）
+  python3 gp_scheduler.py --rounds 5         # 每组合 5 轮
+  python3 gp_scheduler.py --cycles 1         # 只跑 1 圈后退出
+
+停止:
+  touch STOP_SCHEDULER    # 不再派新任务，等运行中的完成
+  Ctrl+C                  # 同上
+
+硬件参考（24GB RAM）:
+  1m 数据 ~4.5GB/进程，30m ~4GB，1h ~3GB，其余 ≤250MB
+"""
+import subprocess
+import os
+import sys
+import time
+import json
+import argparse
+from datetime import datetime, timedelta
+from collections import Counter
+
+# === 配置 ===
+
+# 每个周期的预估内存用量 (MB)
+MEMORY_ESTIMATES = {
+    '1m': 800, '5m': 250, '15m': 120, '30m': 100,
+    '1h': 80, '2h': 60, '4h': 50, '8h': 40, '12h': 40, '1d': 30,
+}
+
+TOTAL_MEMORY_MB = 22000   # 可用内存上限 (24GB - OS/哨兵开销)
+MIN_CANDLES = 1000         # 低于此 K 线数的组合自动跳过
+STATUS_INTERVAL = 30       # 状态刷新间隔（秒）
+
+# 周期排序（小周期数据少、轮次快，先跑）
+INTERVAL_ORDER = {
+    '1d': 0, '12h': 1, '8h': 2, '4h': 3, '2h': 4,
+    '1h': 5, '30m': 6, '15m': 7, '5m': 8, '1m': 9,
+}
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LAB_DIR = os.path.dirname(BASE_DIR)
+DATA_DIR = os.path.join(LAB_DIR, 'src', 'backtest', 'data', 'historical')
+RESULTS_DIR = os.path.join(BASE_DIR, 'results')
+LOG_DIR = os.path.join(RESULTS_DIR, 'scheduler_logs')
+STOP_FILE = os.path.join(BASE_DIR, 'STOP_SCHEDULER')
+EVOLVE_SCRIPT = os.path.join(BASE_DIR, 'gp_evolve.py')
+GATE_DB = os.path.join(LAB_DIR, 'results', 'gate_v41', 'gate_v41_report.db')
+
+SCAN_CACHE_FILE = os.path.join(RESULTS_DIR, 'scan_cache.json')
+
+
+def _load_scan_cache():
+    """读取扫描缓存 {path: {size, mtime, n_candles}}"""
+    if not os.path.exists(SCAN_CACHE_FILE):
+        return {}
+    try:
+        with open(SCAN_CACHE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_scan_cache(cache):
+    os.makedirs(os.path.dirname(SCAN_CACHE_FILE), exist_ok=True)
+    with open(SCAN_CACHE_FILE, 'w') as f:
+        json.dump(cache, f)
+
+
+def _load_covered_cells():
+    """加载已有策略覆盖的格子（Gate冠军 + GP毕业生），返回 {(coin, interval)} 集合"""
+    covered = set()
+
+    # 1. Gate 冠军
+    if os.path.exists(GATE_DB):
+        try:
+            import sqlite3
+            db = sqlite3.connect(GATE_DB)
+            rows = db.execute('SELECT DISTINCT coin, interval FROM champions').fetchall()
+            db.close()
+            for coin, interval in rows:
+                covered.add((coin, interval))
+        except Exception as e:
+            print(f"  ⚠️ Gate DB 读取失败: {e}")
+
+    # 2. GP 毕业生
+    grad_base = os.path.join(BASE_DIR, 'graduates')
+    if os.path.isdir(grad_base):
+        for sub in os.listdir(grad_base):
+            sub_path = os.path.join(grad_base, sub)
+            if not os.path.isdir(sub_path):
+                continue
+            has_grad = any(f.endswith('.json') for f in os.listdir(sub_path))
+            if has_grad:
+                parts = sub.rsplit('_', 1)
+                if len(parts) == 2:
+                    covered.add((parts[0], parts[1]))
+
+    return covered
+
+
+def scan_tasks(min_candles=MIN_CANDLES):
+    """扫描数据目录，返回可用的 (coin, interval, n_candles) 列表。
+    用文件大小+mtime做缓存key，数据没变不重新读文件。"""
+    cache = _load_scan_cache()
+    tasks = []
+    skipped = []
+    cache_hits = 0
+    cache_misses = 0
+
+    for coin in sorted(os.listdir(DATA_DIR)):
+        coin_dir = os.path.join(DATA_DIR, coin)
+        if not os.path.isdir(coin_dir):
+            continue
+        for f in sorted(os.listdir(coin_dir)):
+            if not f.endswith('.json'):
+                continue
+            interval = f.replace('.json', '')
+            path = os.path.join(coin_dir, f)
+            stat = os.stat(path)
+            file_key = path
+            cached = cache.get(file_key)
+
+            if (cached and
+                    cached.get('size') == stat.st_size and
+                    cached.get('mtime') == stat.st_mtime):
+                n = cached['n_candles']
+                cache_hits += 1
+            else:
+                with open(path) as fh:
+                    n = len(json.load(fh))
+                cache[file_key] = {
+                    'size': stat.st_size,
+                    'mtime': stat.st_mtime,
+                    'n_candles': n,
+                }
+                cache_misses += 1
+
+            if n >= min_candles:
+                tasks.append((coin, interval, n))
+            else:
+                skipped.append((coin, interval, n))
+
+    _save_scan_cache(cache)
+
+    if cache_misses > 0:
+        print(f"  缓存: {cache_hits} 命中, {cache_misses} 重新扫描")
+    else:
+        print(f"  缓存: 全部命中 ({cache_hits} 个), 秒启动")
+
+    tasks.sort(key=lambda t: (INTERVAL_ORDER.get(t[1], 5), t[0]))
+    return tasks, skipped
+
+
+def _fmt_duration(seconds):
+    """秒数 → 人类可读的时长"""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    elif seconds < 3600:
+        return f"{seconds/60:.1f}m"
+    else:
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        return f"{h}h{m:02d}m"
+
+
+def _parse_jsonl_tail(coin, interval, n_lines=10):
+    """从 forever_log JSONL 读取最近 N 条记录"""
+    log_path = os.path.join(RESULTS_DIR, f'forever_log_{coin}_{interval}.jsonl')
+    if not os.path.exists(log_path):
+        return []
+    try:
+        with open(log_path) as f:
+            lines = f.readlines()
+        entries = []
+        for line in lines[-n_lines:]:
+            line = line.strip()
+            if line:
+                entries.append(json.loads(line))
+        return entries
+    except Exception:
+        return []
+
+
+def _parse_hall_of_fame(coin, interval):
+    """读取精英库状态"""
+    hof_path = os.path.join(RESULTS_DIR, f'hall_of_fame_{coin}_{interval}.json')
+    if not os.path.exists(hof_path):
+        return 0, 0, None, None
+    try:
+        with open(hof_path) as f:
+            hof = json.load(f)
+        n_long = len(hof.get('long', []))
+        n_short = len(hof.get('short', []))
+        best_l = hof['long'][0]['score'] if hof.get('long') else None
+        best_s = hof['short'][0]['score'] if hof.get('short') else None
+        return n_long, n_short, best_l, best_s
+    except Exception:
+        return 0, 0, None, None
+
+
+def _count_graduates(coin, interval):
+    """计算已有毕业生数量"""
+    grad_dir = os.path.join(BASE_DIR, 'graduates', f'{coin}_{interval}')
+    if not os.path.isdir(grad_dir):
+        return 0
+    return len([f for f in os.listdir(grad_dir) if f.endswith('.json')])
+
+
+class Scheduler:
+    def __init__(self, max_workers, rounds_per_task, max_cycles, use_islands=False):
+        self.max_workers = max_workers
+        self.rounds = rounds_per_task
+        self.max_cycles = max_cycles  # 0=无限
+        self.use_islands = use_islands
+        self.workers = {}       # pid → {proc, coin, interval, mem_mb, start_time, log_file, n_candles}
+        self.used_memory = 0
+        self.stopping = False
+        self.completed = 0      # 本圈完成数
+        self.failed = 0         # 本圈失败数
+        self.cycle = 0          # 当前第几圈
+
+        # 全局统计（跨圈累计）
+        self.total_graduates = 0    # 本次调度器运行期间产出的毕业生
+        self.total_rounds = 0       # 本次运行的总轮次
+        self.total_tasks_done = 0   # 总完成任务数
+        self.start_time = time.time()
+        self.last_status_time = 0
+
+        os.makedirs(LOG_DIR, exist_ok=True)
+
+    def _mem_for(self, interval):
+        return MEMORY_ESTIMATES.get(interval, 100)
+
+    def _can_fit(self, interval):
+        return self.used_memory + self._mem_for(interval) <= TOTAL_MEMORY_MB
+
+    def _start_worker(self, coin, interval, n_candles):
+        """启动一个 gp_evolve.py 子进程"""
+        mem = self._mem_for(interval)
+        log_path = os.path.join(LOG_DIR, f'{coin}_{interval}.log')
+        log_f = open(log_path, 'a')
+
+        log_f.write(f"\n{'='*60}\n")
+        log_f.write(f"调度器启动: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"圈{self.cycle} | {self.rounds}轮\n")
+        log_f.write(f"{'='*60}\n")
+        log_f.flush()
+
+        cmd = [
+            sys.executable, EVOLVE_SCRIPT,
+            '--coin', coin, '--interval', interval,
+            '--rounds', str(self.rounds),
+        ]
+        if self.use_islands:
+            cmd.append('--islands')
+
+        proc = subprocess.Popen(
+            cmd, stdout=log_f, stderr=subprocess.STDOUT,
+            cwd=BASE_DIR
+        )
+
+        # 记录启动前的毕业生数量，用于对比
+        grad_before = _count_graduates(coin, interval)
+
+        self.workers[proc.pid] = {
+            'proc': proc, 'coin': coin, 'interval': interval,
+            'mem_mb': mem, 'start_time': time.time(), 'log_file': log_f,
+            'n_candles': n_candles, 'grad_before': grad_before,
+        }
+        self.used_memory += mem
+        return proc.pid
+
+    def _check_workers(self):
+        """检查已完成的子进程，释放工位并显示详细结果"""
+        finished = []
+        for pid, info in self.workers.items():
+            ret = info['proc'].poll()
+            if ret is not None:
+                finished.append((pid, ret))
+
+        for pid, ret in finished:
+            info = self.workers.pop(pid)
+            self.used_memory -= info['mem_mb']
+            info['log_file'].close()
+
+            elapsed = time.time() - info['start_time']
+            coin = info['coin']
+            interval = info['interval']
+            tag = f"{coin}/{interval}"
+
+            if ret != 0:
+                self.failed += 1
+                self.total_tasks_done += 1
+                print(f"\n  {'─'*56}")
+                print(f"  ⚠️  {tag} 异常退出 rc={ret} ({_fmt_duration(elapsed)})")
+                print(f"  日志: scheduler_logs/{coin}_{interval}.log")
+                print(f"  {'─'*56}")
+                continue
+
+            self.completed += 1
+            self.total_tasks_done += 1
+
+            # 解析本次运行的 JSONL 结果
+            entries = _parse_jsonl_tail(coin, interval, n_lines=self.rounds * 2)
+            grad_after = _count_graduates(coin, interval)
+            new_grads = grad_after - info['grad_before']
+            self.total_graduates += new_grads
+
+            # 精英库状态
+            n_long, n_short, best_l, best_s = _parse_hall_of_fame(coin, interval)
+
+            # 汇总本次各轮结果
+            session_rounds = 0
+            session_passed = 0
+            session_failed_grad = 0
+            round_details = []
+
+            for e in entries:
+                if 'error' in e:
+                    round_details.append(f"    R{e.get('round','?')}: ⚠️ 错误 — {e['error'][:60]}")
+                    session_rounds += 1
+                    continue
+                if 'passed' not in e:
+                    continue
+
+                session_rounds += 1
+                r = e.get('round', '?')
+                d = e.get('direction', '?')
+                d_label = 'L' if d == 'long' else 'S'
+                passed = e['passed']
+                pw = e.get('profitable_windows', 0)
+                tw = e.get('total_windows', 10)
+                avg_ret = e.get('avg_test_return', 0)
+                evo_score = e.get('evolution_score', 0)
+                formula = e.get('formula', '?')
+                abstain = e.get('abstain_count', 0)
+                tree_sz = e.get('tree_size', 0)
+                elapsed_r = e.get('elapsed_sec', 0)
+
+                if passed:
+                    session_passed += 1
+                    self.total_rounds += 1
+                    abstain_str = f" 弃{abstain}" if abstain > 0 else ""
+                    round_details.append(
+                        f"    R{r}[{d_label}]: 🎓 毕业 {pw}/{tw}关{abstain_str} "
+                        f"| avg={avg_ret:+.4f} evo={evo_score:+.4f} "
+                        f"| sz={tree_sz} | {formula[:70]}"
+                    )
+                else:
+                    session_failed_grad += 1
+                    self.total_rounds += 1
+                    round_details.append(
+                        f"    R{r}[{d_label}]: ❌ {pw}/{tw}关 "
+                        f"| avg={avg_ret:+.4f} evo={evo_score:+.4f} "
+                        f"| sz={tree_sz} | {formula[:70]}"
+                    )
+
+            # 输出完成摘要
+            print(f"\n  {'─'*56}")
+            grad_str = f" 🎓×{new_grads}" if new_grads > 0 else ""
+            print(f"  ✅ {tag} 完成 ({_fmt_duration(elapsed)}){grad_str}"
+                  f" | 精英库: L{n_long}/S{n_short}", end="")
+            if best_l is not None or best_s is not None:
+                bl = f"{best_l:+.3f}" if best_l is not None else "—"
+                bs = f"{best_s:+.3f}" if best_s is not None else "—"
+                print(f" (最佳 L={bl} S={bs})", end="")
+            print(f" | 累计毕业生: {grad_after}")
+
+            # 逐轮详情
+            if round_details:
+                for line in round_details:
+                    print(line)
+            else:
+                print(f"    (无日志记录)")
+
+            print(f"  {'─'*56}")
+
+    def _print_status(self, total_tasks, queue_idx, queue):
+        """定期状态刷新"""
+        now = time.time()
+        if now - self.last_status_time < STATUS_INTERVAL:
+            return
+        self.last_status_time = now
+
+        uptime = now - self.start_time
+        mem_pct = self.used_memory / TOTAL_MEMORY_MB * 100
+
+        print(f"\n  ┌─ 状态 [{datetime.now().strftime('%H:%M:%S')}] "
+              f"运行 {_fmt_duration(uptime)} ─────────────────────")
+
+        # 运行中的任务
+        for pid, w in self.workers.items():
+            task_elapsed = now - w['start_time']
+            print(f"  │ 🔄 {w['coin']}/{w['interval']} "
+                  f"({w['n_candles']:,}K线, ~{w['mem_mb']}MB) "
+                  f"已运行 {_fmt_duration(task_elapsed)} pid={pid}")
+
+        # 内存 + 进度
+        print(f"  │ 内存: {self.used_memory:,}/{TOTAL_MEMORY_MB:,}MB ({mem_pct:.0f}%) "
+              f"| 本圈: {self.completed + self.failed}/{total_tasks} "
+              f"| 圈: {self.cycle}")
+
+        # 全局统计
+        print(f"  │ 累计: 任务={self.total_tasks_done} "
+              f"毕业生={self.total_graduates} "
+              f"轮次≈{self.total_rounds}")
+
+        # 队列预览（下 3 个）
+        remaining = len(queue) - queue_idx
+        if remaining > 0:
+            preview = queue[queue_idx:queue_idx + 3]
+            preview_str = ', '.join(f"{c}/{i}" for c, i, _ in preview)
+            more = f" +{remaining - len(preview)}个" if remaining > len(preview) else ""
+            print(f"  │ 队列({remaining}): {preview_str}{more}")
+
+        print(f"  └─────────────────────────────────────────────")
+
+    def _wait_all(self):
+        """等待所有运行中的任务完成"""
+        while self.workers:
+            time.sleep(2)
+            self._check_workers()
+
+    def run(self, tasks):
+        """主循环：无限圈轮转"""
+        total = len(tasks)
+
+        # 统计已有毕业生
+        existing_grads = {}
+        total_existing = 0
+        for coin, interval, _ in tasks:
+            n = _count_graduates(coin, interval)
+            if n > 0:
+                existing_grads[f"{coin}/{interval}"] = n
+                total_existing += n
+
+        print(f"\n{'='*60}")
+        print(f"  GP 调度器 v1.2 — 空缺优先")
+        print(f"  任务: {total} 个组合 | 工位: {self.max_workers} | "
+              f"每组合: {self.rounds} 轮 | 圈数: {'∞' if self.max_cycles == 0 else self.max_cycles}")
+        print(f"  内存: {TOTAL_MEMORY_MB:,}MB上限 "
+              f"| 1m最多 {TOTAL_MEMORY_MB // MEMORY_ESTIMATES['1m']} 并行")
+        print(f"  停止: touch STOP_SCHEDULER 或 Ctrl+C")
+        if total_existing > 0:
+            print(f"  已有毕业生: {total_existing} 个 "
+                  f"({len(existing_grads)} 个组合有产出)")
+            # 显示 top 5
+            top = sorted(existing_grads.items(), key=lambda x: -x[1])[:5]
+            print(f"  Top5: {', '.join(f'{k}={v}' for k, v in top)}")
+        print(f"{'='*60}\n")
+
+        try:
+            while True:
+                self.cycle += 1
+                self.completed = 0
+                self.failed = 0
+
+                print(f"\n{'━'*60}")
+                print(f"  第 {self.cycle} 圈 | {total} 任务 | "
+                      f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"{'━'*60}")
+
+                # 每圈重新检查覆盖——跑出毕业生的格子自动跳过
+                covered_now = _load_covered_cells()
+                queue = [(c, iv, n) for c, iv, n in tasks if (c, iv) not in covered_now]
+                newly_covered = len(tasks) - len(queue)
+                if newly_covered > 0:
+                    print(f"  本圈跳过 {newly_covered} 个已覆盖格子，剩余 {len(queue)} 个空缺")
+                total = len(queue)
+                queue_idx = 0
+
+                while queue_idx < len(queue) or self.workers:
+                    if self._check_stop():
+                        self._wait_all()
+                        return
+
+                    self._check_workers()
+
+                    # 填满工位
+                    dispatched = False
+                    while queue_idx < len(queue) and len(self.workers) < self.max_workers:
+                        coin, interval, n = queue[queue_idx]
+
+                        if not self._can_fit(interval):
+                            found_smaller = False
+                            for j in range(queue_idx + 1, len(queue)):
+                                c2, i2, n2 = queue[j]
+                                if self._can_fit(i2):
+                                    queue[queue_idx], queue[j] = queue[j], queue[queue_idx]
+                                    coin, interval, n = c2, i2, n2
+                                    found_smaller = True
+                                    break
+                            if not found_smaller:
+                                break
+
+                        # 启动前显示已有状态
+                        existing = _count_graduates(coin, interval)
+                        n_long, n_short, _, _ = _parse_hall_of_fame(coin, interval)
+                        hof_str = f" 精英L{n_long}/S{n_short}" if (n_long + n_short) > 0 else " 精英:空"
+                        grad_str = f" 毕业生:{existing}" if existing > 0 else ""
+
+                        pid = self._start_worker(coin, interval, n)
+                        print(f"  🚀 {coin}/{interval} ({n:,}K线, ~{self._mem_for(interval)}MB)"
+                              f"{hof_str}{grad_str} pid={pid}")
+                        queue_idx += 1
+                        dispatched = True
+
+                    # 状态刷新
+                    self._print_status(total, queue_idx, queue)
+
+                    time.sleep(3)
+
+                # 一圈结束统计
+                self._print_cycle_summary(total, tasks)
+
+                if self.max_cycles > 0 and self.cycle >= self.max_cycles:
+                    print(f"  达到 {self.max_cycles} 圈上限，退出。")
+                    break
+
+                print(f"\n  5秒后开始第 {self.cycle + 1} 圈...")
+                time.sleep(5)
+
+        except KeyboardInterrupt:
+            print(f"\n\nCtrl+C — 等待 {len(self.workers)} 个运行中任务完成...")
+            self.stopping = True
+            self._wait_all()
+
+        self._print_final_summary(total, tasks)
+
+    def _print_cycle_summary(self, total, tasks):
+        """圈结束时的详细统计"""
+        print(f"\n{'━'*60}")
+        print(f"  第 {self.cycle} 圈完成: ✅{self.completed} ⚠️{self.failed} / {total}")
+
+        # 各周期毕业生统计
+        interval_grads = Counter()
+        interval_total = Counter()
+        for coin, interval, _ in tasks:
+            n = _count_graduates(coin, interval)
+            interval_grads[interval] += n
+            interval_total[interval] += 1
+
+        print(f"\n  按周期毕业生统计:")
+        for iv in sorted(interval_grads.keys(), key=lambda x: INTERVAL_ORDER.get(x, 5)):
+            g = interval_grads[iv]
+            t = interval_total[iv]
+            bar = '█' * min(g, 30) if g > 0 else '·'
+            print(f"    {iv:>3s} ({t:>2d}组): {g:>3d} 毕业 {bar}")
+
+        total_grads = sum(interval_grads.values())
+        print(f"    {'合计':>5s}: {total_grads} 毕业生")
+        print(f"{'━'*60}")
+
+    def _check_stop(self):
+        if self.stopping:
+            return True
+        if os.path.exists(STOP_FILE):
+            print(f"\n  检测到 STOP_SCHEDULER，不再派新任务...")
+            os.remove(STOP_FILE)
+            self.stopping = True
+            return True
+        return False
+
+    def _print_final_summary(self, total, tasks):
+        """最终统计"""
+        uptime = time.time() - self.start_time
+
+        # 统计全部毕业生
+        total_grads = 0
+        combo_grads = {}
+        for coin, interval, _ in tasks:
+            n = _count_graduates(coin, interval)
+            total_grads += n
+            if n > 0:
+                combo_grads[f"{coin}/{interval}"] = n
+
+        print(f"\n{'='*60}")
+        print(f"  GP 调度器退出 | 运行 {_fmt_duration(uptime)}")
+        print(f"  圈数: {self.cycle} | 任务: {self.total_tasks_done}")
+        print(f"  本次新增毕业生: {self.total_graduates}")
+        print(f"  全部毕业生合计: {total_grads} ({len(combo_grads)} 个组合有产出)")
+
+        if combo_grads:
+            top = sorted(combo_grads.items(), key=lambda x: -x[1])[:10]
+            print(f"\n  Top10 组合:")
+            for tag, n in top:
+                print(f"    {tag}: {n} 毕业生")
+
+        print(f"\n  日志: {LOG_DIR}/")
+        print(f"{'='*60}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='GP 调度器 v1.2 — 空缺优先轮转')
+    parser.add_argument('--workers', type=int, default=4,
+                        help='最大并行工位数 (default: 4)')
+    parser.add_argument('--rounds', type=int, default=3,
+                        help='每个组合每次跑几轮 (default: 3)')
+    parser.add_argument('--cycles', type=int, default=0,
+                        help='总共跑几圈 (default: 0=无限)')
+    parser.add_argument('--min-candles', type=int, default=MIN_CANDLES,
+                        help=f'最低 K 线数门槛 (default: {MIN_CANDLES})')
+    parser.add_argument('--islands', action='store_true',
+                        help='启用岛屿模型 (v1.0)')
+    args = parser.parse_args()
+
+    print("扫描数据文件...")
+    tasks, skipped = scan_tasks(min_candles=args.min_candles)
+
+    if skipped:
+        print(f"\n  跳过 {len(skipped)} 个组合（K线不足 {args.min_candles}）:")
+        for coin, interval, n in skipped:
+            print(f"    {coin}/{interval}: {n} K线")
+
+    if not tasks:
+        print("无可用数据，退出。")
+        return
+
+    # 过滤已有策略的格子（Gate冠军 + GP毕业生）
+    covered = _load_covered_cells()
+    if covered:
+        before = len(tasks)
+        covered_tasks = [(c, iv, n) for c, iv, n in tasks if (c, iv) in covered]
+        tasks = [(c, iv, n) for c, iv, n in tasks if (c, iv) not in covered]
+        print(f"\n  已有策略覆盖: {len(covered_tasks)} 个组合（跳过）")
+        if covered_tasks:
+            for c, iv, _ in covered_tasks[:10]:
+                print(f"    ⏭️ {c}/{iv}")
+            if len(covered_tasks) > 10:
+                print(f"    ... +{len(covered_tasks) - 10} 个")
+        print(f"  剩余空缺: {len(tasks)} 个组合（需要 GP 进化）")
+
+    if not tasks:
+        print("所有格子都已有策略，无需进化。")
+        return
+
+    interval_counts = Counter(t[1] for t in tasks)
+    print(f"\n  待跑组合: {len(tasks)} 个")
+    print(f"  按周期: {', '.join(f'{iv}×{cnt}' for iv, cnt in sorted(interval_counts.items(), key=lambda x: INTERVAL_ORDER.get(x[0], 5)))}")
+
+    if os.path.exists(STOP_FILE):
+        os.remove(STOP_FILE)
+
+    scheduler = Scheduler(args.workers, args.rounds, args.cycles,
+                          use_islands=args.islands)
+    scheduler.run(tasks)
+
+
+if __name__ == '__main__':
+    main()

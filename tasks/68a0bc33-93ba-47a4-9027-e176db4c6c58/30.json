@@ -1,0 +1,9 @@
+{
+  "id": "30",
+  "subject": "修胜率bug + 相关性约束重选",
+  "description": "修胜率显示bug + 贪心法加相关性约束重新选人",
+  "activeForm": "修bug重选",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

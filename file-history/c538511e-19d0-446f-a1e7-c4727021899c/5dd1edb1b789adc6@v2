@@ -1,0 +1,83 @@
+"""Renko — 正确的砖块图策略（基于最后砖块价格而非相邻K线）"""
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from core.strategy import Strategy, Signal, TradingSignal
+from core.indicator_cache import get_indicator
+
+
+@dataclass
+class RenkoConfig:
+    atr_period: int = 14
+    brick_pct: float = 0.02
+
+
+class Renko(Strategy):
+    REQUIRES = ['atr']
+
+    def __init__(self, exchange=None, config: Optional[RenkoConfig] = None):
+        self.exchange = exchange
+        self.config = config or RenkoConfig()
+
+    @property
+    def name(self) -> str:
+        return "renko"
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None) -> TradingSignal:
+        min_required = 50
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        idx = self.current_idx
+        atr_series = get_indicator('atr', period=self.config.atr_period)
+        atr = atr_series[idx] if idx < len(atr_series) else 0.0
+        MIN_BRICK_SIZE = 1e-6
+        brick_size = max(atr, abs(klines[-1]["close"]) * self.config.brick_pct, MIN_BRICK_SIZE)
+
+        # Renko brick generation from truncated klines window
+        closes = [c["close"] for c in klines]
+        bricks = []
+        last_brick_price = closes[0]
+        MAX_BRICKS = 10000
+
+        for close in closes[1:]:
+            diff = close - last_brick_price
+            count = 0
+            while diff >= brick_size:
+                count += 1
+                if count > MAX_BRICKS:
+                    break
+                bricks.append("UP")
+                last_brick_price += brick_size
+                diff = close - last_brick_price
+            count = 0
+            while diff <= -brick_size:
+                count += 1
+                if count > MAX_BRICKS:
+                    break
+                bricks.append("DOWN")
+                last_brick_price -= brick_size
+                diff = close - last_brick_price
+
+        if len(bricks) < 3:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"],
+                                 metadata={"reason": "Not enough bricks"})
+
+        # 方向翻转信号
+        if bricks[-1] == "UP" and bricks[-2] == "DOWN":
+            signal = Signal.BUY
+        elif bricks[-1] == "DOWN" and bricks[-2] == "UP":
+            signal = Signal.SELL
+        elif bricks[-1] == "UP" and bricks[-2] == "UP":
+            signal = Signal.BUY
+        elif bricks[-1] == "DOWN" and bricks[-2] == "DOWN":
+            signal = Signal.SELL
+        else:
+            signal = Signal.HOLD
+
+        return TradingSignal(signal=signal, confidence=0.6,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata={"bricks_last5": bricks[-5:],
+                                        "brick_size": brick_size})

@@ -1,0 +1,19 @@
+审视了DuckDB报告层方案的可行性。审视了DuckDB报告层方案的可行性。方向对。但有一个问题：
+pnl 推算公式要区分 long 和 short。
+他写的是 pnl = direction × (exit - entry) / entry × leverage × capital - fee - slippage，但 direction 在数据里存的是字符串（"long"/"short"），不是 ±1。需要转换。而且 short 的 pnl 公式是 (entry - exit) / entry，不是简单乘 -1。虽然数学上等价，但要确认代码里 direction 字段的值是什么格式。
+其余都对。让他做。duckdb.mdmdsqlite.mdmd这是他自己做的种子文档，你看一下02:11审视了用户提供的种子文档。审视了用户提供的种子文档。两份文档质量不错。尤其是 DuckDB 那份的"踩过的坑"部分——8 个坑全是实战经验，不是抄文档。
+几个具体的反馈：
+SQLite 文档：
+
+内容准确，量化场景的速查部分很实用
+第 586-589 行的 pnl 后算 SQL 是对的（区分了 BUY/SELL）
+唯一的问题：combo_summary 的 schema（第 491-503 行）只写了 9 列，实际有 36 列。应该写完整或者标注"简化版，完整 schema 见 generate_seed.py"
+
+DuckDB 文档：
+
+坑 1（executemany 爆内存）和坑 2（ATTACH 直接查 150 倍慢）是关键——白纱以后写 build_seed_report.py 必须用 CTAS 而不是 executemany
+坑 7（多进程写入损坏）直接对应你们的并行种子生成——每个 worker 写独立 SQLite 再合并，这个做法是对的
+第 1151 行的 klines.duckdb 21GB 含 101 个指标列——这就是之前讨论的"指标预算存进种子"，已经在 K 线层面实现了
+
+一个遗漏： 两份文档都没提到 seed_report.duckdb（报告种子）的 schema。这是你设计的管线最后一环——4 个 SQLite 合并 + 14 字段后算。build_seed_report.py 要补完，对应的 schema 也应该写进 DuckDB 文档里。
+整体来说，白纱做文档的能力比做代码好。让他把这个标准也带到代码里。

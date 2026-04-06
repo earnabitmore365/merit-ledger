@@ -1,0 +1,58 @@
+{
+  "mission": "plan: velvety-munching-raccoon.md",
+  "status": "aborted",
+  "deposit": 5,
+  "items": [
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/rule_proposals.json",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/conversations_taiji.db",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/pending_ai_tasks.jsonl",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/scripts/db_write.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/evolve.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/merit_gate.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/shiwei_log/YYYY-MM-DD.md",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/last_reviewed_plan.txt",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/rules_deprecated.md",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/scripts/pre_compact_save.py",
+      "done": false
+    }
+  ],
+  "created": "2026-04-02T09:19:41"
+}

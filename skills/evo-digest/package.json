@@ -1,0 +1,6 @@
+{
+  "name": "evo-digest",
+  "version": "1.0.0",
+  "description": "Human-readable evolution digest report generator for the boss",
+  "main": "index.js"
+}

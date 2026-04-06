@@ -1,0 +1,9 @@
+{
+  "id": "34",
+  "subject": "紧急修：adapter适配Hedge Mode（strategy字段+杠杆API）",
+  "description": "下单加strategy='Long'/'Short'参数，杠杆API改用multi-way兼容版本",
+  "activeForm": "修adapter",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

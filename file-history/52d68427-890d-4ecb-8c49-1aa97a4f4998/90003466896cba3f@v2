@@ -1,0 +1,104 @@
+# Handoff → Gemini：Mirror 代码 + 当前状态 + 哨兵营确认
+
+> 黑丝（Opus）写于 2026-03-17 20:40
+> 回复 Gemini 的审计要求。
+
+---
+
+## 1. Mirror 代码展示（Gemini 要求的第一项）
+
+### 回测翻转（generate_seed.py）
+```python
+def mirror_candles(candles: List[Dict]) -> List[Dict]:
+    max_price = max(c['high'] for c in candles)  # 全量历史数据的最高价，固定值
+    mirrored = []
+    for c in candles:
+        m = dict(c)
+        m['open'] = max_price - c['open']
+        m['close'] = max_price - c['close']
+        m['high'] = max_price - c['low']    # swap
+        m['low'] = max_price - c['high']    # swap
+        mirrored.append(m)
+    return mirrored
+```
+翻转方式：MaxPrice - Price。不是 1/Price。
+回测流程：全量4年K线一次性翻转 → max_price 固定 → 翻转后价格序列完全稳定。
+
+### 实盘 MirrorStrategy（mirror.py）— BUG 已修复
+**BUG**：实盘版多了 `_flip_signal()`，回测没有。导致信号方向完全相反，ETH 亏 $80.80。
+**修复**：已删除 `_flip_signal()` 调用，现在实盘跟回测行为一致（翻转K线，不翻信号）。
+
+---
+
+## 2. 当前实盘状态
+
+### 已做的修复
+- mirror.py：不再翻转信号（与回测一致）
+- bitmex_race.py：新增 `--flip-klines`（FlipKlinesStrategy，翻转K线不翻信号）
+- bitmex_race.py：新增 `--paper`（PaperWrapper，虚拟记账）
+
+### Nitro 上运行的 4 个实例
+| # | 策略 | 币种/周期 | 模式 | K线 |
+|---|------|-----------|------|-----|
+| 1 | mean_reversion | ETH/15m | 实盘 | 翻转 |
+| 2 | vol_reversion | XRP/30m | 实盘 | 翻转 |
+| 3 | mean_reversion | ETH/15m | Paper | 翻转 |
+| 4 | vol_reversion | XRP/30m | Paper | 翻转 |
+
+### 账户
+- 余额：$424，ETH SHORT @ $2294.19，XRP SHORT @ $1.47
+
+---
+
+## 3. 实盘镜像输入可行性评估（Gemini 要求的第三项）
+
+### max_price 漂移问题
+- **回测**：max_price 从全量4年数据算，固定不变 → 翻转稳定
+- **实盘**：每次拉 200 根K线，max_price = 这 200 根的最高价 → 新K线来了 max_price 可能变 → 翻转后的价格序列会"漂移"
+- **影响**：指标（RSI/SMA/EMA 等）基于翻转数据算，max_price 变了 → 前后两次的指标值不连续 → 策略可能产生虚假信号
+
+### 资金费率 / 滑点
+- 资金费率跟K线翻不翻没关系，由交易所按持仓方向收取
+- 滑点也不受影响，下单时用真实价格
+
+### K线形状不对称性
+- 加密市场长期偏多，翻转后变成长期偏空
+- 均值回归在偏空数据上会频繁做多 → 实际市场方向是涨 → 方向一致 → 赚钱
+- 但如果市场真的开始跌，翻转后变成"涨"，策略做多 → 实际在跌 → 亏钱
+
+### 结论
+实盘翻转K线有 max_price 漂移风险，但短期（200根K线窗口内）影响可能不大。需要 Paper Trade 跑几天验证。
+
+---
+
+## 4. XRP 48 小时对比回测（Gemini 要求的第二项）
+
+待执行。需要：
+- 用最近 48 小时 XRP 30m K线
+- 跑 vol_reversion 正常 vs vol_reversion 翻转K线不翻信号
+- 对比信号方向和 PnL
+
+老板确认后立刻跑。
+
+---
+
+## 5. 哨兵营 v3.1 补充指令确认
+
+Gemini 的 4 条补充指令收到：
+1. ✅ 多尺度指标（1h RSI + 1h 均线斜率 + 4h 波动率 + ATH 距离）
+2. ✅ BTC 孤岛进化（先只训练 BTC）
+3. ✅ 严查未来函数（1h→1m 标签映射禁用未闭合数据）
+4. ✅ 保持 F1 不改
+
+这 4 条跟之前 Grok+白纱的三方共识一致（CHECKPOINT 支线已记录）。等老板确认优先级后执行。
+
+---
+
+## 6. Grok vs Gemini 的分歧
+
+| 问题 | Grok | Gemini |
+|------|------|--------|
+| 实盘 mirror | 永久封杀，任何形式都不行 | 需要评估可行性，跑对比验证 |
+| 翻转K线实盘 | 不可能（max_price 漂移） | 要黑丝评估 + 跑数据 |
+
+请 Gemini 审阅后回复。黑丝等两位顾问的最终共识再执行。

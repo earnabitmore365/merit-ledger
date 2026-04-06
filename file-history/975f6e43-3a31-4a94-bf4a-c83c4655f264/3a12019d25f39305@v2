@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""全量回测：mean_reversion 纯信号版（无TTP），$1固定注码，全币种"""
+
+import sys, os, json, time
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+
+from backtest.backtest import BacktestEngine
+from core.strategy.strategy_mean_reversion import MeanReversion, MeanReversionConfig
+
+
+def mirror_v21(klines):
+    """v2.1 SMA(200) 翻转"""
+    if not klines:
+        return []
+    n = min(len(klines), 200)
+    sma = sum(k['close'] for k in klines[-n:]) / n
+    pivot = 2 * sma
+    flipped = []
+    for k in klines:
+        m = dict(k)
+        m['open'] = pivot - k['open']
+        m['close'] = pivot - k['close']
+        m['high'] = pivot - k['low']
+        m['low'] = pivot - k['high']
+        flipped.append(m)
+    return flipped
+
+
+combos = [
+    ('ETH', '1m'), ('ETH', '5m'),
+    ('XRP', '1m'), ('XRP', '5m'),
+    ('BTC', '1m'), ('BTC', '5m'),
+    ('SOL', '1m'), ('SOL', '5m'),
+    ('BNB', '1m'), ('BNB', '5m'),
+    ('ADA', '1m'), ('ADA', '5m'),
+    ('AVAX', '1m'), ('AVAX', '5m'),
+    ('LINK', '1m'), ('LINK', '5m'),
+    ('DOT', '1m'), ('DOT', '5m'),
+    ('TRX', '1m'), ('TRX', '5m'),
+    ('BTC_COIN', '1m'), ('BTC_COIN', '5m'),
+    ('ETH_COIN', '1m'), ('ETH_COIN', '5m'),
+    ('BNB_COIN', '1m'), ('BNB_COIN', '5m'),
+]
+
+# 纯信号版：TTP关闭
+SEED_PARAMS = dict(
+    days=0,
+    initial_capital=500,
+    enable_ttp=False,       # 纯信号
+    stop_loss_pct=0.1,
+    leverage=10.0,
+    enable_withdraw=False,
+    fixed_bet=True,
+    fixed_bet_amount=1.0,
+    fee_rate=0.00035,
+    slippage_pct=0.0002,
+    funding_rate_8h=0.0001,
+)
+
+CONFIG = MeanReversionConfig(period=20, buy_threshold=0.995, sell_threshold=1.005)
+
+print(f'{"="*110}')
+print(f'  mean_reversion 全量种子回测 — 纯信号版（无TTP）$1固定注码，阈值 ±0.5%')
+print(f'  参数：$500本金 / 10x杠杆 / 10%止损 / TTP关 / fee=0.035%/侧 / slippage=0.02%/侧 / funding=0.01%/8h')
+print(f'{"="*110}')
+print(f'  {"币种":<10} {"周期":<5} {"模式":<12} {"K线数":>8} {"交易数":>6} {"胜率":>7} {"PnL($1)":>10} {"MDD":>8} {"Sharpe":>8} {"赢/亏":>8} {"盈亏比":>6}')
+print(f'  {"─"*100}')
+
+for coin, interval in combos:
+    data_path = f'src/backtest/data/historical/{coin}/{interval}.json'
+    if not os.path.exists(data_path):
+        print(f'  {coin:<10} {interval:<5} — 数据不存在')
+        continue
+
+    for mode in ['原版', 'v2.1_mirror']:
+        t0 = time.time()
+        engine = BacktestEngine(coin=coin, interval=interval, **SEED_PARAMS)
+        n_klines = len(engine.candles)
+
+        if mode == 'v2.1_mirror':
+            engine.candles = mirror_v21(engine.candles)
+
+        strategy = MeanReversion(config=CONFIG)
+        result = engine.run_backtest('mean_reversion', strategy=strategy)
+        elapsed = time.time() - t0
+
+        if result and result.total_trades > 0:
+            wr = result.win_rate
+            if wr > 1:
+                wr = wr / 100
+            mdd = result.max_drawdown
+            if mdd > 1:
+                mdd = mdd / 100
+            pf = result.profit_factor if hasattr(result, 'profit_factor') and result.profit_factor else 0
+            print(f'  {coin:<10} {interval:<5} {mode:<12} {n_klines:>8} {result.total_trades:>6} {wr:>6.1%} {result.total_return:>+10.2f} {mdd:>7.2%} {result.sharpe_ratio:>+8.4f} {result.winning_trades:>3}/{result.losing_trades:<3} {pf:>6.2f}  ({elapsed:.1f}s)')
+        elif result:
+            print(f'  {coin:<10} {interval:<5} {mode:<12} {n_klines:>8}      0    —       0.00    —        —       0/0     —   ({elapsed:.1f}s)')
+        else:
+            print(f'  {coin:<10} {interval:<5} {mode:<12}  FAILED')
+
+        sys.stdout.flush()
+
+print(f'\n{"="*110}')
+print('纯信号版：平仓只靠信号反转或止损，无TTP移动止盈')

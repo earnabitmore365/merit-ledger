@@ -1,0 +1,46 @@
+# Agent 进化系统部署计划
+
+## Context
+
+外部顾问 Opus 设计了一套 Agent 行为进化系统：从 5 周对话种子（8877 条，~800 个纠错信号）中提取考题，用 rules 做合规审计评分，然后自动变异 rules 措辞提升通过率。本质是把 GP Engine 进化交易策略的思路用在进化管理制度上。
+
+## 执行步骤
+
+### 1. 部署文件
+- 创建 `~/agent_evolution/` 目录
+- 复制 4 个文件：`agent_evolution_v2.md`、`exam_runner.py`、`evolve_rules.sh`、`handoff_to_taichi_evolution.md`
+- 合并全局 + auto-trading rules 为一份 `rules.md`
+- `chmod +x evolve_rules.sh`
+
+### 2. 挖矿（核心步骤）
+- 逐周读 `~/Downloads/handoff_to_opus/conversations/` 里的 5 个周文件
+- 读两份 rules.md（全局 10 条 + auto-trading 4 条）
+- 从每周对话中找纠错时刻 → 提取场景考题
+- 每周输出 `exam_bank_W{NN}.json`
+- 目标 ~100 道考题
+
+### 3. 合并 + 分割
+- 合并 5 个周文件 → `exam_bank.json`
+- 去重（同一 boss_quote 只留一道）
+- 70/30 分割 → `exam_train.json` + `exam_test.json`
+
+### 4. 抽查
+- 随机抽 10 道给老板看，确认质量
+
+### 5. 跑基线 + 启动进化
+- `python3 exam_runner.py` 跑基线分
+- `./evolve_rules.sh` 启动自动进化（后台跑，touch STOP 停）
+
+## 关键文件
+- `/tmp/evolution_handoff/exam_runner.py` — 考试脚本
+- `/tmp/evolution_handoff/evolve_rules.sh` — 进化循环
+- `/tmp/evolution_handoff/agent_evolution_v2.md` — 设计文档
+- `~/Downloads/handoff_to_opus/conversations/` — 已导出的对话种子
+- `~/.claude/projects/-Users-allenbot/memory/rules.md` — 全局 rules
+- `~/.claude/projects/-Users-allenbot-project-auto-trading/memory/rules.md` — 项目 rules
+
+## 验证
+- 考题数量 ≥ 80 道
+- 基线考试能跑通（exam_result.json 产出）
+- 老板抽查 10 道确认质量
+- 进化循环能启动并产出 commit

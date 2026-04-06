@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""给 gp_scheduler.py 加 RSS 超限检查（5GB/worker）"""
+import sys
+
+filepath = sys.argv[1]
+with open(filepath) as f:
+    content = f.read()
+
+# 1. 加常量
+old_const = "TOTAL_MEMORY_MB = 22000"
+new_const = """TOTAL_MEMORY_MB = 22000
+WORKER_RSS_LIMIT_MB = 5120  # 每个 worker RSS 超 5GB 就 kill"""
+content = content.replace(old_const, new_const)
+
+# 2. 在 _check_workers 方法开头加 RSS 检查
+old_check = '        """检查已完成的子进程，释放工位并显示详细结果"""\n        finished = []'
+new_check = '''        """检查已完成的子进程，释放工位并显示详细结果"""
+        # RSS 超限检查
+        for pid, info in list(self.workers.items()):
+            try:
+                with open(f'/proc/{pid}/status') as sf:
+                    for line in sf:
+                        if line.startswith('VmRSS:'):
+                            rss_mb = int(line.split()[1]) // 1024
+                            if rss_mb > WORKER_RSS_LIMIT_MB:
+                                tag = info['coin'] + '/' + info['interval']
+                                print(f"  RSS kill: {tag} {rss_mb}MB>{WORKER_RSS_LIMIT_MB}MB")
+                                info['proc'].kill()
+                            break
+            except Exception:
+                pass
+
+        finished = []'''
+content = content.replace(old_check, new_check)
+
+with open(filepath, 'w') as f:
+    f.write(content)
+print('Patched')

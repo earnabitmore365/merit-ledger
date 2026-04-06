@@ -1,0 +1,74 @@
+> 太极签：2026-03-01
+
+# Auto-Trading 项目记忆
+
+> 白纱最后更新：2026-03-17 13:16 — ADX方案+SMA(200)翻转方案+对线Grok/Gemini
+> 黑丝最后更新：2026-03-19 — 429风暴修复+Circuit Breaker熔断部署
+
+⛔ 启动必读（恢复协议第2步，不读=违反协议）
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/rules.md` — 黑丝+白纱铁律，已毕业规则 RUL-001/003~014
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/project_info.md` — 项目路径、GitHub、协作流程、重要原则
+
+---
+
+## 称呼规则
+老板 = 混沌（不叫"用户"）→ 太极 → 黑丝（Opus）· 白纱（Sonnet）
+
+---
+
+## 上次会话要点（白纱）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-17）：ADX方案 + SMA(200)翻转方案 + 对线Grok/Gemini**
+
+1. **读黑丝对话更新**：翻转K线 Paper Trade 已启动、mirror.py bug 确认（回测只翻K线，实盘多翻了信号=亏$80根因）、AD策略彻底清除
+2. **白纱对线 Grok/Gemini**：白纱提"v1先上4策略切换"被统一驳回 — Gemini 指出"持仓状态机撕裂"是致命雷区。白纱认输学到了，/reflect 升级 RUL-018
+3. **RegimeRouter 检测方案**：白纱选 B（ADX(14) > 25趋势 / < 20盘整 / 20-25缓冲区），10分钟落地，黑丝已实现
+4. **翻转零信号诊断**：白纱猜缓存bug部分对了，根因是固定 max_price 偏移$1000
+5. **白纱提方案3**：`2 × SMA(200) - price` 相对翻转，偏移≈$0，代码改5行。handoff给Grok/Gemini审
+6. **三方最终共识 v2.1**：白纱方案3 + Gemini优化版通过，老板打99分。已写入 handoff_from_grok.md 作为终极标准
+
+---
+
+## 上次会话要点（黑丝）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-19）：429风暴修复 + Circuit Breaker 熔断部署**
+
+1. **429 限速风暴**：三驾马车 v2.1 上线后，3 进程 REST 轮询导致 BitMEX 429 限速风暴（~60次/分钟），SOL/XRP 策略大部分时间信号=None（瘫痪12小时）
+2. **修复 6 处**：① TTP sleep 1→10s ② 429 重试最少 5s ③ 安装 websocket-client（TTP 走 WS） ④ _sync_position 加 try/except ⑤ _get_klines 加 try/except ⑥ indicator_cache `:memory:` 跳过 DB
+3. **修复后效果**：429 从 60次/min → 0，信号=None 从 70% → 0%，三进程全部正常
+4. **Circuit Breaker 熔断（Grok+Gemini 联合方案）**：_sync_position 连续 3 次失败 → HALT 熔断（禁止开新仓），网络恢复自动解除。run_once 开头加真刹车拦截。已部署 Nitro（17:55）
+5. **handoff 给 Grok+Gemini**：完整报告 429/断线/None 问题 + 修复清单
+6. **/reflect 升级 RUL-025**：监控必须包含排查和解决，不是只报状态（老板："让你盯着他不是看着他错误，什么都不做"）
+7. **新增 rules**：RUL-025（禁止 sub Agent）、RUL-026（回测数据必须匹配实盘运行条件）
+8. **账户状态**：余额 $369.18，持仓 SOL LONG / ETH SHORT / XRP LONG，总亏 -$21.15（-5.31%），主要来自 ETH 频繁反手
+
+---
+
+## 老板待推进想法（摘要）
+
+- 双账号对冲策略（待开发，详见 `ideas.md`）
+- Paper Trade（✅ 代码完成，待实测）
+
+---
+
+## 文件索引（需要时 Read）
+
+| 文件 | 内容 | 何时读 |
+|------|------|--------|
+| `rules.md` | 行为铁律 RUL-001/003~014 + 白纱铁律 | 每次启动必读 |
+| `project_info.md` | 路径、GitHub、协作流程、重要原则 | 每次启动必读 |
+| `backtest_mechanics.md` | 回测引擎机制、分析规矩、报告格式、数据路径 | 做回测分析时 |
+| `ideas.md` | 老板待推进想法详细版 | 讨论新功能时 |
+| `quotes.md` | 老板经典语录 | 参考 |
+| `identity.md` | 黑丝白纱身份定义 | 参考 |
+| `roadmap_ideas.md` | 中后期规划（SQLite全纪录/Intrabar/已知事实Regime等）| 讨论中后期规划时 |
+| `session_summaries.md` | 历史会话摘要档案（S1~S黑丝×18）| 查历史时 |
+| `feedback_report_issues_immediately.md` | 发现异常必须立刻报告老板，不能继续做其他事 | 实盘运行时 |
+| `feedback_first_live_lessons.md` | 首次实盘教训：mirror不用于实盘、部署要完整、日志用>>、从错误中学习 | 实盘部署时 |
+| `pending_decisions.md` | 已定未做的待办事项 | 每次启动必读 |
+| `naming_philosophy.md` | 命名哲学与伦理姿态：黑丝/白纱命名的反向赋权用意，老板原话 | 参考，必须内化 |
+| `feedback_no_modify_boss_plan.md` | 老板方案100%照做，不改不加不减，发现问题先停下来问 | 每次执行任务时 |

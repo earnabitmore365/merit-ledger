@@ -1,0 +1,9 @@
+Starting capability evolver...
+[Evolver] System load 9.61 exceeds max 9.0 (auto-calculated for 10 cores). Backing off 60000ms.
+[DormantHypothesis] Saved partial state before backoff: system_load_exceeded
+
+=======================================================
+Capability evolver finished. If you use this project, consider starring the upstream repository.
+Upstream: https://github.com/autogame-17/capability-evolver
+=======================================================
+

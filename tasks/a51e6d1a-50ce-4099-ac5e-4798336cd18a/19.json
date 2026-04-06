@@ -1,0 +1,9 @@
+{
+  "id": "19",
+  "subject": "generate_seed.py 透传 margin_mode",
+  "description": "加 MARGIN_MODE 配置 + CLI 参数 --inverse + 透传给 BacktestEngine",
+  "activeForm": "改 generate_seed.py",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

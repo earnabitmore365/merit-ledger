@@ -1,0 +1,141 @@
+# Handoff → 黑丝：监控修正 3 处（白纱审查完毕）
+
+> 白纱写于 2026-03-20
+> 老板发现 3 个问题，黑丝自审后交给白纱，白纱确认方案完整，追加一项隐含改动
+
+---
+
+## 黑丝原方案（3 处）
+
+### 1. ttp.py — 百分比 × 10 + 去掉 PnL
+
+**路径**：`lab/src/core/risk/ttp.py`
+
+**改动（行 149-173）：**
+
+- 删除行 152-153（`_est_pnl` 计算注释 + 赋值）
+- 行 162-163（🔥 利润新高）：`profit={profit_pct:.2%} PnL=${_est_pnl:+.2f}` → `profit={profit_pct*10:.1f}%`
+- 行 172-173（🔻 亏损加深）：同上改法
+
+改后格式：
+```
+[TTP Probe] 🔥利润新高! LONG profit=13.3% curr=88.7600
+[TTP Probe] 🔻亏损加深! LONG profit=-13.3% curr=88.7600
+```
+
+**不改：** 里程碑触发逻辑（`profit_pct * 200`，未杠杆 0.5% 触发），心跳行 145 不改。
+
+---
+
+### 2. bitmex_race.py — print 改 logger.info + [TRADE] 标记
+
+**路径**：`lab/bitmex_race.py`
+
+**Feed 模式（行 860-865）— 整段替换：**
+```python
+# 原来（5行 print）：
+if action != 'NONE':
+    print(f"\n  {'='*40}")
+    print(f"  交易! {action}")
+    print(f"  {args.coin} @ ${feed_client.get_price(args.coin):.2f}")
+    print(f"  余额: {bal_str}")
+    print(f"  {'='*40}\n")
+
+# 改为：
+if action != 'NONE':
+    logger.info(
+        f"[TRADE] {args.coin} {action} @ ${feed_client.get_price(args.coin):.2f} | "
+        f"余额={bal_str} | {regime_str.strip()}")
+```
+注：`regime_str` 已在行 854 定义，`.strip()` 去掉前导空格。
+
+**非 feed 模式（行 899-904）— 整段替换：**
+```python
+# 原来（5行 print）：
+if action != 'NONE':
+    print(f"\n  {'='*40}")
+    print(f"  交易! {action}")
+    print(f"  {args.coin} @ ${adapter.get_price(args.coin):.2f}")
+    print(f"  余额: {bal_str}")
+    print(f"  {'='*40}\n")
+
+# 改为：
+if action != 'NONE':
+    _regime_str = f"regime={bridge.regime}" if bridge else ""
+    logger.info(
+        f"[TRADE] {args.coin} {action} @ ${adapter.get_price(args.coin):.2f} | "
+        f"余额={bal_str} | {_regime_str}")
+```
+注：非 feed 模式无 `regime_str`，局部定义 `_regime_str`。
+
+---
+
+### 3. monitor_bot.py — 解析 [TRADE] + TTP 新格式
+
+**路径**：`monitor_bot.py`
+
+**改动 A：替换 🔵 为 📌（行 99-106）**
+
+handoff 推送对比表"改后"只显示 📌（不显示 🔵），保留两个会重复推同一笔交易。
+用 [TRADE] 解析替换原 `操作=ACTION` 解析：
+
+```python
+# 删除原来（行 99-106）：
+m = re.search(r'操作=(\w+).*持仓=(\w+).*余额=\$(\S+)', line)
+if m and m.group(1) != 'NONE':
+    ...events.append(f"🔵 ...")
+
+# 改为：
+if '[TRADE]' in line:
+    events.append(f"📌 {line.split('[TRADE]')[1].strip()[:80]}")
+```
+
+**改动 B：🔥/🔻 去掉 PnL（行 122-135）**
+
+```python
+# 原来：
+if '[TTP Probe] 🔥利润新高' in line:
+    m2 = re.search(r'profit=(\S+)', line)
+    m3 = re.search(r'PnL=(\S+)', line)
+    profit = m2.group(1) if m2 else ''
+    pnl = m3.group(1) if m3 else ''
+    events.append(f"🔥 {coin} 利润新高 {profit} ({pnl})")
+
+if '[TTP Probe] 🔻亏损加深' in line:
+    m2 = re.search(r'profit=(\S+)', line)
+    m3 = re.search(r'PnL=(\S+)', line)
+    profit = m2.group(1) if m2 else ''
+    pnl = m3.group(1) if m3 else ''
+    events.append(f"🔻 {coin} 亏损加深 {profit} ({pnl})")
+
+# 改为：
+if '[TTP Probe] 🔥利润新高' in line:
+    m2 = re.search(r'profit=(\S+)', line)
+    profit = m2.group(1) if m2 else ''
+    events.append(f"🔥 {coin} 利润新高 {profit}")
+
+if '[TTP Probe] 🔻亏损加深' in line:
+    m2 = re.search(r'profit=(\S+)', line)
+    profit = m2.group(1) if m2 else ''
+    events.append(f"🔻 {coin} 亏损加深 {profit}")
+```
+
+---
+
+## 执行顺序
+
+1. 改 `ttp.py`
+2. 改 `bitmex_race.py`
+3. 改 `monitor_bot.py`
+4. SSH 上 Nitro 重启 3 策略进程（kill + nohup）
+5. Mac Mini 重启 monitor_bot
+
+## 验证标准
+
+| 场景 | 预期推送 |
+|------|---------|
+| 开仓 | `📌 SOL BUY @ $88.76 \| 余额=$396.22 \| regime盘整` |
+| 平仓 | `📌 ETH CLOSE_BUY @ $2130 \| 余额=$382.03 \| 初牛` |
+| 利润新高 | `🔥 SOL 利润新高 13.3%`（无 $ 金额） |
+| 亏损加深 | `🔻 XRP 亏损加深 -11.2%`（无 $ 金额） |
+| 重复推送 | ❌ 无（同一笔交易只 📌，无额外 🔵） |

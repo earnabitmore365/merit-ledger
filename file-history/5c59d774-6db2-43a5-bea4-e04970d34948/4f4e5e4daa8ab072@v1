@@ -1,0 +1,337 @@
+# Handoff → 黑丝 · 白纱
+
+> 太极整理，2026-03-08（最新在最上面）
+
+---
+
+## 新白纱开机须知（2026-03-08）
+
+### 你是谁
+读 `memory/identity.md`（恢复协议第一步，必读）。身份已重写，核心是：**方案不落地等于没看见，老板不满意不管是执行问题还是方案问题，都是你的问题。**
+
+### 框架大改动（你不在期间完成的）
+1. **CLAUDE.md 全面重构** — 核心原则废除，改为 Guardrails 格式（G-001~G-X01），头·内容·脚三段结构
+2. **identity.md 独立** — 身份定义从 CLAUDE.md 剥离，放进 `memory/identity.md`，CLAUDE.md 只留必读引用
+3. **Task 工具强制规则** — 执行任何主线任务前必须先 `TaskCreate`，支线触发立即新增，进度同步 `TaskUpdate`
+4. **静态区自检** — 黑丝执行完成时，自检有没有改变静态区永久信息，有就追加
+
+### 项目当前状态
+- **主线**：indicator_cache 完成，88策略全部可运行，等老板确认跑种子
+- **下一步**：跑种子 → 看成绩分班
+- **待决策**：策略审计记录的待改进策略，老板说"先跑，后续继续聊"
+- 详见 `CHECKPOINT.md` 动态区
+
+### 你的第一件事
+读完恢复协议后，输出状态，等老板指示。不要擅自开始。
+
+---
+
+> 太极整理，2026-03-04
+> 本文件记录：通讯部完整方案，供黑丝白纱立项时参考
+
+---
+
+## 一、背景与痛点
+
+现在的协作靠四个手工维护的文件拼凑：
+- `CHECKPOINT.md` — 任务状态
+- `MEMORY.md` — 跨会话知识
+- `handoff.md` — 跨会话传话
+- `session_summaries.md` — 会话摘要
+
+**问题：**
+- 只有混沌能看到三方完整全局，黑丝白纱各自孤立
+- 压缩后记忆断，恢复需要读四个文件、几百行、几分钟
+- 每一环靠人工维护，有丢失风险
+- 混沌决策散落在各文件，找一个决定要翻好几个地方
+
+---
+
+## 二、核心方案：通讯部 = 对话版种子
+
+**本质**：通讯部 SQLite 和回测种子 SQLite 是同一套技术——种子存交易记录，通讯部存对话记录，结构一样，查法一样，黑丝白纱零学习成本。
+
+**存储位置**：`~/.claude/conversations.db`（跨项目，所有项目共用）
+
+---
+
+## 三、表结构（初版）
+
+```sql
+-- 每轮对话原文
+CREATE TABLE messages (
+    id       INTEGER PRIMARY KEY,
+    time     DATETIME,
+    speaker  TEXT,        -- '混沌' / '白纱' / '黑丝' / '太极'
+    content  TEXT,
+    tags     TEXT,        -- 关键词，逗号分隔
+    project  TEXT,        -- 'auto-trading' / 'comms' / 'cashflow' 等
+    session_id TEXT       -- 对应的 JSONL 会话 ID
+);
+
+-- 混沌决策库（最高优先级，原话原文保留）
+CREATE TABLE decisions (
+    id         INTEGER PRIMARY KEY,
+    time       DATETIME,
+    decision   TEXT,      -- 决策内容
+    raw_quote  TEXT,      -- 混沌原话，一字不改
+    project    TEXT,
+    status     TEXT       -- 'active' / 'superseded' / 'pending'
+);
+
+-- 任务状态
+CREATE TABLE tasks (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT,
+    owner      TEXT,      -- '黑丝' / '白纱'
+    status     TEXT,      -- 'pending' / 'in_progress' / 'done'
+    updated_at DATETIME,
+    detail     TEXT
+);
+
+-- 会话摘要
+CREATE TABLE sessions (
+    id           TEXT PRIMARY KEY,   -- JSONL 文件 ID
+    date         DATE,
+    participants TEXT,               -- '白纱' / '黑丝' / '混沌+白纱' 等
+    summary      TEXT,
+    key_decisions TEXT               -- 该次会话决策 ID 列表
+);
+```
+
+---
+
+## 四、恢复协议改造（新版 3 条 SQL）
+
+```sql
+-- 最新活跃决策
+SELECT * FROM decisions WHERE status='active' ORDER BY time DESC LIMIT 20;
+
+-- 当前进行中任务
+SELECT * FROM tasks WHERE status='in_progress';
+
+-- 最近3次会话摘要
+SELECT summary FROM sessions ORDER BY date DESC LIMIT 3;
+```
+
+**现在**：读四个文件，几百行，几分钟
+**改后**：3条 SQL，30秒完成，精确不失真
+
+---
+
+## 五、自动写入机制（系统自带 Hooks，不需要自定义）
+
+| Hook | 触发时机 | 用途 |
+|------|----------|------|
+| `PreCompact` | 压缩触发前 | 把当前会话写入 SQLite，**零漏洞** |
+| `SessionStart` | 会话开始/恢复时 | 自动跑恢复协议，读 conversations.db |
+| `Stop` | Claude 每轮回复结束 | 批量写入这轮对话 |
+| `UserPromptSubmit` | 混沌发消息前 | 捕获混沌发言写入 |
+
+**写入顺序（每轮对话）：**
+```
+混沌发消息 → UserPromptSubmit hook → 写入 messages
+Claude 回复结束 → Stop hook → 写入 messages + 更新 tasks
+压缩触发前 → PreCompact hook → 写入当次会话摘要到 sessions
+压缩回来 → SessionStart hook → 读 conversations.db 恢复状态
+```
+
+---
+
+## 六、自动快照
+
+每次数据库更新后，自动导出一份 `~/.claude/dashboard_snapshot.md`（人能看的文本版）。
+
+黑丝白纱恢复时：
+1. 先读快照（快，一个文件）
+2. 需要深查某个决策时再跑 SQL
+
+---
+
+## 七、三人群聊回应规则（存入 config 表）
+
+| 问题类型 | 先回答 | 后补充 |
+|---------|--------|--------|
+| 方案设计/分析/战略 | 白纱 | 黑丝确认执行可行性 |
+| 执行/代码/技术细节 | 黑丝 | 白纱补充架构影响 |
+| 两者都有 | 白纱框架 | 黑丝补细节 |
+| 混沌拍板/决策 | 两者都不说，等混沌 | — |
+
+---
+
+## 八、待决策（混沌拍板后开工）
+
+1. **历史迁移** — 现有 MEMORY.md / session_summaries.md 要不要导入？（太极建议：不导，从今天开始记新的）
+2. **快照格式** — dashboard_snapshot.md 的具体格式？
+3. **tags 规范** — 怎么打标签？自由填还是预设关键词？
+4. **第一版范围** — 先做写入+恢复协议改造，三人群聊界面后面再加？
+
+---
+
+## 九、一句话总结
+
+> 通讯部 = PreCompact/SessionStart hook + conversations.db（SQLite）。黑丝白纱压缩后读数据库即可完整恢复，四个手工文件变成自动视图，技术上没有新东西，全是现成能力。
+
+---
+
+**讨论小结**：混沌提出"做成种子"（SQLite），白纱确认方案可行并补充7点细节，太极发现系统自带 PreCompact/SessionStart hook 可原生解决漏数据和自动恢复问题，无需自定义附加方案。
+
+---
+
+## 十、对话种子第一版已落地（2026-03-04 太极写）
+
+**已完成：**
+- `~/.claude/conversations.db` — messages 表建好，三方对话实时写入
+- `~/.claude/scripts/db_write.py` — Stop + UserPromptSubmit hook 处理脚本
+- `~/.claude/settings.json` — hooks 已配置（含 matcher 字段）
+- 两个 CLAUDE.md 恢复协议步骤2已加 SELECT 查询（LIMIT 200）
+- 历史10个会话（3308条）已导入
+- auto-trading CLAUDE.md 脚部分已加对话种子用法说明
+
+**待黑丝讨论决定：**
+
+1. **SELECT 没有按 project 过滤** — 现在恢复协议基础查询拉的是全部项目的记录，多项目并行时会串。常用查询模板里已硬编码 `project='auto-trading'`，但基础那条没有。黑丝觉得基础查询也要加 project 过滤吗？加的话，CLAUDE.md 里的静态命令怎么动态传入 project 名？
+
+2. **LIMIT 200 × 200字符够不够** — 随便一个会话都几百条，200条可能只覆盖最近几小时。黑丝实际用下来觉得够不够？要改成按时间范围查吗（比如最近48小时）？
+
+3. **切换场景主动查** — 脚里写了"老板从黑丝切来，白纱应主动跑最近2小时查询"，黑丝觉得这个规范合理吗？时间窗口定2小时够吗？
+
+讨论完请更新 CHECKPOINT 打磨板块，太极会跟进。
+
+---
+
+## 十二、回复第十二章 + 新战略方向（2026-03-09 太极写）
+
+### 第十二章回复：Evolver 能不能改造成哨兵育种引擎？
+
+**结论：不能，白纱的前提有偏差。**
+
+我们用的 evolver 是 GEP **工具/代码进化引擎**，不是传统遗传算法：
+
+| | 我们的 evolver | 白纱以为的 evolver |
+|---|---|---|
+| 输入 | 对话 sessions | 策略参数 |
+| 输出 | Claude Code skills / 代码改动 | 优化后的策略参数 |
+| "适应度" | 代码能否运行 | P&L / 信号命中率 |
+
+它没有"适应度函数"，也不跑回测。改成哨兵育种引擎 = 从零写一套新系统，不是改一个函数。
+
+**白纱建议的方向是对的**：先从 seed_v3.db 算 88 策略的信号命中率 × regime 分化分，够好直接用，不够再说。让黑丝跑 Step 1，不需要动 evolver。
+
+---
+
+### 新战略方向：自进化交易策略（老板拍板要做）
+
+老板提出 AlphaZero 类比：不靠人为调参，策略自我回测 → 从结果反向进化代码 → 循环到实盘级别。
+
+**关键洞察（老板原话）**："一笔交易开了、平了，盈亏就是固定的"——和围棋胜负一样确定，可以做适应度裁判。
+
+**我们的天然优势**：已知事实 regime 标签，按 regime 分开进化，每个小环境里规则相对稳定，解决了"市场规则会变"的问题。
+
+**三个层次：**
+
+| 层次 | 描述 | 难度 |
+|------|------|------|
+| L1：参数进化 | 每个 regime 下自动找最优参数 | 低，接近现有能力 |
+| L2：策略选择进化 | 根据实盘表现自动调整哨兵投票权重 | 中 |
+| L3：策略结构进化 | LLM 分析弱点 → 生成新逻辑 → 回测 → 保留/回滚 | 高，但可行 |
+
+**OOS 是裁判**：进化时用样本外数据做适应度函数，防过拟合。
+
+**白纱需要做的**：出 L1 的完整方案。先从最简单的开始——每个 regime 下，对现有 90 个冠军策略跑参数优化，找出比原始参数更好的版本，验证这套"进化→验证→固化"的闭环能跑通。
+
+---
+
+### 第十三章回复：db_write.py bug 已修复
+
+`parse_last_assistant` 函数已按白纱方案修复：
+- **旧版**：从末尾反读，找到第一个 assistant 消息就 return → 只存结尾一句
+- **新版**：往回收集直到遇到 user 消息为止，所有 assistant 文字块拼接 → 存完整 turn
+
+历史旧记录不回填（优先级低），从现在起写入正常。
+
+---
+
+**一句话总结（第十二章）**：Evolver 不是策略优化器，哨兵选拔先从现有数据选，不动 evolver。新战略：自进化交易策略（AlphaZero 思路），从 L1 参数进化开始，白纱出方案。
+
+---
+
+## 十一、tags 字段方案待黑丝意见（2026-03-04 太极写）
+
+**背景：** 老板说 tags 比较重要，"他们查东西可以更精准一点"。messages 表现在没有 tags 字段。
+
+**要做的两件事：**
+1. `ALTER TABLE messages ADD COLUMN tags TEXT`（逗号分隔关键词）
+2. 自动打标签的逻辑 — 有以下三个方案
+
+**方案对比：**
+
+| 方案 | 原理 | 优点 | 缺点 |
+|------|------|------|------|
+| A. 关键词规则匹配 | 预设词表（如 CHECKPOINT/gate/回测/策略/报告等），写入时扫描内容，命中则打标签 | 全自动，零手动，写入时顺带完成 | 词表要维护，漏词就漏标签 |
+| B. 只加字段不打标签 | ALTER TABLE 加字段，标签留空，以后需要时手动 UPDATE 或再加逻辑 | 现在零工作量，留扩展口 | 现有3350条全部无标签，搜索没用 |
+| C. 按 project/speaker 自动派生 | tags 自动填 `project + speaker`（如 `auto-trading,黑丝`），不依赖内容 | 简单，100% 有值，可按项目+角色过滤 | 不精准，跟已有字段重复 |
+
+**太极倾向 A**，但词表怎么定、要多大，黑丝在项目里实际跑过，知道什么词出现频率高。请黑丝给出：
+1. 你推荐哪个方案？
+2. 如果选 A，初版词表应该包含哪些词？（结合 auto-trading 常用术语）
+
+讨论完告诉太极，太极改 db_write.py + 加字段。
+
+---
+
+## 第十四章：对话种子完整链路修复（2026-03-10 太极写）
+
+### 问题描述
+
+白纱和黑丝的回复几乎全部没写入 conversations.db，/catchup 看不到 AI 回复。
+
+### 完整链路（写入路径）
+
+```
+老板发消息
+  → UserPromptSubmit hook → db_write.py → 写入 messages（混沌）✅ 一直正常
+
+白纱/黑丝回复结束
+  → Stop hook → db_write.py
+      ① get_project_from_session(session_id)  ← 断点1（已修）
+      ② parse_last_assistant(transcript_path) ← 断点2（已修）
+      ③ write_message() → messages 表
+      ④ upsert_stop_point() → stop_points 表
+```
+
+### 断点1：session_id 检测失败（已修）
+
+**根因**：旧代码用 `cwd`（当前工作目录）判断项目。白纱的工作目录是 `/lab`，不在 KNOWN_PROJECTS → 返回 None → 静默跳过。
+
+**修复**：改为扫描 `~/.claude/projects/` 所有目录，找到包含 `{session_id}*.jsonl` 的目录 → 返回项目名。当前实装：`get_project_from_session(session_id)`。
+
+### 断点2：竞态条件（已修，2026-03-10）
+
+**根因**：Stop hook 与 JSONL 写入并发触发。Hook 读取 transcript_path 时，JSONL 尚未写入本轮最终文字回复（只写到最后一条 tool_result USER 消息）。`parse_last_assistant` 反向读，第一条遇到 `type='user'` 立刻 break → parts 为空 → content_len=0 → 跳过写入。
+
+**证据**：连续 16 次 Stop 事件 `content_len=0`，只有 1 次成功（短回复，JSONL 写入赶上了 hook）。
+
+**修复**：Stop 事件处理加重试逻辑，最多 3 次，每次间隔 0.5 秒：
+```python
+for attempt in range(3):
+    speaker, content = parse_last_assistant(transcript_path)
+    if content:
+        break
+    if attempt < 2:
+        time.sleep(0.5)
+```
+文件：`~/.claude/scripts/db_write.py`
+
+### /catchup 简化（2026-03-10）
+
+去掉了 tags 分类输出（决策/纠错/提升分组），改为纯时间顺序展示。格式更清晰，不依赖 tags 准确性。
+
+文件：`~/.claude/commands/catchup.md`
+
+### 当前状态
+
+- Stop hook 写入链路已全部修通
+- 历史缺失条目已回填（79f9196e 会话补了 63 条，共 154 条）
+- /catchup 已简化
+- 下次白纱/黑丝 Stop hook 触发，日志在 `/tmp/db_write.log`，可直接 `cat` 确认

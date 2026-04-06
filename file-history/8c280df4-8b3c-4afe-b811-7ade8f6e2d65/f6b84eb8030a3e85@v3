@@ -1,0 +1,51 @@
+# 遗留清单（太极·全局）
+
+> 发现问题加进来，做完了才删。每次【自审】从这里读，不从脑子编。
+
+## 待处理
+
+- [ ] **stone_guard_v7_design.md 更新**：需补 review-plan/verify/500分制/段位/评分漏洞修复/自进化等改动
+- [ ] **旧项目目录清理**：`-Users-allenbot-project-auto-trading` 有大量历史文件，活跃目录已迁移到 `-Volumes-SSD-2TB-`
+- [ ] **哨兵营**：老板跟顾问讨论中，待定
+- [ ] **纪律/完整性父类 evolve 偶尔超时**：子规则多导致 prompt 过长，timeout 已改 60s 但偶尔还超
+
+## 已完成（2026-04-04 ~ 04-05）
+
+- [x] CHANGELOG 系统建立 + PostToolUse 自动 hook + 恢复协议加读 CHANGELOG
+- [x] pending 94 条归档 + prompt/context 截断修复（全去掉，不再截断）
+- [x] AI 输入截断全链路排查（merit_gate + credit_manager + evolve）
+- [x] 石卫评分漏洞修复（语气识别负面优先 / 自审+1 / honest_report上限2次 / 10分钟冷却期）
+- [x] credit history 归档机制（超100条存 credit_history_archive.jsonl）
+- [x] hrf session 计数器 + SessionEnd 清零
+- [x] penalty_only 模式（太极降级 Lv.3，只扣不加）
+- [x] evolve.py 全面重构（LRN解析/自动审查/自动写入/父类进化/质量精炼/防丢保护）
+- [x] evolve cron 持久化（每5分钟独立跑）
+- [x] pycma 安装 Nitro（CMA-ES 参数优化）
+- [x] Carbonyl 终端浏览器安装
+- [x] 世界模型调研存档
+- [x] MiniMax API 文档补 rate limit
+- [x] auto-trading 项目级 rules 确认已完成（活跃文件在 -Volumes-SSD-2TB-）
+- [x] rules.md 子目标继承更新（老板原话）
+- [x] LEARNINGS 写入 4 条教训（幻觉/没听完就动/不可逆无备份/子目标继承）
+- [x] MAX_NEW_PER_RUN 从 5→20 + 规则质量精炼 + 每10轮强制精炼父类
+
+## 已完成（2026-04-02 ~ 04-03）
+
+- [x] 太极独立 conversations_taiji.db
+- [x] Haiku 弃用，MiniMax only + 失败存队列
+- [x] 石卫操作日志 shiwei_log/
+- [x] 石卫段位 shiwei_credit.json
+- [x] /audit-shiwei command
+- [x] session_start 未审计提醒
+- [x] evolve.py 规则进化引擎 + rule_proposals.json
+- [x] daily_digest.py 集成 evolve.py 4am cron
+- [x] credit_system_design.md 全文重写 v7
+- [x] review-plan CLI 激励机制
+- [x] mission 积分统一：SCORING_TABLE 过程发放
+- [x] verify.py 四件套质检 + verify_registry.json
+- [x] wuji-verify.py 项目级质检（信息隔离）
+- [x] test_merit.py 15/15 + test_memory.py 10/10
+- [x] _get_level 副本消除
+- [x] 500 分制迁移
+- [x] 两仪 CLAUDE.md 同步
+- [x] backlog 按项目分

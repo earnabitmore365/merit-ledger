@@ -1,0 +1,125 @@
+# 种子架构升级 — 顾问 Handoff
+
+> 日期：2026-03-27
+> 状态：矩阵种子生成串行运行中，1m 分段并行已验证问题，待架构升级后重做
+
+---
+
+## 背景
+
+我们的回测系统对 12 个币种 × 7 个时间周期 × 105 个策略 × 3 种 TTP 模式（纯信号/TTP Close/TTP High-Low）做全量回测，结果存入种子 DB（SQLite）。
+
+**瓶颈**：1m 周期有 210 万根 K 线，单策略跑 5-70 秒，1,260 个 combo 串行要十几小时。
+
+**目标**：把 210 万根 1m K 线拆成 4 段（各 ~52.5 万根），4 worker 并行跑，合并结果。
+
+---
+
+## 已验证的问题（今天的数据）
+
+### 问题 1：balance 重置导致爆仓策略交易数翻倍
+
+**验证方式**：手动回测 → 对比分段合并结果
+
+| 策略 | 类型 | 基准 trades | 分段 trades | 是否吻合 |
+|------|------|-----------|-----------|---------|
+| kama | 爆仓 (return=-100%) | 41,007 | 173,918 (×4.24) | ❌ |
+| bb_squeeze | 不爆仓 (return=-87%) | 46,697 | 46,697 | ✅ 完全吻合 |
+
+**根因**：当前 BacktestEngine 把信号生成和 balance 管理绑在一起。balance 归零后引擎不再开单。分段时每段独立初始化 `initial_capital=500`，相当于给了 4 条命，爆仓策略交易数翻倍。
+
+**数据证据**（kama 每段详情）：
+- 段0: formal=41,007, 末笔 close_idx=276,823（在 27 万根处 balance 归零停止）
+- 段1: formal=42,215, 末笔 close_idx=813,104（新 balance 又跑到 81 万根处归零）
+- 段2: formal=45,550
+- 段3: formal=45,357
+
+### 问题 2：指标重算导致分段比串行更慢
+
+| 测试 | 基准耗时 | 分段耗时 | 加速比 |
+|------|---------|---------|--------|
+| bb_squeeze | 10.0s | 97.5s | 0.1x（反向） |
+
+**根因**：每段需要独立重算所有指标（SMA/RSI/ATR/布林带等 ~40 种）。指标缓存按 candle_count 做 key，4 段的 candle_count 各不相同，缓存全部 miss，每段都从头算。
+
+### 问题 3：indicator_cache 污染（意外发现）
+
+同一策略 bb_squeeze，同样参数，两次运行结果不同：
+- 运行 A（在 kama 分段测试之后）：trades=1,757, return=-4.97%
+- 运行 B（独立进程）：trades=46,697, return=-87.56%
+
+怀疑 indicator_cache.db（磁盘缓存）被前次测试污染。这是独立于分段并行的缓存可靠性问题。
+
+### 不爆仓策略的分段是准确的
+
+bb_squeeze 分段对比完全吻合（46,697 = 46,697），边界验证 3/3 matched。证明分段逻辑本身（切片、预热、过滤、合并）是正确的，问题只出在 balance 管理上。
+
+---
+
+## 已确认的升级方案（老板已拍板）
+
+### 核心思路：回测只管开关仓，balance/PnL 全部后算
+
+一次改三件事，顺序天然对：
+
+### 1. 精简字段（25 → 11）
+
+paired_trades 表从 25 字段减到 11 字段：
+
+**保留**（引擎直接产出）：
+- combo_id, open_candle_idx, close_candle_idx, open_time, close_time
+- direction, entry_price, exit_price, close_type
+- mfe, mae, regime_at_open
+
+**后算**（DuckDB 纯算术，不需要引擎）：
+- pnl, r_value, balance_after, capital, position_size
+- holding_bars, fee, slippage_cost, funding_cost, funding_count
+- open_atr_pct, open_volume
+
+**效果**：DB 体积减半（50GB → ~22GB）
+
+### 2. 指标库整合进种子
+
+主进程用完整 K 线算一次所有指标（~40 种），存进种子 DB 的 indicators 表。分段时 K 线 + 指标一起切片传给 worker，worker 不查外部 cache、不重算。
+
+**老板原话**："指标库直接存入种子里，反正指标是跟着 K 线跑，是不会变的。到时候切片分出时间段时，连同所有的指标一起切。"
+
+**效果**：增加 ~7GB，但消除分段指标重算问题
+
+### 3. 删独立指标库
+
+indicator_cache.db 不再需要，直接删掉。
+
+**净效果**：种子 ~29GB（22GB 精简字段 + 7GB 指标），自包含（K 线 + 指标 + 交易）
+
+### 4. 1m 分段加速（自然可用）
+
+指标整合后，210 万根 1m 切成 4 段（各 ~52.5 万根 + 2000 根预热），K 线 + 指标一起切片。4 worker 并行跑，不重算指标。
+
+引擎不管 balance → 爆仓策略也不会停止产生交易 → 分段对所有策略都吻合。
+
+---
+
+## 已写好待改的代码
+
+分段并行的 4 个核心函数已写好（在 generate_seed.py 里）：
+- `_split_candles(candles, n_segments=4, warmup=2000)` — 切分 K 线
+- `_worker_segment(...)` — 段 worker（需要改：去掉 balance 依赖后这段逻辑会简化）
+- `_merge_segment_trades(...)` — 合并 + 吻合验证（3 笔边界对比）
+- `_rebuild_combo_summary_from_trades(...)` — 从 trades 重算 combo_summary
+
+吻合验证已通过（不爆仓策略边界 3/3 matched）。
+
+---
+
+## 需要顾问意见的点
+
+1. **引擎去掉 balance 管理后，MFE/MAE 的计算是否还需要在引擎内完成？** 还是也可以后算？（MFE/MAE 需要知道持仓期间的最高/最低价）
+
+2. **指标存储格式**：存成 JSON blob（当前 indicator_cache 的做法）还是拆成列存储？种子 DB 是 SQLite，后续可能迁移 DuckDB/Parquet。
+
+3. **分段预热 2000 根是否足够？** 今天测试 bb_squeeze 边界验证全部 passed，但不知道是否所有 105 个策略都能在 2000 根内收敛。有没有更科学的方法确定预热长度？
+
+4. **indicator_cache 污染问题**：当前 indicator_cache.db 以 (coin, interval, indicator_name, params, candle_count) 为 key。不同运行可能写入相同 key 但不同值（如 K 线数据更新后）。升级方案直接删掉独立缓存，但在此之前的过渡期如何防止污染？
+
+5. **其他我们没想到的风险？**

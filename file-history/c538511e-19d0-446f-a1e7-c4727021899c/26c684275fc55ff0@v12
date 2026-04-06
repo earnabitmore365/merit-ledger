@@ -1,0 +1,49 @@
+# Mirror 改为滚动 SMA(200) + 重跑三个种子
+
+## Context
+当前 `mirror_candles()` 用固定 SMA（最后 200 根算一个 pivot 翻转所有 K 线）。在长时间序列（420,000 根）上，历史价格远离当前 SMA → 翻转后变负数（DOT 89.4% 负价格）。验算确认：改为滚动 SMA(200)（每根 K 线用自己时间点的 SMA 翻转）后，负价格 = 0%，翻转有效（同向比例 0.8%~5.6%），与实盘 strategy_runner 行为一致。
+
+## 修改文件
+- `lab/src/backtest/generate_seed.py` — mirror_candles() 函数
+
+## 改动
+将固定 pivot 改为逐根滚动 pivot：
+```python
+# 现在（固定）
+sma = sum(closes[-period:]) / period
+pivot = 2 * sma
+for c in candles:
+    m['open'] = pivot - c['open']  # 所有K线用同一个pivot
+
+# 改为（滚动）
+for i, c in enumerate(candles):
+    p = min(SMA_MIRROR_PERIOD, i + 1)
+    sma_i = sum(closes[max(0, i-p+1):i+1]) / p
+    pivot_i = 2 * sma_i
+    m['open'] = pivot_i - c['open']  # 每根K线用自己的pivot
+```
+
+high/low swap 逻辑不变，只是 pivot 从固定变滚动。
+
+## 影响链路
+- mirror_candles() 被 generate_seed.py 的 _worker_coin_interval() 调用（line 746）
+- incremental_backtest.py import 了但不直接调用
+- 不改 strategy_runner.py（实盘已经是滚动的）
+- 不改 backtest.py / ttp.py
+
+## 执行顺序
+1. 先改代码（mirror_candles 改滚动 SMA）
+2. 等老板加入新东西后再跑种子
+
+## 验证
+1. py_compile 语法检查
+2. code-reviewer agent 审查滚动翻转逻辑
+3. 验算 DOT/5m 翻转后价格范围（应全正数）
+4. 抽查几笔 mirror 交易的 entry_price（应为正数）
+
+## 自审（第1轮）
+- ✅ RUL-007：影响链路已追踪（generate_seed.py → incremental_backtest.py → 三个种子库）
+- ✅ RUL-054：用 code-reviewer 审查
+- ✅ RUL-034：不绕回旧方案（不回退到 max_price）
+- ✅ RUL-009：技术细节自己搞定
+- ✅ 自审通过（第1轮，零纰漏）

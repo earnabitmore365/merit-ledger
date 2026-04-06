@@ -1,0 +1,1 @@
+/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/seo-technical-optimization/agents/seo-keyword-strategist.md

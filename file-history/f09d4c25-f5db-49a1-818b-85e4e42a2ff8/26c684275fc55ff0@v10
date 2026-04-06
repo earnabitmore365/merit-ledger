@@ -1,0 +1,16 @@
+# 紧急重启（不改代码）
+
+11张仓位开着有SL保护。按 emergency_restart.md 执行：
+
+## 步骤
+1. SSH到Vultr，killall -9 python3，sleep 10，确认全部干净
+2. cd /opt/auto-trading/lab && bash start_trading.sh
+3. 等2分钟，tail -20 logs/unified.log
+4. 期望看到：策略数量 21/21 + 进入主循环 + K线信号处理
+5. 只看到"进入主循环"后面没日志 → 贴给老板，不自己排查
+
+## 禁止
+- 不改任何 .py 文件
+- 不单独 kill PID
+- 不跑测试
+- 出问题贴日志等老板指令

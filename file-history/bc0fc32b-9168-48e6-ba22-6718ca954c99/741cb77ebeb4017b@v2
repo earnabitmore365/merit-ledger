@@ -1,0 +1,406 @@
+#!/usr/bin/env python3
+"""
+报告种子看板 — 从 seed_signal.db 生成可交互的 HTML 报告
+
+@see lab/README.md#architecture — 报告看板
+
+功能：
+  - 策略/币种/周期 下拉筛选
+  - 按 Sharpe/翻倍速度/胜率/PnL 等列排序
+  - 勾选多个 combo 并排对比
+  - Regime 分布条形图
+
+用法：
+  python3 lab/seed_dashboard.py              # 纯信号版
+  python3 lab/seed_dashboard.py --ttp        # TTP 版
+  python3 lab/seed_dashboard.py --db xxx.db  # 指定数据库
+"""
+
+import sys
+import os
+import sqlite3
+import json
+import argparse
+from datetime import datetime
+
+# ── 项目根定位 ──
+_p = os.path.dirname(os.path.abspath(__file__))
+while _p != os.path.dirname(_p) and not os.path.exists(os.path.join(_p, '.wuji-root')):
+    _p = os.path.dirname(_p)
+if _p not in sys.path:
+    sys.path.insert(0, _p)
+from path_config import ROOT, DATA_DIR, REPORT_DIR, SRC_DIR  # noqa: E402
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
+DB_PATH = os.path.join(REPORT_DIR, 'seed_signal.db')
+DB_PATH_TTP = os.path.join(REPORT_DIR, 'seed_ttp_close.db')
+
+
+def generate_html(db_path: str, output_path: str):
+    """从数据库生成 HTML 看板"""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    # 读取所有 combo_summary
+    cur = conn.execute("""
+        SELECT strategy, coin, interval, total_return, final_balance,
+               max_drawdown, sharpe_ratio, sortino_ratio, calmar_ratio,
+               total_trades, winning_trades, losing_trades, win_rate,
+               avg_win_pct, avg_loss_pct, profit_factor,
+               double_count, fastest_double_days, avg_double_days,
+               daily_open_positions, cagr, max_daily_dd, reward_risk,
+               ttp_count, max_balance, min_balance, max_win, max_loss,
+               expectancy_ratio, longest_win_streak, longest_loss_streak,
+               total_fees, signal_close_count, backtest_time
+        FROM combo_summary
+        ORDER BY sharpe_ratio DESC
+    """)
+    rows = cur.fetchall()
+
+    # 提取唯一值用于筛选
+    strategies = sorted(set(r['strategy'] for r in rows))
+    coins = sorted(set(r['coin'] for r in rows))
+    intervals_set = set(r['interval'] for r in rows)
+    interval_order = ['1m', '5m', '15m', '30m', '1h', '2h', '4h', '8h', '12h', '1d']
+    intervals = [iv for iv in interval_order if iv in intervals_set]
+
+    # 转为 JSON
+    data = []
+    for r in rows:
+        data.append({
+            'strategy': r['strategy'],
+            'coin': r['coin'],
+            'interval': r['interval'],
+            'total_return': round(r['total_return'] or 0, 2),
+            'final_balance': round(r['final_balance'] or 0, 2),
+            'max_drawdown': round(r['max_drawdown'] or 0, 2),
+            'sharpe': round(r['sharpe_ratio'] or 0, 3),
+            'sortino': round(r['sortino_ratio'] or 0, 3),
+            'calmar': round(r['calmar_ratio'] or 0, 3),
+            'total_trades': r['total_trades'] or 0,
+            'win_rate': round(r['win_rate'] or 0, 1),
+            'profit_factor': round(r['profit_factor'] or 0, 2),
+            'double_count': r['double_count'] or 0,
+            'fastest_d2d': round(r['fastest_double_days'] or 0, 1),
+            'avg_d2d': round(r['avg_double_days'] or 0, 1),
+            'daily_open': round(r['daily_open_positions'] or 0, 2),
+            'cagr': round((r['cagr'] or 0) * 100, 2),
+            'reward_risk': round(r['reward_risk'] or 0, 2),
+            'ttp_count': r['ttp_count'] or 0,
+            'max_win': round(r['max_win'] or 0, 4),
+            'max_loss': round(r['max_loss'] or 0, 4),
+            'expectancy': round(r['expectancy_ratio'] or 0, 4),
+            'longest_win': r['longest_win_streak'] or 0,
+            'longest_loss': r['longest_loss_streak'] or 0,
+            'total_fees': round(r['total_fees'] or 0, 4),
+        })
+
+    conn.close()
+
+    db_name = os.path.basename(db_path)
+    gen_time = datetime.now().strftime('%Y-%m-%d %H:%M')
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>种子报告看板 — {db_name}</title>
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; background: #0a0a0a; color: #e0e0e0; padding: 16px; }}
+h1 {{ font-size: 20px; margin-bottom: 8px; color: #fff; }}
+.meta {{ color: #888; font-size: 12px; margin-bottom: 16px; }}
+.filters {{ display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }}
+.filters label {{ font-size: 12px; color: #aaa; }}
+.filters select, .filters input {{ background: #1a1a1a; border: 1px solid #333; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 12px; }}
+.filters select {{ min-width: 120px; }}
+.stats {{ color: #888; font-size: 12px; margin-bottom: 8px; }}
+table {{ width: 100%; border-collapse: collapse; font-size: 11px; }}
+thead {{ position: sticky; top: 0; z-index: 10; }}
+th {{ background: #1a1a1a; padding: 6px 8px; text-align: left; cursor: pointer; border-bottom: 2px solid #333; white-space: nowrap; user-select: none; }}
+th:hover {{ background: #252525; }}
+th.sorted-asc::after {{ content: ' ▲'; color: #4fc3f7; }}
+th.sorted-desc::after {{ content: ' ▼'; color: #4fc3f7; }}
+td {{ padding: 4px 8px; border-bottom: 1px solid #1a1a1a; white-space: nowrap; }}
+tr:hover {{ background: #1a1a2e; }}
+tr.selected {{ background: #1a2a1a !important; }}
+.pos {{ color: #4caf50; }}
+.neg {{ color: #f44336; }}
+.neutral {{ color: #888; }}
+.compare-bar {{ position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a2e; padding: 8px 16px; display: none; border-top: 2px solid #4fc3f7; z-index: 100; }}
+.compare-bar button {{ background: #4fc3f7; color: #000; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; margin-right: 8px; }}
+#compare-panel {{ display: none; margin-top: 12px; background: #111; padding: 16px; border-radius: 8px; border: 1px solid #333; }}
+#compare-panel table {{ font-size: 12px; }}
+#compare-panel th {{ background: #1a1a2e; }}
+</style>
+</head>
+<body>
+
+<h1>种子报告看板</h1>
+<div class="meta">数据库: {db_name} | 生成: {gen_time} | Combo: {len(data)} 个</div>
+
+<div class="filters">
+  <div><label>策略</label><br><select id="f-strategy" multiple size="1"><option value="">全部</option></select></div>
+  <div><label>币种</label><br><select id="f-coin" multiple size="1"><option value="">全部</option></select></div>
+  <div><label>周期</label><br><select id="f-interval" multiple size="1"><option value="">全部</option></select></div>
+  <div><label>最小交易数</label><br><input id="f-min-trades" type="number" value="10" min="0" style="width:60px"></div>
+  <div><label>搜索</label><br><input id="f-search" type="text" placeholder="策略名..." style="width:120px"></div>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<div style="overflow-x: auto; max-height: calc(100vh - 200px); overflow-y: auto;">
+<table id="main-table">
+<thead><tr>
+  <th data-col="select" style="width:30px"><input type="checkbox" id="select-all"></th>
+  <th data-col="strategy">策略</th>
+  <th data-col="coin">币种</th>
+  <th data-col="interval">周期</th>
+  <th data-col="sharpe" data-type="num">Sharpe</th>
+  <th data-col="total_return" data-type="num">收益%</th>
+  <th data-col="max_drawdown" data-type="num">回撤%</th>
+  <th data-col="win_rate" data-type="num">胜率%</th>
+  <th data-col="total_trades" data-type="num">交易数</th>
+  <th data-col="profit_factor" data-type="num">盈利因子</th>
+  <th data-col="cagr" data-type="num">CAGR%</th>
+  <th data-col="reward_risk" data-type="num">盈亏比</th>
+  <th data-col="double_count" data-type="num">翻倍次数</th>
+  <th data-col="fastest_d2d" data-type="num">最快翻倍(天)</th>
+  <th data-col="avg_d2d" data-type="num">均翻倍(天)</th>
+  <th data-col="daily_open" data-type="num">日均开仓</th>
+  <th data-col="sortino" data-type="num">Sortino</th>
+  <th data-col="expectancy" data-type="num">期望值</th>
+  <th data-col="longest_win" data-type="num">最长连胜</th>
+  <th data-col="longest_loss" data-type="num">最长连亏</th>
+</tr></thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+
+<div class="compare-bar" id="compare-bar">
+  <span id="compare-count">已选 0 个</span>
+  <button onclick="showCompare()">对比</button>
+  <button onclick="clearSelection()">清除</button>
+</div>
+
+<div id="compare-panel"></div>
+
+<script>
+const DATA = {json.dumps(data, ensure_ascii=False)};
+const STRATEGIES = {json.dumps(strategies)};
+const COINS = {json.dumps(coins)};
+const INTERVALS = {json.dumps(intervals)};
+
+let sortCol = 'sharpe';
+let sortAsc = false;
+let selected = new Set();
+
+// 初始化筛选器
+function initFilters() {{
+  const fs = document.getElementById('f-strategy');
+  STRATEGIES.forEach(s => {{ const o = document.createElement('option'); o.value = s; o.textContent = s; fs.appendChild(o); }});
+  const fc = document.getElementById('f-coin');
+  COINS.forEach(c => {{ const o = document.createElement('option'); o.value = c; o.textContent = c; fc.appendChild(o); }});
+  const fi = document.getElementById('f-interval');
+  INTERVALS.forEach(v => {{ const o = document.createElement('option'); o.value = v; o.textContent = v; fi.appendChild(o); }});
+}}
+
+function getFilter(id) {{
+  const sel = document.getElementById(id);
+  const vals = Array.from(sel.selectedOptions).map(o => o.value).filter(v => v);
+  return vals.length > 0 ? vals : null;
+}}
+
+function filterData() {{
+  const strategies = getFilter('f-strategy');
+  const coins = getFilter('f-coin');
+  const intervals = getFilter('f-interval');
+  const minTrades = parseInt(document.getElementById('f-min-trades').value) || 0;
+  const search = document.getElementById('f-search').value.toLowerCase();
+
+  return DATA.filter(d => {{
+    if (strategies && !strategies.includes(d.strategy)) return false;
+    if (coins && !coins.includes(d.coin)) return false;
+    if (intervals && !intervals.includes(d.interval)) return false;
+    if (d.total_trades < minTrades) return false;
+    if (search && !d.strategy.toLowerCase().includes(search)) return false;
+    return true;
+  }});
+}}
+
+function sortData(data) {{
+  return data.sort((a, b) => {{
+    let va = a[sortCol], vb = b[sortCol];
+    if (typeof va === 'string') {{
+      return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    }}
+    return sortAsc ? va - vb : vb - va;
+  }});
+}}
+
+function colorVal(v, positive_good = true) {{
+  if (v > 0) return positive_good ? 'pos' : 'neg';
+  if (v < 0) return positive_good ? 'neg' : 'pos';
+  return 'neutral';
+}}
+
+function render() {{
+  let data = filterData();
+  data = sortData(data);
+
+  document.getElementById('stats').textContent =
+    `显示 ${{data.length}} / ${{DATA.length}} 个 combo`;
+
+  // 更新排序指示
+  document.querySelectorAll('th').forEach(th => {{
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    if (th.dataset.col === sortCol) {{
+      th.classList.add(sortAsc ? 'sorted-asc' : 'sorted-desc');
+    }}
+  }});
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = data.map((d, i) => {{
+    const key = d.strategy + '/' + d.coin + '/' + d.interval;
+    const sel = selected.has(key);
+    return `<tr class="${{sel ? 'selected' : ''}}" data-key="${{key}}">
+      <td><input type="checkbox" ${{sel ? 'checked' : ''}} onchange="toggleSelect('${{key}}')"></td>
+      <td>${{d.strategy}}</td>
+      <td>${{d.coin}}</td>
+      <td>${{d.interval}}</td>
+      <td class="${{colorVal(d.sharpe)}}">${{d.sharpe.toFixed(3)}}</td>
+      <td class="${{colorVal(d.total_return)}}">${{d.total_return.toFixed(1)}}%</td>
+      <td class="${{colorVal(d.max_drawdown, false)}}">${{d.max_drawdown.toFixed(1)}}%</td>
+      <td>${{d.win_rate.toFixed(1)}}%</td>
+      <td>${{d.total_trades}}</td>
+      <td class="${{colorVal(d.profit_factor - 1)}}">${{d.profit_factor.toFixed(2)}}</td>
+      <td class="${{colorVal(d.cagr)}}">${{d.cagr.toFixed(1)}}%</td>
+      <td>${{d.reward_risk.toFixed(2)}}</td>
+      <td>${{d.double_count}}</td>
+      <td>${{d.fastest_d2d || '-'}}</td>
+      <td>${{d.avg_d2d || '-'}}</td>
+      <td>${{d.daily_open.toFixed(2)}}</td>
+      <td class="${{colorVal(d.sortino)}}">${{d.sortino.toFixed(3)}}</td>
+      <td class="${{colorVal(d.expectancy)}}">${{d.expectancy.toFixed(4)}}</td>
+      <td>${{d.longest_win}}</td>
+      <td>${{d.longest_loss}}</td>
+    </tr>`;
+  }}).join('');
+
+  updateCompareBar();
+}}
+
+function toggleSelect(key) {{
+  if (selected.has(key)) selected.delete(key);
+  else selected.add(key);
+  render();
+}}
+
+function updateCompareBar() {{
+  const bar = document.getElementById('compare-bar');
+  const count = document.getElementById('compare-count');
+  if (selected.size > 0) {{
+    bar.style.display = 'block';
+    count.textContent = `已选 ${{selected.size}} 个`;
+  }} else {{
+    bar.style.display = 'none';
+  }}
+}}
+
+function clearSelection() {{
+  selected.clear();
+  render();
+  document.getElementById('compare-panel').style.display = 'none';
+}}
+
+function showCompare() {{
+  if (selected.size < 2) {{ alert('至少选2个'); return; }}
+  const items = DATA.filter(d => selected.has(d.strategy + '/' + d.coin + '/' + d.interval));
+
+  const fields = [
+    ['Sharpe', 'sharpe', 3], ['收益%', 'total_return', 1], ['回撤%', 'max_drawdown', 1],
+    ['胜率%', 'win_rate', 1], ['交易数', 'total_trades', 0], ['盈利因子', 'profit_factor', 2],
+    ['CAGR%', 'cagr', 1], ['盈亏比', 'reward_risk', 2], ['翻倍次数', 'double_count', 0],
+    ['最快翻倍', 'fastest_d2d', 1], ['均翻倍', 'avg_d2d', 1], ['日均开仓', 'daily_open', 2],
+    ['Sortino', 'sortino', 3], ['期望值', 'expectancy', 4],
+  ];
+
+  let html = '<h3 style="margin-bottom:8px;color:#4fc3f7">对比</h3><table><thead><tr><th>指标</th>';
+  items.forEach(d => {{ html += `<th>${{d.strategy}}<br>${{d.coin}}/${{d.interval}}</th>`; }});
+  html += '</tr></thead><tbody>';
+
+  fields.forEach(([label, key, dec]) => {{
+    html += `<tr><td style="font-weight:bold">${{label}}</td>`;
+    const vals = items.map(d => d[key]);
+    const best = key === 'max_drawdown' ? Math.min(...vals) : Math.max(...vals);
+    items.forEach(d => {{
+      const v = d[key];
+      const isBest = v === best && items.length > 1;
+      html += `<td class="${{colorVal(key === 'max_drawdown' ? -v : v)}}" ${{isBest ? 'style="font-weight:bold;text-decoration:underline"' : ''}}>${{typeof v === 'number' ? v.toFixed(dec) : v}}</td>`;
+    }});
+    html += '</tr>';
+  }});
+
+  html += '</tbody></table>';
+  const panel = document.getElementById('compare-panel');
+  panel.innerHTML = html;
+  panel.style.display = 'block';
+  panel.scrollIntoView({{ behavior: 'smooth' }});
+}}
+
+// 排序
+document.querySelector('thead').addEventListener('click', e => {{
+  const th = e.target.closest('th');
+  if (!th || !th.dataset.col || th.dataset.col === 'select') return;
+  if (sortCol === th.dataset.col) sortAsc = !sortAsc;
+  else {{ sortCol = th.dataset.col; sortAsc = false; }}
+  render();
+}});
+
+// 全选
+document.getElementById('select-all').addEventListener('change', e => {{
+  const data = filterData();
+  if (e.target.checked) data.forEach(d => selected.add(d.strategy + '/' + d.coin + '/' + d.interval));
+  else selected.clear();
+  render();
+}});
+
+// 筛选器事件
+['f-strategy', 'f-coin', 'f-interval', 'f-min-trades', 'f-search'].forEach(id => {{
+  document.getElementById(id).addEventListener('change', render);
+  document.getElementById(id).addEventListener('input', render);
+}});
+
+initFilters();
+render();
+</script>
+</body>
+</html>"""
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    print(f"看板已生成: {output_path} ({len(data)} combo)")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='种子报告看板')
+    parser.add_argument('--ttp', action='store_true', help='TTP 版本')
+    parser.add_argument('--db', type=str, default=None, help='指定数据库路径')
+    parser.add_argument('--output', type=str, default=None, help='输出路径')
+    args = parser.parse_args()
+
+    db_path = args.db or (DB_PATH_TTP if args.ttp else DB_PATH)
+    if not os.path.exists(db_path):
+        print(f"数据库不存在: {db_path}")
+        sys.exit(1)
+
+    suffix = '_ttp' if args.ttp else ''
+    output = args.output or os.path.join(REPORT_DIR, f'seed_dashboard{suffix}.html')
+
+    generate_html(db_path, output)
+
+
+if __name__ == '__main__':
+    main()

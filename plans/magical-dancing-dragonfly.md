@@ -1,0 +1,261 @@
+# Regime 动态镜像开关 — 全地形系统（Grok + Gemini 联合方案）
+
+## Context
+老板发现"翻转K线+不翻信号=均值回归变趋势跟踪"。Grok+Gemini 打完架后达成联合共识：实盘可以翻转，但必须用固定坐标系+双缓存+熔断。老板打98分，批准执行。
+
+## 核心架构：单实例、双引擎、无缝切换
+
+```
+K线进来 → Fork 分叉
+  ├─ Normal Pipeline  → normal_cache → 均值回归信号
+  └─ Flipped Pipeline → flipped_cache（固定max_price）→ 趋势跟踪信号
+                              ↓
+               RegimeDetector（L2摆动追踪）
+                              ↓
+                    盘整 → Normal 信号
+                    趋势 → Flipped 信号
+                              ↓
+                    熔断检查（动态ATR + 冷却锁）
+                              ↓
+                         交易所 API
+```
+
+## 改动文件清单
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `lab/config/coin_max_price.json` | **新建** | 每币种固定 max_price = 4年ATH × 1.1 |
+| `lab/src/core/indicator_cache.py` | **修改** | 支持 dual pipeline（normal + flipped 并行） |
+| `lab/src/trading/regime_router.py` | **新建** | Regime Router + 熔断 + 冷却逻辑 |
+| `lab/bitmex_race.py` | **修改** | 加 --regime-mirror 参数启用全地形模式 |
+| `lab/src/core/strategy/mirror.py` | 不动 | 保持封杀状态（实盘直接 raise） |
+
+不动：system.py（Router 在外层包装，不改核心）、adapter.py、策略文件。
+
+## 详细步骤
+
+### 步骤1：新建 `lab/config/coin_max_price.json`
+用代码从K线数据拉取每币种4年最高价 × 1.1：
+```python
+# 遍历 src/backtest/data/historical/{COIN}/1h.json
+# max_price = max(k['high'] for k in all_klines) * 1.1
+```
+输出格式：
+```json
+{"BTC": 80000.0, "ETH": 5380.0, "XRP": 3.85, ...}
+```
+用代码生成，不手写。
+
+### 步骤2：重构 `indicator_cache.py` — 双管道
+现有接口：`init_cache(coin, interval, candles)` + `get_indicator(name)`
+改成支持 namespace：
+```python
+init_cache(coin, interval, candles, namespace='normal')   # 正常数据
+init_cache(coin, interval, flipped, namespace='flipped')  # 翻转数据
+get_indicator(name, namespace='normal')                    # 取正常指标
+get_indicator(name, namespace='flipped')                   # 取翻转指标
+```
+内部用 `_contexts = {'normal': {...}, 'flipped': {...}}` 两套独立上下文。
+现有代码用 `_context`（单数），改成字典。所有调用 `get_indicator` 的地方默认 namespace='normal'，向后兼容。
+
+### 步骤3：新建 `lab/src/trading/regime_router.py`
+```python
+class RegimeRouter:
+    """智能离合器：根据 regime 选 normal 或 flipped 信号"""
+
+    def __init__(self, strategy, coin, interval, fixed_max_prices, regime_detector):
+        self._strategy = strategy
+        self._coin = coin
+        self._interval = interval
+        self._fixed_max_price = fixed_max_prices[coin]
+        self._detector = regime_detector
+        self._current_mode = 'normal'
+        self._last_switch_time = 0
+        self._cooldown_sec = 1800  # 30分钟冷却
+        self._atr_history = []     # 14天ATR历史
+
+    def _flip_klines(self, klines):
+        """用固定 max_price 翻转（不是局部200根的max）"""
+        mp = self._fixed_max_price
+        flipped = []
+        for k in klines:
+            m = dict(k)
+            m['open'] = mp - k['open']
+            m['close'] = mp - k['close']
+            m['high'] = mp - k['low']
+            m['low'] = mp - k['high']
+            flipped.append(m)
+        return flipped
+
+    def _should_fuse(self):
+        """熔断检查：动态ATR 90th百分位"""
+        if len(self._atr_history) < 14:
+            return False
+        import numpy as np
+        threshold = np.percentile(self._atr_history, 90)
+        current_atr = self._atr_history[-1]
+        return current_atr > threshold
+
+    def _in_cooldown(self):
+        """30分钟冷却锁"""
+        import time
+        return (time.time() - self._last_switch_time) < self._cooldown_sec
+
+    def generate_signal(self, coin, klines):
+        """双引擎 + regime 选信号"""
+        import time
+        from core.indicator_cache import init_cache
+
+        # 1. 两套缓存并行初始化
+        flipped = self._flip_klines(klines)
+        init_cache(coin, self._interval, klines, namespace='normal')
+        init_cache(coin, self._interval, flipped, namespace='flipped')
+
+        # 2. 更新 regime（用正常K线）
+        # RegimeDetector.update() 需要逐根喂，这里用最新一根
+        latest = klines[-1]
+        result = self._detector.update(
+            idx=len(klines)-1,
+            high=latest['high'], low=latest['low'],
+            close=latest['close'], volume=latest['volume'],
+            time_ms=latest.get('time', 0)
+        )
+        regime = self._detector.regime
+
+        # 3. 更新ATR历史（用于熔断）
+        # 从 normal cache 取 ATR
+        try:
+            from core.indicator_cache import get_indicator
+            atr = get_indicator('atr_14', namespace='normal')
+            if atr is not None and len(atr) > 0:
+                self._atr_history.append(float(atr[-1]))
+                if len(self._atr_history) > 14 * 48:  # 保留14天（30m周期）
+                    self._atr_history = self._atr_history[-14*48:]
+        except Exception:
+            pass
+
+        # 4. 决定模式
+        new_mode = 'normal'
+        if regime in ('牛', '熊'):  # 趋势行情用翻转
+            new_mode = 'flipped'
+
+        # 5. 熔断检查
+        if self._should_fuse():
+            new_mode = 'normal'  # 强制回正常
+            # TODO: 仓位砍70%
+
+        # 6. 冷却锁
+        if new_mode != self._current_mode:
+            if self._in_cooldown():
+                new_mode = self._current_mode  # 冷却中不切换
+            else:
+                self._last_switch_time = time.time()
+                self._current_mode = new_mode
+
+        # 7. 用选中的模式生成信号
+        if self._current_mode == 'flipped':
+            self._strategy.current_idx = len(flipped) - 1
+            signal = self._strategy.generate_signal(coin, flipped)
+        else:
+            self._strategy.current_idx = len(klines) - 1
+            signal = self._strategy.generate_signal(coin, klines)
+
+        # 8. 标记元数据
+        signal.metadata = signal.metadata or {}
+        signal.metadata['regime'] = regime
+        signal.metadata['mode'] = self._current_mode
+        signal.metadata['fused'] = self._should_fuse()
+        return signal
+```
+
+### 步骤4：改 `bitmex_race.py`
+新增参数 `--regime-mirror`：
+```python
+parser.add_argument('--regime-mirror', action='store_true',
+    help='全地形模式：regime控制normal/flipped双引擎切换')
+```
+
+策略加载处：
+```python
+if args.regime_mirror:
+    from trading.regime_router import RegimeRouter
+    from live_regime.regime_detector import RegimeDetector
+    import json
+    with open('config/coin_max_price.json') as f:
+        max_prices = json.load(f)
+    detector = RegimeDetector(initial_regime='盘整',
+                              state_file=f'regime_state_{args.coin}.json')
+    strategy = RegimeRouter(strategy, args.coin, args.interval, max_prices, detector)
+```
+
+### 步骤5：验证
+1. py_compile 所有新建/修改文件
+2. 生成 coin_max_price.json，确认每币种的值合理
+3. 本地测试：用历史K线调 RegimeRouter.generate_signal()，确认：
+   - 盘整时 mode=normal
+   - 趋势时 mode=flipped
+   - 冷却锁生效（30分钟内不切换）
+   - 熔断生效（ATR 爆表时强制 normal）
+4. Paper Trade 72小时回放
+5. Nitro 部署 Paper 实例观察
+6. 收尾：更新 CHECKPOINT #95 + README + handoff 回复 Grok/Gemini
+
+## Grok + Gemini 审查补丁（94分，3点追加）
+
+### 补丁1：init_cache 提到主循环
+RegimeRouter.generate_signal 里不调 init_cache，改到 bitmex_race.py 主循环：
+```python
+# bitmex_race.py 主循环（每根K线）
+klines = adapter.get_klines(coin, interval, limit=200)
+flipped = router._flip_klines(klines)
+init_cache(coin, interval, klines, namespace='normal')
+init_cache(coin, interval, flipped, namespace='flipped')
+result = system.run_once()  # Router 内部只 get_indicator
+```
+
+### 补丁2：Detector 喂 1h 聚合数据
+```python
+# RegimeRouter 内部
+if self._interval in ['15m', '30m']:
+    aggregated = aggregate_to_1h(klines[-60:])
+    result = self._detector.update_with_aggregation(aggregated)
+```
+aggregate_to_1h 可复用 BitMEXAdapter._aggregate_klines() 的逻辑。
+
+### 补丁3：CLI 参数互斥
+```python
+if args.regime_mirror and (args.mirror or args.flip_klines):
+    raise RuntimeError("CRITICAL: 严禁同时开启 --regime-mirror 和旧版 --mirror/--flip-klines！")
+```
+
+## 最终执行顺序
+1. 清仓止血（已完成 ✅）
+2. 生成 coin_max_price.json（真实 ATH × 1.1）
+3. 重构 indicator_cache.py（双 namespace）
+4. 新建 regime_router.py（含补丁1/2/3）
+5. 改 bitmex_race.py（--regime-mirror + 主循环 init_cache + 互斥检查）
+6. py_compile + 72小时回放测试
+7. 1美元微仓实盘探雷
+
+## 自审
+
+### 第1遍 — 完整性
+- ✅ 固定 max_price（用代码从数据拉，不手写）
+- ✅ 双缓存（indicator_cache namespace 方案）
+- ✅ Regime Router（盘整→normal，趋势→flipped）
+- ✅ 熔断（动态ATR 90th百分位，不硬编码）
+- ✅ 冷却锁（30分钟）
+- ✅ 向后兼容（get_indicator 默认 namespace='normal'）
+- ⚠️ RegimeDetector 需要预热（200根BTC 1h K线）— 但我们用的是交易币种自身的K线喂 detector，不是 BTC。需要确认：detector 用交易币种还是 BTC？
+  → Grok/Gemini 方案里没指定，先用交易币种自身的30m K线。如果要用BTC需要额外拉数据。
+- ⚠️ 初牛/初熊怎么分？→ 简单版：牛+初牛=趋势，熊+初熊=趋势，盘整=normal
+- ⚠️ get_indicator 的 namespace 改动会影响所有调用方 → 默认 namespace='normal' 保证向后兼容，不影响回测和其他模块
+
+### 第2遍 — 真实性
+- ✅ 固定 max_price 解决了漂移问题
+- ✅ 双缓存解决了切换跳变问题
+- ⚠️ 熔断砍仓70%：TradingSystem 没有"砍仓位"的接口，只有全平或反手。→ 熔断时先返回 CLOSE 信号平仓，下一根K线在 normal 模式下正常开仓（仓位由 PositionSizing 控制）。不做部分平仓，太复杂。
+- ⚠️ Regime 判断延迟：L2 摆动追踪是 1h 级别，但交易是 30m。→ 可接受，冷却锁已经防了频繁切换
+
+### 第3遍 — 无新发现
+以上问题都有解，方案可执行。

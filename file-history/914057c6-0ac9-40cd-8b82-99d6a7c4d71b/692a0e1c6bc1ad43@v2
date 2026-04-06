@@ -1,0 +1,55 @@
+# 通讯部合并方案 — 执行计划
+
+## Context
+
+老板与 claude.ai 讨论了通讯部的完整方案（tmux + comm-hq），太极已搭好 ttyd Web 看板（已跑通）。claude.ai 回了合并方案，保留 ttyd，增强安全、工具、UI。现在要按 P0→P1→P2 优先级执行。
+
+## P0 — 立即做
+
+### 1. comm_hub.sh 加认证
+- 文件：`~/.claude/scripts/comm_hub.sh`
+- 改动：ttyd 启动命令加 `--credential "boss:$COMM_PASS"`
+- 密码文件：`~/.claude/.comm_pass`（chmod 600）
+
+### 2. brief.sh 部署
+- 文件：`~/.claude/scripts/brief.sh`
+- 基于 claude.ai 方案，修正以下问题：
+  - 表名 `conversations` → `messages`
+  - SQL 注入：tags 过滤改用安全方式
+  - 项目目录查找适配 `~/project/` 路径
+
+## P1 — 本周做
+
+### 3. new_project.sh 部署
+- 文件：`~/.claude/scripts/new_project.sh`
+- 基于 claude.ai 方案，修正：rules.md 位置提醒（不放项目根目录，由 hook 体系管理）
+- 生成标准文件：CLAUDE.md, CHECKPOINT.md, MEMORY.md, handoff*.md, context.md, review.md
+
+### 4. 看板 UI 增强
+- 文件：comm_hub.sh 里的 dashboard HTML
+- 加状态条（各端口在线检测）
+- 快捷输入栏简化版（点击后切换 tab 聚焦 iframe，不走 WebSocket）
+
+### 5. auto-trading 项目补充 context.md / strategy.md
+- 面向外部顾问的摘要文件
+
+## P2 — 下周做（Trading MCP Server）
+
+暂不执行，方案已设计好，等老板指示。
+
+## 关键文件
+
+| 文件 | 操作 |
+|------|------|
+| `~/.claude/scripts/comm_hub.sh` | 修改（加认证） |
+| `~/.claude/scripts/brief.sh` | 新建 |
+| `~/.claude/scripts/new_project.sh` | 新建 |
+| `~/.claude/.comm_pass` | 新建 |
+| dashboard HTML（comm_hub.sh 内） | 修改（加状态条） |
+
+## 验证
+
+1. `bash ~/.claude/scripts/comm_hub.sh stop && bash ~/.claude/scripts/comm_hub.sh start` — 验证认证生效
+2. 手机浏览器访问 `http://100.108.158.57:8080` — 验证需要密码
+3. `bash ~/.claude/scripts/brief.sh auto-trading --days 3` — 验证摘要生成+剪贴板
+4. `bash ~/.claude/scripts/new_project.sh test-project` — 验证脚手架

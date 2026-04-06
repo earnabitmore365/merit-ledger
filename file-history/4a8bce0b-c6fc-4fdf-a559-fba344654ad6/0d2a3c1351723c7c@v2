@@ -1,0 +1,77 @@
+# 修复下载脚本：去掉固定目标条数限制，每次都追到最新
+
+## Context
+
+`download_latest_coins_2.0.py` 有个设计缺陷：每个周期设了固定目标条数（如 1m: 2,102,000），达到就跳过不下载。导致每日管线跑的时候 1m/5m/15m 数据停在旧日期不更新，只有 1h（目标 70,000 条还没满的）才会补新数据。
+
+老板要求：**每天更新，不管已有多少条，都要追到最新时间。**
+
+## 修改文件
+
+`download_latest_coins_2.0.py`（项目根目录，不在 lab 里）
+
+## 改动方案（3处）
+
+### 改动1：已达目标不再跳过，改为跳到"往后补"
+
+**第 138~142 行**，现在的逻辑：
+```python
+if existing_count >= target_rows:
+    print(f"  ✓ 已有 {existing_count:,} 条 ...，已达目标，跳过")
+    return existing_count, True  # ← 直接返回，后面的"往后补"跑不到
+```
+
+改成：
+```python
+if existing_count >= target_rows:
+    # 历史数据够了，跳过往前拉，但仍然往后补最新数据
+    skip_backward = True
+else:
+    skip_backward = False
+```
+
+### 改动2：往前拉阶段受 skip_backward 控制
+
+在往前拉的循环前加 `if not skip_backward:` 包裹，已达标的不往前拉，只往后补。
+
+### 改动3：往后补改为无条件执行
+
+现有的"往后补"逻辑（约第 205~232 行）已经正确：从 newest_timestamp 往后拉到 now_ms。只需要确保：
+1. `skip_backward = True` 时，`existing_data` 还在，`newest_timestamp` 能正确取到
+2. 合并后**不截断**（或只从旧端截断，不砍掉新的）
+
+**截断逻辑**（第 262~263 行）：
+```python
+if len(result) > target_rows:
+    result = result[-target_rows:]  # 保留最新的 N 条
+```
+这个保留——它只砍旧数据不砍新数据，所以追到最新后文件会慢慢增长，但不会丢新数据。如果老板希望文件不无限增长，可以保留这个截断；如果老板不在意文件大小，可以去掉。先保留。
+
+## 具体代码改动
+
+在 `download_coin()` 函数内，约第 138 行开始：
+
+```python
+# 原来：达标直接返回
+# 新：达标跳过往前拉，但继续往后补最新数据
+skip_backward = existing_count >= target_rows
+
+if skip_backward:
+    oldest_date = ex.iso8601(existing_data[0]['time'])[:10]
+    newest_date = ex.iso8601(existing_data[-1]['time'])[:10]
+    print(f"  ✓ 已有 {existing_count:,} 条 ({oldest_date} ~ {newest_date})，历史够了，检查最新数据...")
+else:
+    # ... 原来的"往前拉"逻辑不变 ...
+```
+
+然后在"往后补"阶段（约第 205 行），把 `if existing_count > 0:` 的条件改为 `if existing_count > 0 or skip_backward:`（其实 skip_backward 时 existing_count 一定 > 0，所以这里不用改，但要确保这段代码在 skip_backward 路径下也能执行到）。
+
+关键是：原来 skip_backward 时直接 return 了，现在不 return，代码自然会走到"往后补"。
+
+## 验证
+
+1. 改完后跑 `python3 download_latest_coins_2.0.py`
+2. 检查 1m/5m/15m 的各币种文件，最新时间应该 ≈ 2026-03-16（而不是 3/9）
+3. 检查 1h 也正常更新
+4. 文件大小合理（1m 文件会比 2,102,000 条多出几天的数据）
+5. 跑完后再跑增量回测，确认 1m/5m/15m 的 combo 也有新交易

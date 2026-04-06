@@ -1,0 +1,805 @@
+#!/usr/bin/env python3
+"""
+BitMEX Crypto Olympus 比赛启动脚本
+
+@see lab/README.md#architecture — 指标统一调用 indicator_cache
+
+轻量启动脚本，只做配置和调用，不包含任何交易逻辑。
+逻辑全在 TradingSystem 和 TradingRunner 里。
+
+用法:
+  python3 bitmex_race.py                          # 默认策略，主网
+  python3 bitmex_race.py --coin BTC --interval 30m
+  python3 bitmex_race.py --strategy fvg --coin AVAX
+  python3 bitmex_race.py --dry-run                # 只检查连通性，不跑主循环
+  python3 bitmex_race.py --flip-klines --paper    # Paper Trade + 翻转K线
+  python3 bitmex_race.py --flip-klines            # 实盘翻转K线
+
+比赛信息:
+  - BitMEX Crypto Olympus（2026-03-12 ~ 2026-04-12）
+  - $500K 奖池
+  - $100K 交易量门槛
+"""
+
+import sys
+import os
+import time
+import logging
+import argparse
+from datetime import datetime
+
+# 添加 src 目录到路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from dotenv import load_dotenv
+
+from exchange.bitmex.adapter import BitMEXAdapter
+from trading.system import TradingSystem
+from core.strategy import get_strategy, list_strategies
+from core.risk.position_sizing import FixedPercentSizing
+from core.risk.combined import CombinedRiskManager, CombinedRiskConfig
+
+
+# ==================== FlipKlinesStrategy ====================
+
+class FlipKlinesStrategy:
+    """翻转K线但不翻转信号的包装策略
+
+    跟 MirrorStrategy 的区别：Mirror 翻转K线且翻转信号，这个只翻转K线。
+    效果：均值回归策略看到翻转的数据 → "以为在抄底" → 实际在追涨 → 变成趋势跟踪。
+    """
+
+    def __init__(self, inner_strategy, interval='30m'):
+        self._inner = inner_strategy
+        self._interval = interval
+
+    @property
+    def name(self):
+        return self._inner.name + '_flip'
+
+    @name.setter
+    def name(self, value):
+        pass
+
+    @property
+    def current_idx(self):
+        return getattr(self._inner, 'current_idx', 0)
+
+    @current_idx.setter
+    def current_idx(self, value):
+        self._inner.current_idx = value
+
+    def _flip_klines(self, klines):
+        """翻转 OHLCV — 复用 mirror.py 的逻辑"""
+        if not klines:
+            return klines
+        max_price = max(k['high'] for k in klines)
+        flipped = []
+        for k in klines:
+            m = dict(k)
+            m['open'] = max_price - k['open']
+            m['close'] = max_price - k['close']
+            m['high'] = max_price - k['low']
+            m['low'] = max_price - k['high']
+            flipped.append(m)
+        return flipped
+
+    def generate_signal(self, coin, klines=None):
+        """翻转K线 → 跑策略 → 信号不翻转"""
+        if not klines:
+            from core.strategy.base import Signal, TradingSignal
+            return TradingSignal(signal=Signal.HOLD, coin=coin)
+
+        # 1. 翻转K线
+        flipped = self._flip_klines(klines)
+
+        # 2. 用翻转数据初始化 indicator_cache
+        try:
+            from core.indicator_cache import init_cache
+            init_cache(coin, self._interval, flipped)
+        except Exception:
+            pass
+
+        # 3. 设置 current_idx
+        self._inner.current_idx = len(flipped) - 1
+
+        # 4. 跑策略，信号不翻转
+        return self._inner.generate_signal(coin, flipped)
+
+
+# ==================== PaperWrapper ====================
+
+class PaperWrapper:
+    """Paper Trade 包装器 — 真实行情 + 虚拟记账
+
+    包装 BitMEXAdapter：行情透传，交易虚拟执行。
+    """
+
+    def __init__(self, real_adapter, initial_balance=500.0, leverage=10):
+        self._real = real_adapter
+        self._balance = initial_balance
+        self._available = initial_balance
+        self._leverage = leverage
+        self._position = None  # {'side': 'LONG'/'SHORT', 'size': int, 'entry_price': float, 'coin': str}
+        self._trades = []  # 交易记录
+        self._logger = logging.getLogger('paper')
+        self._logger.info(f"Paper Trade 启动: 余额=${initial_balance:.2f}, 杠杆={leverage}x")
+
+    # === 行情透传 ===
+    def connect(self):
+        return self._real.connect()
+
+    def disconnect(self):
+        return self._real.disconnect()
+
+    def get_price(self, coin):
+        return self._real.get_price(coin)
+
+    def get_klines(self, coin, interval='1h', limit=200):
+        return self._real.get_klines(coin, interval, limit)
+
+    def get_orderbook(self, coin, depth=25):
+        return self._real.get_orderbook(coin, depth)
+
+    def get_best_bid_ask(self, coin):
+        return self._real.get_best_bid_ask(coin)
+
+    def get_funding_rate(self, coin):
+        return self._real.get_funding_rate(coin)
+
+    def get_instrument_info(self, coin):
+        return self._real.get_instrument_info(coin)
+
+    def health_check(self):
+        return self._real.health_check()
+
+    def get_exchange_name(self):
+        return 'BitMEX-Paper'
+
+    @property
+    def testnet(self):
+        return getattr(self._real, 'testnet', False)
+
+    # === 虚拟交易 ===
+    def get_balance(self, currency='USDt'):
+        unrealized = self._calc_unrealized_pnl()
+        return {
+            'usdc': self._balance,
+            'available': self._available,
+            'unrealized_pnl': unrealized,
+        }
+
+    def _calc_unrealized_pnl(self):
+        if not self._position:
+            return 0.0
+        try:
+            current_price = self._real.get_price(self._position['coin'])
+            qty_in_coin = self._position['size'] / self._real._get_u2p(self._position['coin'])
+            if self._position['side'] == 'LONG':
+                return (current_price - self._position['entry_price']) * qty_in_coin
+            else:
+                return (self._position['entry_price'] - current_price) * qty_in_coin
+        except Exception:
+            return 0.0
+
+    def get_positions(self):
+        if self._position:
+            from exchange.base import Position
+            unrealized = self._calc_unrealized_pnl()
+            return [Position(
+                coin=self._position['coin'],
+                side='LONG' if self._position['side'] == 'LONG' else 'SHORT',
+                size=self._position['size'],
+                entry_price=self._position['entry_price'],
+                unrealized_pnl=unrealized,
+                leverage=self._leverage,
+            )]
+        return []
+
+    def get_position(self, coin):
+        positions = self.get_positions()
+        for p in positions:
+            if p.coin == coin:
+                return p
+        return None
+
+    def set_leverage(self, coin, leverage):
+        self._leverage = leverage
+        return True
+
+    def coin_to_contracts(self, coin, coin_qty):
+        return self._real.coin_to_contracts(coin, coin_qty)
+
+    def place_order(self, order):
+        """虚拟下单"""
+        from exchange.base import OrderResult
+        price = self._real.get_price(order.coin)
+        contracts = order.quantity
+
+        self._logger.info(
+            f"[PAPER] {order.side} {order.coin} qty={contracts} @ ${price:.4f}"
+        )
+
+        # 记录交易
+        self._trades.append({
+            'time': datetime.now().isoformat(),
+            'coin': order.coin,
+            'side': order.side,
+            'quantity': contracts,
+            'price': price,
+        })
+
+        # 更新持仓
+        side = 'LONG' if order.side == 'BUY' else 'SHORT'
+        self._position = {
+            'coin': order.coin,
+            'side': side,
+            'size': contracts,
+            'entry_price': price,
+        }
+
+        # 更新保证金
+        u2p = self._real._get_u2p(order.coin)
+        notional = (contracts / u2p) * price
+        margin = notional / self._leverage
+        self._available = self._balance - margin
+
+        return OrderResult(
+            success=True,
+            order_id=f'paper_{len(self._trades)}',
+            filled_price=price,
+            filled_qty=contracts,
+            message='Paper trade executed',
+        )
+
+    def close_position(self, coin):
+        """虚拟平仓"""
+        from exchange.base import OrderResult
+        if not self._position or self._position['coin'] != coin:
+            return OrderResult(success=False, message='No position')
+
+        price = self._real.get_price(coin)
+        pnl = self._calc_unrealized_pnl()
+        self._balance += pnl
+        self._available = self._balance
+
+        self._logger.info(
+            f"[PAPER] CLOSE {self._position['side']} {coin} @ ${price:.4f} PnL=${pnl:+.4f} "
+            f"余额=${self._balance:.2f}"
+        )
+
+        self._trades.append({
+            'time': datetime.now().isoformat(),
+            'coin': coin,
+            'side': 'CLOSE',
+            'price': price,
+            'pnl': pnl,
+            'balance': self._balance,
+        })
+
+        self._position = None
+        return OrderResult(success=True, filled_price=price, message=f'Paper close, PnL={pnl:+.4f}')
+
+    def reverse_position(self, coin):
+        """虚拟反手"""
+        self.close_position(coin)
+        # reverse 后要在 TradingSystem 里重新 place_order
+        from exchange.base import OrderResult
+        return OrderResult(success=True, message='Paper reverse (close side done)')
+
+    def cancel_all_orders(self, coin=None):
+        return True
+
+    def place_stop_loss(self, coin, stop_price, quantity=None, side=None):
+        return {'success': True}
+
+    def place_take_profit(self, coin, tp_price, quantity=None, side=None):
+        return {'success': True}
+
+    def _get_u2p(self, coin):
+        return self._real._get_u2p(coin)
+
+    def _to_symbol(self, coin):
+        return self._real._to_symbol(coin)
+
+
+# ==================== 配置 ====================
+
+# 默认比赛策略（从 TTP Gate 冠军中选的）
+# 30m 冠军候选（按 all_pnl 排序）:
+#   matriple      XRP  30m  pnl=48.8  1.9笔/天
+#   fvg           AVAX 30m  pnl=48.3  1.5笔/天
+#   macross_slow  ADA  30m  pnl=47.7  2.1笔/天
+#   order_block   AVAX 30m  pnl=39.5  2.4笔/天
+DEFAULT_STRATEGY = 'matriple'
+DEFAULT_COIN = 'XRP'
+DEFAULT_INTERVAL = '30m'
+
+
+def load_config():
+    """从 .env 读取 BitMEX API 配置"""
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    load_dotenv(env_path)
+
+    api_key = os.getenv('BITMEX_API_KEY')
+    api_secret = os.getenv('BITMEX_API_SECRET')
+    testnet = os.getenv('BITMEX_TESTNET', 'false').lower() == 'true'
+
+    if not api_key or not api_secret:
+        print("错误: .env 里没有 BITMEX_API_KEY / BITMEX_API_SECRET")
+        sys.exit(1)
+
+    return {
+        'api_key': api_key,
+        'api_secret': api_secret,
+        'testnet': testnet,
+        'default_leverage': 10,
+    }
+
+
+def reconcile_positions(adapter, coin: str):
+    """启动时从 BitMEX 拉真实持仓，对账
+
+    Returns:
+        tuple: (position, entry_price) — 如果有持仓则返回方向和开仓价
+    """
+    pos = adapter.get_position(coin)
+    if pos and pos.size > 0:
+        direction = 'BUY' if pos.side == 'LONG' else 'SELL'
+        print(f"  已有持仓: {direction} {coin} @ ${pos.entry_price:.2f}"
+              f"  数量={pos.size}  未实现盈亏=${pos.unrealized_pnl:.4f}")
+        return direction, pos.entry_price
+    else:
+        print(f"  无 {coin} 持仓")
+        return 'NO_POSITION', 0.0
+
+
+def print_status(adapter, coin: str):
+    """打印账户状态"""
+    balance = adapter.get_balance()
+    price = adapter.get_price(coin)
+    funding = adapter.get_funding_rate(coin)
+
+    print(f"\n{'='*50}")
+    print(f"  BitMEX {'测试网' if adapter.testnet else '主网'}")
+    print(f"  余额: ${balance.get('usdc', 0):.2f} USDT")
+    print(f"  可用: ${balance.get('available', 0):.2f} USDT")
+    print(f"  {coin} 价格: ${price:.4f}")
+    print(f"  资金费率: {funding.get('rate', 0):.6f}")
+    print(f"{'='*50}\n")
+
+
+# K线周期 → 秒数
+INTERVAL_SECONDS = {
+    '1m': 60, '5m': 300, '15m': 900, '30m': 1800,
+    '1h': 3600, '2h': 7200, '4h': 14400,
+}
+
+
+def wait_for_next_kline(interval: str, logger):
+    """K 线整点对齐：sleep 到下一根 K 线收盘 + 10 秒"""
+    import math
+    interval_sec = INTERVAL_SECONDS.get(interval, 1800)
+    now = time.time()
+    next_close = math.ceil(now / interval_sec) * interval_sec
+    wait = next_close - now + 10  # 多等 10 秒让数据稳定
+
+    if wait > 0:
+        logger.info(f"等待下一根 {interval} K 线: {wait:.0f}s")
+        end_time = time.time() + wait
+        while time.time() < end_time:
+            time.sleep(min(5.0, end_time - time.time()))
+
+
+def main():
+    parser = argparse.ArgumentParser(description='BitMEX 比赛启动脚本')
+    parser.add_argument('--strategy', type=str, default=DEFAULT_STRATEGY,
+                        help=f'策略名称（默认: {DEFAULT_STRATEGY}）')
+    parser.add_argument('--coin', type=str, default=DEFAULT_COIN,
+                        help=f'交易币种（默认: {DEFAULT_COIN}）')
+    parser.add_argument('--interval', type=str, default=DEFAULT_INTERVAL,
+                        help=f'K线周期（默认: {DEFAULT_INTERVAL}）')
+    parser.add_argument('--balance', type=float, default=500,
+                        help='初始本金（默认: $500）')
+    parser.add_argument('--bet-pct', type=float, default=0.10,
+                        help='每笔下注比例（默认: 10%%）')
+    parser.add_argument('--min-bet', type=float, default=100,
+                        help='最低保证金（默认: $100）')
+    parser.add_argument('--leverage', type=float, default=10,
+                        help='杠杆倍数（默认: 10x）')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='只检查连通性，不跑主循环')
+    parser.add_argument('--mirror', action='store_true',
+                        help='Mirror 模式：翻转 OHLCV + 反转信号（用于 mirror 冠军策略）')
+    parser.add_argument('--flip-klines', action='store_true',
+                        help='[已封杀] 翻转K线但不翻转信号')
+    parser.add_argument('--paper', action='store_true',
+                        help='Paper Trade 模式（真实行情 + 虚拟记账）')
+    parser.add_argument('--regime-mirror', action='store_true',
+                        help='全地形模式：regime控制normal/flipped双引擎切换（Grok+Gemini方案）')
+    parser.add_argument('--replay', type=str, default=None,
+                        help='历史回放模式（如 72h）：用本地K线逐根喂，模拟实盘')
+    parser.add_argument('--replay-start', type=str, default=None,
+                        help='回放起始时间（如 "2026-03-14 00:00:00"）')
+    parser.add_argument('--list-strategies', action='store_true',
+                        help='列出所有可用策略')
+    args = parser.parse_args()
+
+    # 日志
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(name)s] %(levelname)s %(message)s',
+    )
+    logger = logging.getLogger('bitmex_race')
+
+    # === GROK + GEMINI 永久封杀 2026-03-17 ===
+    if args.mirror:
+        print("[GROK + GEMINI 封杀令] 实盘禁止 --mirror！max_price 漂移导致指标重绘，信号等于掷骰子。")
+        sys.exit(1)
+    if args.flip_klines:
+        print("[GROK + GEMINI 封杀令] 实盘禁止 --flip-klines！这是 mirror 的换皮版，同样有 max_price 漂移问题。")
+        sys.exit(1)
+    # 补丁3：互斥检查
+    if args.regime_mirror and (args.mirror or args.flip_klines):
+        print("CRITICAL: 严禁同时开启 --regime-mirror 和旧版 --mirror/--flip-klines！")
+        sys.exit(1)
+
+    # 列出策略
+    if args.list_strategies:
+        print("可用策略:")
+        for name in sorted(list_strategies()):
+            print(f"  {name}")
+        return
+
+    mode_suffix = '_mirror' if args.mirror else ('_flip' if args.flip_klines else '')
+    strategy_name = args.strategy + mode_suffix
+    trade_mode = 'PAPER' if args.paper else 'LIVE'
+    print(f"\n{'='*50}")
+    print(f"  BitMEX Crypto Olympus 比赛 [{trade_mode}]")
+    print(f"  策略: {strategy_name}")
+    print(f"  币种: {args.coin}")
+    print(f"  周期: {args.interval}")
+    print(f"  杠杆: {args.leverage}x")
+    print(f"  下注: {args.bet_pct:.0%} / 最低 ${args.min_bet}")
+    if args.flip_klines:
+        print(f"  翻转K线: 开启（均值回归→趋势跟踪）")
+    print(f"{'='*50}\n")
+
+    # 1. 加载 API 配置
+    config = load_config()
+    config['default_leverage'] = int(args.leverage)
+    logger.info(f"API 配置: {'测试网' if config['testnet'] else '主网'}")
+
+    # 2. 创建适配器（实盘 or Paper）
+    real_adapter = BitMEXAdapter(config)
+    if not real_adapter.connect():
+        logger.error("BitMEX 连接失败")
+        sys.exit(1)
+    logger.info("BitMEX 连接成功")
+
+    if args.paper:
+        adapter = PaperWrapper(real_adapter, initial_balance=args.balance, leverage=int(args.leverage))
+        logger.info("Paper Trade 模式：虚拟记账，不真实下单")
+    else:
+        adapter = real_adapter
+
+    # 3. 打印账户状态
+    print_status(adapter, args.coin)
+
+    # 4. 创建仓位管理
+    sizing = FixedPercentSizing(
+        balance=args.balance,
+        bet_pct=args.bet_pct,
+        min_bet=args.min_bet,
+        leverage=int(args.leverage),
+    )
+    logger.info(f"仓位管理: {sizing}")
+
+    # 5. 加载策略
+    try:
+        strategy = get_strategy(args.strategy)
+    except ValueError as e:
+        logger.error(f"策略加载失败: {e}")
+        logger.info(f"可用策略: {list_strategies()}")
+        adapter.disconnect()
+        sys.exit(1)
+
+    # Mirror 模式：翻转数据 + 反转信号
+    if args.mirror:
+        from core.strategy.mirror import MirrorStrategy
+        strategy = MirrorStrategy(strategy)
+
+    # Flip-klines 模式：翻转K线，不翻转信号（已封杀，走不到这里）
+    if args.flip_klines:
+        strategy = FlipKlinesStrategy(strategy, interval=args.interval)
+
+    # 全地形模式：Regime Router（Grok+Gemini 联合方案）
+    regime_router = None
+    if args.regime_mirror:
+        from trading.regime_router import RegimeRouter
+        from live_regime.regime_detector import RegimeDetector
+        import json as _json
+        config_path = os.path.join(os.path.dirname(__file__), 'config', 'coin_max_price.json')
+        with open(config_path) as f:
+            max_prices = _json.load(f)
+        detector = RegimeDetector(
+            initial_regime='盘整',
+            state_file=os.path.join(os.path.dirname(__file__), f'regime_state_{args.coin}.json')
+        )
+        regime_router = RegimeRouter(
+            strategy=strategy,
+            coin=args.coin,
+            interval=args.interval,
+            fixed_max_prices=max_prices,
+            regime_detector=detector,
+        )
+        strategy = regime_router
+        logger.info(f"[全地形] RegimeRouter 启用: {args.coin} fixed_max=${max_prices.get(args.coin, 0):.2f}")
+
+    logger.info(f"策略: {strategy.name}")
+
+    # 6. 创建风险管理（TTP + 无止损，让强平兜底）
+    risk_config = CombinedRiskConfig(
+        stop_loss_pct=1.0,  # 100% = 不设止损（逐仓强平兜底）
+        ttp_enabled=True,
+    )
+    risk_manager = CombinedRiskManager(risk_config)
+
+    # 7. 创建 TradingSystem
+    trading_config = {
+        'coin': args.coin,
+        'interval': args.interval,
+        'leverage': args.leverage,
+        'kline_limit': 200,
+    }
+    system = TradingSystem(
+        exchange=adapter,
+        strategy=strategy,
+        risk_manager=risk_manager,
+        config=trading_config,
+        position_sizing=sizing,
+    )
+
+    # 8. 对账：从 BitMEX 拉真实持仓（Paper 模式跳过）
+    if not args.paper:
+        print("\n对账:")
+        pos_direction, pos_price = reconcile_positions(adapter, args.coin)
+        if pos_direction != 'NO_POSITION':
+            system.position = pos_direction
+            system.entry_price = pos_price
+            logger.info(f"已同步持仓: {pos_direction} @ ${pos_price:.2f}")
+    else:
+        print("\nPaper 模式，跳过对账")
+
+    # dry-run 到此为止
+    if args.dry_run:
+        print("\n--- dry-run 完成，连通性正常 ---")
+        adapter.disconnect()
+        return
+
+    # 9. 启动 TTP tick 级监控（内置在 TradingSystem 里）
+    system.start_ttp_monitor()
+
+    # 10. 主循环
+    # === Replay 模式：用本地历史K线逐根回放 ===
+    if args.replay:
+        _run_replay(args, strategy, regime_router, adapter, logger)
+        return
+
+    print(f"\n开始交易主循环（{args.interval} 周期）")
+    print("按 Ctrl+C 停止\n")
+
+    try:
+        while True:
+            wait_for_next_kline(args.interval, logger)
+
+            try:
+                # 补丁1：全地形模式下主循环初始化双缓存
+                if regime_router is not None:
+                    from core.indicator_cache import init_cache
+                    klines = adapter.get_klines(args.coin, args.interval, limit=200)
+                    if klines:
+                        flipped = regime_router.flip_klines(klines)
+                        init_cache(args.coin, args.interval, klines, namespace='normal')
+                        init_cache(args.coin, args.interval, flipped, namespace='flipped')
+
+                result = system.run_once()
+                action = result.get('action', 'NONE')
+                signal = result.get('signal', 'N/A')
+                position = result.get('position', 'N/A')
+
+                # 每次执行后打印状态
+                balance = adapter.get_balance()
+                bal_str = f"${balance.get('usdc', 0):.4f}"
+
+                logger.info(
+                    f"信号={signal} 操作={action} 持仓={position} "
+                    f"余额={bal_str}"
+                )
+
+                # 有交易动作时打印详情
+                if action != 'NONE':
+                    print(f"\n  {'='*40}")
+                    print(f"  交易! {action}")
+                    print(f"  {args.coin} @ ${adapter.get_price(args.coin):.2f}")
+                    print(f"  余额: {bal_str}")
+                    print(f"  {'='*40}\n")
+
+            except Exception as e:
+                logger.error(f"run_once 异常: {e}", exc_info=True)
+                time.sleep(60)  # 出错后等 1 分钟再试
+
+    except KeyboardInterrupt:
+        print("\n收到停止信号")
+    finally:
+        system.stop_ttp_monitor()
+        adapter.disconnect()
+        print("BitMEX 已断开，比赛脚本结束")
+
+
+def _run_replay(args, strategy, regime_router, adapter, logger):
+    """历史回放模式：用本地K线逐根喂，模拟实盘时间流逝"""
+    import json as _json
+    from datetime import datetime, timedelta
+    from core.indicator_cache import init_cache
+
+    # 解析回放时长
+    replay_hours = int(args.replay.replace('h', ''))
+    replay_start = args.replay_start or '2026-03-14 00:00:00'
+    start_dt = datetime.strptime(replay_start, '%Y-%m-%d %H:%M:%S')
+    start_ms = int(start_dt.timestamp() * 1000)
+    end_ms = start_ms + replay_hours * 3600 * 1000
+
+    # 加载本地K线
+    data_dir = os.path.join(os.path.dirname(__file__), 'src', 'backtest', 'data', 'historical')
+    kline_path = os.path.join(data_dir, args.coin, f'{args.interval}.json')
+    if not os.path.exists(kline_path):
+        # 尝试从更小周期聚合
+        for base in ['5m', '1m']:
+            alt = os.path.join(data_dir, args.coin, f'{base}.json')
+            if os.path.exists(alt):
+                kline_path = alt
+                break
+
+    logger.info(f"[REPLAY] 加载 K 线: {kline_path}")
+    with open(kline_path) as f:
+        all_klines = _json.load(f)
+
+    # 过滤时间范围（预留200根预热）
+    interval_ms = INTERVAL_SECONDS.get(args.interval, 1800) * 1000
+    warmup_bars = 200
+    warmup_start = start_ms - warmup_bars * interval_ms
+
+    # 如果K线周期不匹配文件（比如文件是5m但要15m），做聚合
+    file_interval = os.path.basename(kline_path).replace('.json', '')
+    if file_interval != args.interval:
+        from exchange.bitmex.adapter import BitMEXAdapter
+        factor = INTERVAL_SECONDS[args.interval] // INTERVAL_SECONDS[file_interval]
+        all_klines = BitMEXAdapter._aggregate_klines(all_klines, factor, args.interval)
+        logger.info(f"[REPLAY] 聚合 {file_interval} → {args.interval}，{len(all_klines)} 根")
+
+    # 筛选范围
+    replay_klines = [k for k in all_klines if k['time'] >= warmup_start and k['time'] <= end_ms]
+    logger.info(f"[REPLAY] 范围: {len(replay_klines)} 根 K 线（含 {warmup_bars} 根预热）")
+
+    if len(replay_klines) < warmup_bars + 10:
+        logger.error(f"[REPLAY] K 线不足！需要至少 {warmup_bars + 10} 根")
+        return
+
+    # 模拟交易状态
+    balance = args.balance
+    position = 'NO_POSITION'  # BUY / SELL / NO_POSITION
+    entry_price = 0.0
+    trades = []
+    max_balance = balance
+    max_drawdown = 0.0
+
+    print(f"\n{'='*60}")
+    print(f"  [REPLAY] 72 小时历史回放")
+    print(f"  币种: {args.coin} / {args.interval}")
+    print(f"  时间: {replay_start} → +{replay_hours}h")
+    print(f"  K线: {len(replay_klines)} 根")
+    print(f"  初始余额: ${balance:.2f}")
+    print(f"{'='*60}\n")
+
+    # 逐根喂
+    for i in range(warmup_bars, len(replay_klines)):
+        window = replay_klines[max(0, i - warmup_bars + 1):i + 1]
+        current = replay_klines[i]
+        ts = datetime.fromtimestamp(current['time'] / 1000).strftime('%m-%d %H:%M')
+
+        # 双缓存初始化
+        if regime_router is not None:
+            flipped = regime_router.flip_klines(window)
+            init_cache(args.coin, args.interval, window, namespace='normal')
+            init_cache(args.coin, args.interval, flipped, namespace='flipped')
+
+        # 生成信号
+        try:
+            signal_result = strategy.generate_signal(args.coin, window)
+            signal = signal_result.signal.name if hasattr(signal_result.signal, 'name') else str(signal_result.signal)
+            metadata = getattr(signal_result, 'metadata', {}) or {}
+            regime = metadata.get('regime', '?')
+            mode = metadata.get('mode', '?')
+            fused = metadata.get('fused', False)
+        except Exception as e:
+            logger.error(f"[REPLAY] {ts} 信号异常: {e}")
+            continue
+
+        # 模拟交易
+        price = current['close']
+        action = 'NONE'
+
+        if signal == 'BUY' and position == 'NO_POSITION':
+            position = 'BUY'
+            entry_price = price
+            action = 'OPEN_LONG'
+        elif signal == 'SELL' and position == 'NO_POSITION':
+            position = 'SELL'
+            entry_price = price
+            action = 'OPEN_SHORT'
+        elif signal == 'BUY' and position == 'SELL':
+            # 平空 + 开多
+            pnl = (entry_price - price) * (args.min_bet / entry_price) * args.leverage
+            balance += pnl
+            trades.append({'time': ts, 'side': 'SHORT', 'entry': entry_price, 'exit': price, 'pnl': pnl, 'regime': regime, 'mode': mode})
+            position = 'BUY'
+            entry_price = price
+            action = f'REVERSE_LONG (pnl={pnl:+.2f})'
+        elif signal == 'SELL' and position == 'BUY':
+            # 平多 + 开空
+            pnl = (price - entry_price) * (args.min_bet / entry_price) * args.leverage
+            balance += pnl
+            trades.append({'time': ts, 'side': 'LONG', 'entry': entry_price, 'exit': price, 'pnl': pnl, 'regime': regime, 'mode': mode})
+            position = 'SELL'
+            entry_price = price
+            action = f'REVERSE_SHORT (pnl={pnl:+.2f})'
+        elif signal == 'CLOSE' and position != 'NO_POSITION':
+            if position == 'BUY':
+                pnl = (price - entry_price) * (args.min_bet / entry_price) * args.leverage
+            else:
+                pnl = (entry_price - price) * (args.min_bet / entry_price) * args.leverage
+            balance += pnl
+            trades.append({'time': ts, 'side': position, 'entry': entry_price, 'exit': price, 'pnl': pnl, 'regime': regime, 'mode': mode})
+            position = 'NO_POSITION'
+            entry_price = 0.0
+            action = f'CLOSE (pnl={pnl:+.2f})'
+
+        # 更新回撤
+        if balance > max_balance:
+            max_balance = balance
+        dd = (max_balance - balance) / max_balance * 100 if max_balance > 0 else 0
+        if dd > max_drawdown:
+            max_drawdown = dd
+
+        # 打印（只打有动作的 + 每小时打一次状态）
+        if action != 'NONE' or i % (3600 // INTERVAL_SECONDS.get(args.interval, 1800)) == 0:
+            logger.info(
+                f"[REPLAY] {ts} | regime={regime:4s} mode={mode:7s} "
+                f"signal={signal:5s} action={action:20s} "
+                f"pos={position:4s} bal=${balance:.2f} "
+                f"{'[FUSE]' if fused else ''}"
+            )
+
+    # 汇总
+    total_pnl = balance - args.balance
+    wins = sum(1 for t in trades if t['pnl'] > 0)
+    losses = sum(1 for t in trades if t['pnl'] <= 0)
+    wr = wins / len(trades) * 100 if trades else 0
+
+    print(f"\n{'='*60}")
+    print(f"  [REPLAY] 回放完成")
+    print(f"  交易数: {len(trades)} (赢{wins}/亏{losses}, WR={wr:.0f}%)")
+    print(f"  总 PnL: ${total_pnl:+.2f}")
+    print(f"  最终余额: ${balance:.2f}")
+    print(f"  最大回撤: {max_drawdown:.1f}%")
+    print(f"{'='*60}")
+
+    # 打印每笔交易
+    print(f"\n  交易明细:")
+    for t in trades:
+        print(f"  {t['time']} | {t['side']:5s} | ${t['entry']:.4f}→${t['exit']:.4f} | PnL=${t['pnl']:+.2f} | {t['regime']}/{t['mode']}")
+
+
+if __name__ == '__main__':
+    main()

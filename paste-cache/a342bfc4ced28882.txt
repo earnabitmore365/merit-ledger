@@ -1,0 +1,54 @@
+<DOCUMENT filename="handoff_to_heisi_zero_signal_emergency_fix_final.md">
+
+Handoff → 黑丝：4小时零交易紧急修复终极版（Grok + Gemini + 白纱 联合拍板）2026-03-18 03:10 混沌（团队共识）
+目的：ETH 1m（mirror）+ XRP 5m（原版）4小时零信号的根因已锁定，今晚必须修复并看到信号。
+老板最终判决两个阻断级 Bug：mean_reversion 阈值绝缘（±5% 在1m上几乎不可能触发）
+实盘 indicator_cache 时间静止（SQLite 长度匹配死锁，永远返回启动时的旧指标）
+
+v2.1 相对翻转（2×SMA(200)）本身数学正确，但被上面两个 Bug 挡住，信号永远出不了。黑丝立即执行（10 分钟改完 + 重启）第一步：强制实盘走纯内存缓存（解决时间静止）
+在 bitmex_race.py 主循环双缓存初始化处（大约第 317 行）改成：python
+
+# === GROK + GEMINI 紧急修复 2026-03-18 ===
+if klines:
+    flipped = regime_router.flip_klines(klines)
+    # 强制内存模式（绕过 SQLite 长度死锁）
+    init_cache(args.coin, args.interval, klines, namespace='normal', db_path=':memory:')
+    init_cache(args.coin, args.interval, flipped, namespace='flipped', db_path=':memory:')
+
+第二步：删掉 system.py 的捣乱缓存初始化
+在 src/trading/system.py 的 _generate_signal 方法里，直接删掉这整段 try-except（第 328-333 行）：python
+
+# 删除以下代码，只保留：
+def _generate_signal(self, klines: List[Dict]) -> Signal:
+    self.strategy.current_idx = len(klines) - 1
+    return self.strategy.generate_signal(self.config.get('coin', 'ETH'), klines)
+
+第三步：把不可能触发的阈值拉回地球
+在 src/core/strategy/mean_reversion.py（或对应策略文件）里把默认阈值改成适合 1m/5m 的现实值：python
+
+class MeanReversionConfig:
+    period: int = 20
+    buy_threshold: float = 0.998   # 原 0.95 → ±0.2%
+    sell_threshold: float = 1.002  # 原 1.05 → ±0.2%
+
+重启验证（改完立即执行）bash
+
+pkill -f bitmex_race
+python3 bitmex_race.py --regime-mirror --strategy mean_reversion --coin ETH --interval 1m --min-bet 200 &
+python3 bitmex_race.py --strategy mean_reversion --coin XRP --interval 5m --min-bet 100 &
+
+5 分钟后看日志：[DIAG FLIPPED] 是否有正常 RSI/BB/ADX 值
+是否出现 BUY/SELL（不再全是 HOLD）
+Regime 切换记录（ADX >30 时应切 flipped）
+
+通过标准：10 分钟内至少看到 1-2 笔非 HOLD 信号
+flipped 模式下指标正常波动
+
+纪律（以后“零信号”问题标准流程）先加 [DIAG] 日志确认缓存正常
+检查策略阈值是否现实（1m 绝不能用 ±5%）
+强制实盘走 :memory: 缓存
+更新 CHECKPOINT.md（修复前/后日志对比）
+
+黑丝，这份文档就是零信号诊断的宪法。
+改完 3 步立即重启，贴新日志上来。我们 5 分钟就能看到信号。老板已拍板：今晚必须看到交易。执行！</DOCUMENT>
+

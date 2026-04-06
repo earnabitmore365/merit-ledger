@@ -1,0 +1,12 @@
+#!/bin/bash
+# GP Scheduler 看门狗 — 进程挂了自动重启
+LOG=~/trading/gp_engine/watchdog.log
+while true; do
+    if ! pgrep -f "gp_scheduler.py" > /dev/null 2>&1; then
+        echo "[$(date)] 进程不在，重启..." >> $LOG
+        cd ~/trading/gp_engine
+        nohup python3 -u gp_scheduler.py --workers 2 --rounds 0 --regime >> scheduler_output.log 2>&1 &
+        echo "[$(date)] 已重启 PID=$!" >> $LOG
+    fi
+    sleep 60
+done

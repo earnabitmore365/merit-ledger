@@ -1,0 +1,115 @@
+<DOCUMENT filename="handoff_to_heisi_direct_live_deployment_final_fixed.md">
+Handoff → 黑丝：实盘最终上线版 —— 三驾马车直接实盘开单（去除信号反转 Bug）
+2026-03-18 混沌（团队共识）
+
+目的：黑丝立功了！确认回测未反转信号，实盘坚决对齐回测！跳过 Paper，直接真金白银满血上线！
+
+老板最终判决：
+
+听黑丝的！在 mirror.py 中只翻转K线，绝对不翻转信号，确保实盘 = 回测。
+
+彻底废除 RegimeRouter，直接用原生 --mirror 启动。
+
+TTP 开启。动态阈值：ETH ±0.5%、XRP ±1.0%、SOL ±0.7%。
+
+资金分配：SOL $140 / ETH $150 / XRP $108。
+
+直接跑真金白银，不加 --paper！
+
+黑丝立即执行（按顺序修改，10分钟改完 + 直接起实盘）
+
+第一步：重写 mirror.py 核心引擎（彻底对齐回测）
+打开 src/core/strategy/mirror.py，删掉 _flip_signal 方法，并使用以下完整的类替换：
+
+Python
+class MirrorStrategy(Strategy):
+    def __init__(self, inner_strategy: Strategy, interval: str = '1m'):
+        super().__init__(inner_strategy.name + '_mirror')
+        self._inner = inner_strategy
+        self._interval = interval
+
+    @property
+    def name(self) -> str:
+        return self._inner.name + '_mirror'
+
+    @name.setter
+    def name(self, value):
+        pass
+
+    def _mirror_klines(self, klines: List[Dict]) -> List[Dict]:
+        """v2.1 终极翻转逻辑：2 × SMA(200) - price"""
+        if not klines:
+            return []
+        n = min(len(klines), 200)
+        sma = sum(k['close'] for k in klines[-n:]) / n
+        pivot = 2 * sma
+
+        mirrored = []
+        for k in klines:
+            m = dict(k)
+            m['open'] = pivot - k['open']
+            m['close'] = pivot - k['close']
+            m['high'] = pivot - k['low']
+            m['low'] = pivot - k['high']
+            mirrored.append(m)
+        return mirrored
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None):
+        if not klines:
+            from core.strategy.base import Signal, TradingSignal
+            return TradingSignal(signal=Signal.HOLD, coin=coin)
+
+        # 1. 翻转K线
+        flipped = self._mirror_klines(klines)
+
+        # 2. 强制内存缓存，确保内层策略拿到正确的翻转指标，不污染DB
+        try:
+            from core.indicator_cache import init_cache
+            init_cache(coin, self._interval, flipped, db_path=':memory:')
+        except Exception:
+            pass
+
+        # 3. 跑策略，直接返回原信号（绝对不要反转信号，对齐回测！）
+        self._inner.current_idx = len(flipped) - 1
+        return self._inner.generate_signal(coin, flipped)
+第二步：解除封杀 & 配置动态阈值
+打开 bitmex_race.py：
+
+删除开头关于 --mirror 的 [GROK + GEMINI 封杀令] 退出逻辑。
+
+找到加载策略的地方（约第 292 行 strategy = get_strategy(args.strategy)），下面加上动态阈值：
+
+Python
+    try:
+        strategy = get_strategy(args.strategy)
+        # 动态分配回测最优阈值
+        if hasattr(strategy, 'config'):
+            if args.coin == 'ETH':
+                strategy.config.buy_threshold = 0.995   # ±0.5%
+                strategy.config.sell_threshold = 1.005
+            elif args.coin == 'XRP':
+                strategy.config.buy_threshold = 0.990   # ±1.0%
+                strategy.config.sell_threshold = 1.010
+            elif args.coin == 'SOL':
+                strategy.config.buy_threshold = 0.993   # ±0.7%
+                strategy.config.sell_threshold = 1.007
+第三步：清理不必要的缓存补丁
+将 bitmex_race.py 主循环里和 system.py 里为了双引擎强加的 :memory: 补丁全部删掉（单引擎 mirror 内部会自动处理正常缓存）。确保 risk_config 中 ttp_enabled=True。
+
+第四步：直接实盘启动（注意已去掉 paper 且资金已分配）
+
+Bash
+pkill -f bitmex_race
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin SOL --interval 1m --min-bet 140 >> logs/sol_1m_live.log 2>&1 &
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin ETH --interval 1m --min-bet 150 >> logs/eth_1m_live.log 2>&1 &
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin XRP --interval 5m --min-bet 108 >> logs/xrp_5m_live.log 2>&1 &
+通过标准：
+
+日志不再有 regime 切换的噪音。
+
+10 分钟内看到真实开单的 BUY/SELL 信号，不再翻转信号致亏。
+
+TTP 监控正常挂起。
+
+黑丝，收到指令立刻执行，真金白银实盘启动！改完重启后，贴出首批实盘开单日志！
+</DOCUMENT>

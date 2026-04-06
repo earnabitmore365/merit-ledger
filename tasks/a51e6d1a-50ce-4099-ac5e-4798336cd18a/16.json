@@ -1,0 +1,9 @@
+{
+  "id": "16",
+  "subject": "用正式引擎跑 BNB_COIN × 5周期 × 3阈值 × Mirror 种子",
+  "description": "generate_seed.py 跑 BNB_COIN 的 1m/5m/15m/30m/1h，3个策略（mean_reversion/mean_reversion_07/mean_reversion_10）+ mirror 版。然后 sim_coin_margin.py 用反向合约公式算真实 PnL。",
+  "activeForm": "跑 BNB_COIN 种子",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

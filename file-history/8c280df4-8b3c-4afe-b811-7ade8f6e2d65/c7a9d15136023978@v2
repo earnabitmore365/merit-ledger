@@ -1,0 +1,41 @@
+# Auto-Trading 项目记忆
+
+> 干净重建：2026-03-30（旧黑丝数据已清除）
+
+---
+
+## 项目基本信息
+
+- **路径**：`/Volumes/SSD-2TB/project/auto-trading`
+- **项目**：加密货币自动交易系统
+- **语言**：Python 3.11+，中文
+- **AI Sandbox**：`lab/`（实验区，完成后老板决定是否覆盖 src/）
+- **GitHub**：`earnabitmore365/auto-trading`（private）
+
+## 核心架构
+
+- **DuckDB 数据层**：`/Volumes/SSD-2TB/project/wuji-auto-trading/duckdb/` — K线+指标存储（41GB）
+- **种子系统**：`reports/seed_signal.db` 等 — 策略信号+回测结果
+- **GP 进化树**：`lab/gp_engine/` — 表达式树自进化引擎 v2.0（regime-based）
+- **Nitro 服务器**：`ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98`（GP 调度器部署）
+
+## 投资核心战略
+
+老板原话："快狠准：500本金，以最快且最稳的方式达到翻倍。资金翻倍后取出本金，再开下一个策略。"
+
+## 当前进行中
+
+| 项目 | 状态 |
+|------|------|
+| 种子生成 v4 | 1m 周期还差 10 币种，其余全部完成 |
+| GP 进化树 v2.0 | regime-based 已部署 Nitro，调度器运行中 |
+| MiniMax 审查 | 毕业生自动走 MiniMax M2.7-highspeed（零 Anthropic 配额） |
+
+## 关键设计决策
+
+详见 `/Volumes/SSD-2TB/project/auto-trading/DESIGN_DECISIONS.md`
+
+## 文件索引
+
+- `rules.md` — 行为规范（已毕业规则，hook 注入）
+- `MEMORY.md` — 本文件（项目记忆）

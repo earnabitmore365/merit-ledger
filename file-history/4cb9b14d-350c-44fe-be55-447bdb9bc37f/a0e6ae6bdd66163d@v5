@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+"""
+Trading MCP Server — Abby Auto-Trading 专属工具集
+
+提供原子能力供 Claude / OpenClaw 等 AI 客户端调用：
+  get_live_status     — 实盘全景（进程+持仓+最近事件）
+  get_balance         — BitMEX 真实余额
+  get_positions       — BitMEX 真实持仓+未实现PnL
+  get_log_tail        — 读取某币种最近日志
+  query_backtest      — 查回测数据库找最优策略
+
+运行方式：
+  stdio 模式（Claude Code）：python3 mcp_server.py
+  HTTP 模式（Claude Web / OpenClaw）：python3 mcp_server.py http 8765
+
+配置（环境变量 / .env）：
+  NITRO_SSH_CMD       SSH 命令（默认见下）
+  NITRO_DIR           Nitro 上的工作目录
+  BITMEX_API_KEY      BitMEX 只读 API Key（只需 Read 权限）
+  BITMEX_API_SECRET   BitMEX 只读 API Secret
+  SEED_DB_PATH        种子数据库路径
+"""
+
+import os
+import re
+import json
+import time
+import hmac
+import hashlib
+import sqlite3
+import subprocess
+import urllib.request
+import urllib.parse
+from mcp.server.fastmcp import FastMCP
+
+# ==================== 自动加载 .env ====================
+# 优先级：环境变量 > .env.mcp > lab/.env
+def _load_env(path, overwrite=False):
+    """加载 .env 文件，跳过占位符值（含 'your_' 或 '_here'）"""
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            k, v = line.split('=', 1)
+            k, v = k.strip(), v.strip()
+            if 'your_' in v or '_here' in v:   # 跳过未填写的占位符
+                continue
+            if overwrite or k not in os.environ:
+                os.environ[k] = v
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_load_env(os.path.join(_THIS_DIR, 'lab', '.env'))        # 真实 key（基础）
+_load_env(os.path.join(_THIS_DIR, '.env.mcp'), overwrite=True)  # 显式配置优先级最高
+
+# ==================== 配置 ====================
+
+SSH_CMD_BASE = os.getenv(
+    'NITRO_SSH_CMD',
+    'ssh -p 2222 -o ConnectTimeout=10 -o StrictHostKeyChecking=no pc_heisi_claude@localhost'
+)
+NITRO_DIR = os.getenv('NITRO_DIR', '/home/pc_heisi_claude/trading')
+
+BITMEX_API_KEY    = os.getenv('BITMEX_API_KEY', '')
+BITMEX_API_SECRET = os.getenv('BITMEX_API_SECRET', '')
+BITMEX_BASE_URL   = 'https://www.bitmex.com'
+
+SEED_DB_PATH = os.getenv(
+    'SEED_DB_PATH',
+    '/Volumes/BIWIN NV 7400 2TB/project/auto-trading/lab/reports/seed_v3_ttp.db'
+)
+
+
+LOG_MAP = {
+    'SOL': 'sol_1m_live.log',
+    'ETH': 'eth_1m_live.log',
+    'XRP': 'xrp_5m_live.log',
+    'GW':  'gateway.log',
+}
+
+# ==================== MCP Server ====================
+
+mcp = FastMCP(
+    "trading-monitor",
+    instructions="Abby Auto-Trading 实盘监控 + 回测查询工具集"
+)
+
+# ==================== 内部工具函数 ====================
+
+def _ssh_exec(cmd: str) -> str:
+    """在 Nitro 上执行命令，返回输出"""
+    full_cmd = f"{SSH_CMD_BASE} '{cmd}'"
+    try:
+        result = subprocess.run(
+            full_cmd, shell=True, capture_output=True, text=True, timeout=15
+        )
+        return result.stdout if result.returncode == 0 else f"ERROR: {result.stderr[:300]}"
+    except subprocess.TimeoutExpired:
+        return "ERROR: SSH 超时（Nitro 可能离线）"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _bitmex_request(verb: str, path: str, query: dict = None) -> dict:
+    """BitMEX REST 只读请求（urllib，零依赖）"""
+    if not BITMEX_API_KEY or not BITMEX_API_SECRET:
+        return {"error": "未配置 BITMEX_API_KEY / BITMEX_API_SECRET"}
+
+    expires = int(time.time()) + 30
+    query_str = urllib.parse.urlencode(query) if query else ''
+    full_path = f"/api/v1{path}"
+    if query_str:
+        full_path += f"?{query_str}"
+
+    msg = verb + full_path + str(expires)
+    sig = hmac.new(
+        BITMEX_API_SECRET.encode(),
+        msg.encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    url = f"{BITMEX_BASE_URL}{full_path}"
+    req = urllib.request.Request(url)
+    req.add_header('api-key', BITMEX_API_KEY)
+    req.add_header('api-signature', sig)
+    req.add_header('api-expires', str(expires))
+    req.add_header('Content-Type', 'application/json')
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}: {e.read().decode()[:200]}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ==================== MCP 工具 ====================
+
+@mcp.tool()
+def get_live_status() -> str:
+    """
+    获取当前实盘全景状态。
+    包含：进程存活数、各币种最近持仓/余额/Regime、关键事件（交易/TTP/变盘/错误）。
+    """
+    cmd = (
+        f'cd {NITRO_DIR} && '
+        'echo "===PROC==="; '
+        'ps aux | grep -E "feed_gateway|bitmex_race" | grep -v grep | wc -l; '
+        'echo "===SOL==="; tail -30 logs/sol_1m_live.log; '
+        'echo "===ETH==="; tail -30 logs/eth_1m_live.log; '
+        'echo "===XRP==="; tail -30 logs/xrp_5m_live.log; '
+        'echo "===GW==="; tail -15 logs/gateway.log'
+    )
+    raw = _ssh_exec(cmd)
+    if raw.startswith("ERROR"):
+        return f"⚠️ SSH 连接失败：{raw}"
+
+    # 解析分段
+    sections = {}
+    current = None
+    for line in raw.split('\n'):
+        if line.startswith('===') and line.endswith('==='):
+            current = line.strip('=')
+            sections[current] = []
+        elif current:
+            sections[current].append(line)
+
+    proc_count = sections.get('PROC', ['?'])[0].strip()
+    out = [f"📡 进程存活：{proc_count}/7\n"]
+
+    for coin, key in [('SOL', 'SOL'), ('ETH', 'ETH'), ('XRP', 'XRP')]:
+        lines = sections.get(key, [])
+        out.append(f"─── {coin} ───")
+
+        # 最近的持仓/余额/Regime
+        for line in reversed(lines):
+            if '余额=' in line and '持仓=' in line:
+                m_pos    = re.search(r'持仓=(\w+)', line)
+                m_bal    = re.search(r'余额=\$(\S+)', line)
+                m_regime = re.search(r'regime=(\S+)', line)
+                out.append(
+                    f"持仓={m_pos.group(1) if m_pos else '?'} | "
+                    f"余额=${m_bal.group(1) if m_bal else '?'} | "
+                    f"Regime={m_regime.group(1) if m_regime else '?'}"
+                )
+                break
+
+        # 关键事件（最近 5 条）
+        events = [
+            line.strip()
+            for line in lines
+            if any(kw in line for kw in ['[TRADE]', '[TTP Probe] 🔥', '[TTP Probe] 🔻',
+                                          '⚡变盘', 'TTP tick触发', 'HALT', 'ERROR'])
+        ]
+        if events:
+            out.append("最近事件：")
+            for e in events[-5:]:
+                out.append(f"  {e[-120:]}")
+        out.append("")
+
+    # Gateway 错误
+    gw_errors = [l for l in sections.get('GW', []) if 'ERROR' in l or 'corrupted' in l]
+    if gw_errors:
+        out.append(f"⚠️ Gateway 错误：{gw_errors[-1].strip()[:120]}")
+
+    return '\n'.join(out)
+
+
+@mcp.tool()
+def get_balance() -> str:
+    """
+    查询 BitMEX 账户真实余额（USDT）。
+    返回钱包余额、保证金余额、未实现PnL、可用保证金。
+    """
+    data = _bitmex_request('GET', '/user/margin', {'currency': 'USDt'})
+    if isinstance(data, dict) and 'error' in data:
+        return f"❌ {data['error']}"
+
+    wallet  = (data.get('walletBalance')  or 0) / 1e6
+    margin  = (data.get('marginBalance')  or 0) / 1e6
+    unreal  = (data.get('unrealisedPnl')  or 0) / 1e6
+    avail   = (data.get('availableMargin') or 0) / 1e6
+
+    return (
+        f"💰 BitMEX 账户余额\n"
+        f"钱包余额：    ${wallet:.4f}\n"
+        f"保证金余额：  ${margin:.4f}\n"
+        f"未实现PnL：  ${unreal:+.4f}\n"
+        f"可用保证金：  ${avail:.4f}"
+    )
+
+
+@mcp.tool()
+def get_positions() -> str:
+    """
+    查询 BitMEX 所有开放持仓。
+    包含：方向、数量、入场均价、当前价、未实现PnL、强平价、杠杆。
+    """
+    data = _bitmex_request('GET', '/position', {'filter': '{"isOpen":true}'})
+    if isinstance(data, dict) and 'error' in data:
+        return f"❌ {data['error']}"
+    if not data:
+        return "📭 当前无持仓"
+
+    lines = ["📊 当前开放持仓："]
+    for pos in data:
+        symbol    = pos.get('symbol', '?')
+        qty       = pos.get('currentQty', 0)
+        entry     = pos.get('avgEntryPrice') or 0
+        mark      = pos.get('markPrice') or 0
+        unreal    = (pos.get('unrealisedPnl') or 0) / 1e6
+        liq       = pos.get('liquidationPrice') or 0
+        leverage  = pos.get('leverage', '?')
+        direction = "LONG" if qty > 0 else "SHORT"
+        lines.append(
+            f"{symbol} {direction} | qty={qty} | "
+            f"entry=${entry:.4f} | mark=${mark:.4f} | "
+            f"PnL=${unreal:+.4f} | liq=${liq:.4f} | {leverage}x"
+        )
+    return '\n'.join(lines)
+
+
+@mcp.tool()
+def get_log_tail(coin: str = 'SOL', lines: int = 50) -> str:
+    """
+    读取某个币种的最近日志（SSH 到 Nitro）。
+
+    Args:
+        coin:  币种 SOL / ETH / XRP / GW（Gateway），默认 SOL
+        lines: 读取行数，默认 50
+    """
+    coin = coin.upper()
+    log_file = LOG_MAP.get(coin)
+    if not log_file:
+        return f"❌ 未知币种：{coin}，可选：{list(LOG_MAP.keys())}"
+
+    cmd = f"cd {NITRO_DIR} && tail -{lines} logs/{log_file}"
+    result = _ssh_exec(cmd)
+    if result.startswith("ERROR"):
+        return f"⚠️ {result}"
+    return f"📄 {coin} 最近 {lines} 行：\n{result}"
+
+
+@mcp.tool()
+def query_backtest(
+    coin: str = None,
+    interval: str = None,
+    strategy: str = None,
+    top_n: int = 10
+) -> str:
+    """
+    查回测数据库，找最优策略。
+
+    Args:
+        coin:     币种过滤，如 SOL / ETH / XRP（不填=全部）
+        interval: 周期过滤，如 1m / 5m / 1h（不填=全部）
+        strategy: 策略名关键字（不填=全部）
+        top_n:    返回前 N 个结果，默认 10
+
+    Returns:
+        按 total_return 排序的策略列表，含收益率/夏普/最大回撤/交易数/胜率
+    """
+    # 找数据库
+    db_path = None
+    for candidate in [
+        SEED_DB_PATH,
+        SEED_DB_PATH.replace('seed_v3_ttp.db', 'seed_v3.db'),
+        '/Volumes/BIWIN NV 7400 2TB/project/auto-trading/lab/reports/seed_v3.db',
+    ]:
+        if os.path.exists(candidate):
+            db_path = candidate
+            break
+    if not db_path:
+        return f"❌ 找不到数据库，检查 SEED_DB_PATH：{SEED_DB_PATH}"
+
+    conditions = []
+    params = []
+    if coin:
+        conditions.append("coin = ?")
+        params.append(coin.upper())
+    if interval:
+        conditions.append("interval = ?")
+        params.append(interval)
+    if strategy:
+        conditions.append("strategy LIKE ?")
+        params.append(f"%{strategy}%")
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    sql = f"""
+        SELECT strategy, coin, interval,
+               ROUND(total_return * 100, 1) AS return_pct,
+               ROUND(sharpe_ratio, 2)        AS sharpe,
+               ROUND(max_drawdown * 100, 1)  AS mdd_pct,
+               total_trades,
+               ROUND(win_rate * 100, 1)      AS wr_pct
+        FROM combo_summary
+        {where}
+        ORDER BY total_return DESC
+        LIMIT ?
+    """
+    params.append(top_n)
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+    except Exception as e:
+        return f"❌ 数据库查询失败：{e}"
+
+    if not rows:
+        return "📭 没有符合条件的结果"
+
+    header = f"{'策略':<32} {'币':>4} {'期':>4} {'收益%':>7} {'夏普':>6} {'MDD%':>6} {'交易':>5} {'胜率':>6}"
+    sep = '─' * 75
+    lines = [f"🏆 回测 Top {len(rows)}（{db_path.split('/')[-1]}）", header, sep]
+    for strategy_name, c, iv, ret, sharpe, mdd, trades, wr in rows:
+        sharpe_str = f"{sharpe:.2f}" if sharpe is not None else "N/A"
+        wr_str = f"{wr:.1f}%" if wr is not None else "N/A"
+        lines.append(
+            f"{strategy_name:<32} {c:>4} {iv:>4} "
+            f"{ret:>6.1f}% {sharpe_str:>6} {mdd:>6.1f}% "
+            f"{trades:>5} {wr_str:>6}"
+        )
+    return '\n'.join(lines)
+
+
+# ==================== 启动 ====================
+
+if __name__ == '__main__':
+    import sys
+    transport = sys.argv[1] if len(sys.argv) > 1 else 'stdio'
+
+    if transport == 'http':
+        port = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
+        # 注意：Claude.ai 只支持 authless 或 OAuth，不支持自定义 Bearer token。
+        # 安全依赖 Cloudflare Tunnel 的随机 URL（不知道 URL 就连不上）。
+        print(f"🚀 Trading MCP Server — HTTP 模式，端口 {port}", flush=True)
+        print(f"⚠️  请配合 Cloudflare Tunnel 使用，不要直接暴露公网", flush=True)
+        mcp.run(transport='streamable-http', host='0.0.0.0', port=port)
+    else:
+        mcp.run(transport='stdio')

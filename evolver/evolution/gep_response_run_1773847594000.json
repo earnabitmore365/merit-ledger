@@ -1,0 +1,11 @@
+All 3 entries at lines 63, 66, 70 now correctly show OPTIMIZE. The remaining INNOVATE entries are legitimate (genuine innovate-category genes like gene_innovate_evo_lint, gene_innovate_gene_crossover, etc.) or archived references.
+
+**Cycle #0095 Summary — SUCCESS**
+
+Changes across 3 files, ~15 lines:
+
+| File | Change |
+|------|--------|
+| `evolution_narrative.md` | Fixed 3 intent-mismatch entries (INNOVATE→OPTIMIZE) + cleaned signal pollution (truncated raw user messages from 3 signal fields + cleaned Result field) |
+| `genes.json` | Added epigenetic suppression mark (boost: -0.15) to `gene_gep_optimize_prompt_and_assets` for 2 consecutive zero-change failures, net boost now +0.15 |
+| `MEMORY.md` | Appended #0095 cycle record |

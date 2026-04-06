@@ -1,0 +1,149 @@
+"""Order Block（订单块）— ICT/Smart Money 价格行为策略.
+
+订单块 = 大幅拉升/下跌之前的最后一根反方向K线区域。
+逻辑：机构在这根K线集中建仓，价格回到这里时机构可能再次买入/卖出。
+
+看涨订单块（Bullish OB）：
+- 一根大阳线出现（涨幅 >= threshold）
+- 它前面的最后一根阴线就是订单块
+- 价格回踩到这根阴线的区域 → 做多
+
+看跌订单块（Bearish OB）：
+- 一根大阴线出现（跌幅 >= threshold）
+- 它前面的最后一根阳线就是订单块
+- 价格反弹到这根阳线的区域 → 做空
+
+天生多空双向，signal close 正常触发。
+"""
+from dataclasses import dataclass
+from typing import Any
+
+from core.strategy import Signal, Strategy, TradingSignal
+
+
+@dataclass
+class OrderBlockConfig:
+    lookback: int = 30             # 回看窗口
+    impulse_pct: float = 0.015     # 大阳/大阴线最低涨跌幅（1.5%）
+    max_ob_age: int = 50           # 订单块最大存活K线数
+
+
+class OrderBlock(Strategy):
+    def __init__(
+        self, exchange: Any = None,
+        config: OrderBlockConfig | None = None,
+    ) -> None:
+        self.exchange = exchange
+        self.config = config or OrderBlockConfig()
+
+    @property
+    def name(self) -> str:
+        return "order_block"
+
+    def generate_signal(
+        self, coin: str, klines: list[dict] | None = None,
+    ) -> TradingSignal:
+        min_required = self.config.lookback + 5
+        if not klines or len(klines) < min_required:
+            return TradingSignal(signal=Signal.HOLD, confidence=0.0, coin=coin,
+                                 timestamp=klines[-1]["time"] if klines else 0,
+                                 metadata={"reason": "Insufficient klines"})
+
+        current_price = klines[-1]["close"]
+        best_bull_ob = None  # (ob_low, ob_high, age)
+        best_bear_ob = None
+
+        search_start = max(1, len(klines) - self.config.max_ob_age)
+        for i in range(search_start, len(klines) - 1):
+            candle = klines[i]
+            body_pct = (
+                (candle["close"] - candle["open"])
+                / candle["open"]
+                if candle["open"] > 0 else 0
+            )
+
+            # 检测大阳线（impulse move up）
+            if body_pct >= self.config.impulse_pct:
+                # 往前找最后一根阴线作为订单块
+                for j in range(i - 1, max(search_start - 1, i - 10), -1):
+                    prev = klines[j]
+                    if prev["close"] < prev["open"]:  # 阴线
+                        ob_low = prev["low"]
+                        ob_high = prev["high"]
+                        age = len(klines) - 1 - j
+                        # 检查订单块是否已被后续K线跌破（失效）
+                        invalidated = False
+                        for k in range(j + 1, len(klines)):
+                            if klines[k]["close"] < ob_low:
+                                invalidated = True
+                                break
+                        if (not invalidated
+                                and (best_bull_ob is None
+                                     or age < best_bull_ob[2])):
+                            best_bull_ob = (ob_low, ob_high, age)
+                        break
+
+            # 检测大阴线（impulse move down）
+            if body_pct <= -self.config.impulse_pct:
+                for j in range(i - 1, max(search_start - 1, i - 10), -1):
+                    prev = klines[j]
+                    if prev["close"] > prev["open"]:  # 阳线
+                        ob_low = prev["low"]
+                        ob_high = prev["high"]
+                        age = len(klines) - 1 - j
+                        invalidated = False
+                        for k in range(j + 1, len(klines)):
+                            if klines[k]["close"] > ob_high:
+                                invalidated = True
+                                break
+                        if (not invalidated
+                                and (best_bear_ob is None
+                                     or age < best_bear_ob[2])):
+                            best_bear_ob = (ob_low, ob_high, age)
+                        break
+
+        # 判断信号
+        signal = Signal.HOLD
+        confidence = 0.0
+        metadata = {}
+
+        if best_bull_ob:
+            ob_low, ob_high, age = best_bull_ob
+            if ob_low <= current_price <= ob_high:
+                signal = Signal.BUY
+                confidence = (
+                    1.0 - (current_price - ob_low)
+                    / (ob_high - ob_low)
+                    if ob_high > ob_low else 0.5
+                )
+                metadata = {"ob_type": "bullish", "ob_low": ob_low,
+                           "ob_high": ob_high, "age": age}
+
+        if best_bear_ob:
+            ob_low, ob_high, age = best_bear_ob
+            if ob_low <= current_price <= ob_high:
+                if signal == Signal.BUY:
+                    if age < best_bull_ob[2]:
+                        signal = Signal.SELL
+                        confidence = (
+                            (current_price - ob_low)
+                            / (ob_high - ob_low)
+                            if ob_high > ob_low
+                            else 0.5
+                        )
+                        metadata = {"ob_type": "bearish", "ob_low": ob_low,
+                                   "ob_high": ob_high, "age": age}
+                else:
+                    signal = Signal.SELL
+                    confidence = (
+                        (current_price - ob_low)
+                        / (ob_high - ob_low)
+                        if ob_high > ob_low
+                        else 0.5
+                    )
+                    metadata = {"ob_type": "bearish", "ob_low": ob_low,
+                               "ob_high": ob_high, "age": age}
+
+        return TradingSignal(signal=signal, confidence=confidence,
+                             coin=coin, timestamp=klines[-1]["time"],
+                             metadata=metadata)

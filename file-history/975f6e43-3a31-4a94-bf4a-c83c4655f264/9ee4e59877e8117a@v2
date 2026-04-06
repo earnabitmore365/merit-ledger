@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""阈值扫描：mean_reversion 原版 + mirror，多阈值对比"""
+
+import sys, os, json, copy
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+
+from backtest.backtest import BacktestEngine
+from core.strategy import get_strategy
+from core.strategy.strategy_mean_reversion import MeanReversion, MeanReversionConfig
+
+# 翻转K线（同 generate_seed.py mirror_candles）
+def mirror_candles(klines):
+    if not klines:
+        return klines
+    max_price = max(k['high'] for k in klines)
+    mirrored = []
+    for k in klines:
+        m = dict(k)
+        m['open'] = max_price - k['open']
+        m['close'] = max_price - k['close']
+        m['high'] = max_price - k['low']
+        m['low'] = max_price - k['high']
+        mirrored.append(m)
+    return mirrored
+
+# 测试阈值列表
+thresholds = [
+    (0.990, 1.010, '±1.0%'),
+    (0.993, 1.007, '±0.7%'),
+    (0.995, 1.005, '±0.5%'),
+    (0.997, 1.003, '±0.3%'),
+    (0.998, 1.002, '±0.2%'),
+]
+
+combos = [
+    ('ETH', '1m'),
+    ('XRP', '5m'),
+]
+
+print(f'{"="*90}')
+print(f'  mean_reversion 阈值扫描（近60天，原版 + mirror）')
+print(f'{"="*90}')
+
+for coin, interval in combos:
+    print(f'\n{"─"*90}')
+    print(f'  {coin} {interval}')
+    print(f'{"─"*90}')
+    print(f'  {"阈值":<8} {"模式":<8} {"交易数":>6} {"胜率":>8} {"PnL":>10} {"余额":>10} {"Sharpe":>8} {"赢/亏":>8}')
+    print(f'  {"─"*80}')
+
+    for buy_th, sell_th, label in thresholds:
+        for mode in ['原版', 'mirror']:
+            # 创建引擎
+            engine = BacktestEngine(
+                coin=coin,
+                interval=interval,
+                days=60,
+                initial_capital=500,
+                enable_ttp=True,
+                stop_loss_pct=0.1,
+                leverage=10.0,
+                enable_withdraw=False,
+            )
+
+            # mirror 模式：翻转K线
+            if mode == 'mirror':
+                engine.candles = mirror_candles(engine.candles)
+
+            # 创建自定义阈值的策略
+            config = MeanReversionConfig(
+                period=20,
+                buy_threshold=buy_th,
+                sell_threshold=sell_th,
+            )
+            strategy = MeanReversion(config=config)
+
+            result = engine.run_backtest('mean_reversion', strategy=strategy)
+
+            if result:
+                wr = result.win_rate
+                # 修正胜率显示（引擎可能返回百分比形式）
+                if wr > 1:
+                    wr = wr / 100
+                print(f'  {label:<8} {mode:<8} {result.total_trades:>6} {wr:>7.1%} {result.total_return:>+10.2f} ${result.final_balance:>9.2f} {result.sharpe_ratio:>+8.4f} {result.winning_trades:>3}/{result.losing_trades:<3}')
+            else:
+                print(f'  {label:<8} {mode:<8}  FAILED')
+
+print(f'\n{"="*90}')
+print('注：mirror = 旧版固定 max_price 翻转（非 v2.1 SMA(200) 翻转）')
+print('    PnL 为 $1 固定注码下的累计盈亏')

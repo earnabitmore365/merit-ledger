@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""
+PreToolUse hook for Agent — 写代码/改代码必须用专业 agent，不准用 general-purpose。
+"""
+
+import json
+import sys
+import re
+
+# 写代码关键词
+CODE_KEYWORDS = [
+    r"写代码", r"改代码", r"修改.*代码", r"修复.*代码", r"实现.*功能",
+    r"写.*脚本", r"创建.*文件", r"新建.*\.py", r"新建.*\.js", r"新建.*\.ts",
+    r"用 Edit", r"用 Write", r"代码写手", r"按照执行",
+    r"修改指令", r"改动.*行", r"在.*后面加", r"把.*改为",
+    r"write.*code", r"modify.*code", r"implement", r"fix.*code",
+    r"create.*file", r"edit.*file",
+]
+
+# 允许写代码的专业 agent
+CODE_AGENTS = {
+    "python-pro", "typescript-pro", "javascript-pro", "golang-pro",
+    "rust-pro", "java-pro", "csharp-pro", "cpp-pro", "c-pro",
+    "ruby-pro", "php-pro", "elixir-pro", "scala-pro", "haskell-pro",
+    "julia-pro", "bash-pro", "posix-shell-pro",
+    "fastapi-pro", "django-pro", "dotnet-architect",
+    "frontend-developer", "mobile-developer", "ios-developer",
+    "flutter-expert", "unity-developer", "minecraft-bukkit-pro",
+    "debugger", "code-reviewer", "test-automator",
+    "team-implementer", "team-debugger",
+    "legacy-modernizer", "dx-optimizer",
+    "arm-cortex-expert",
+}
+
+def main():
+    try:
+        data = json.load(sys.stdin)
+    except (json.JSONDecodeError, Exception):
+        return  # 解析失败不阻塞
+
+    tool_name = data.get("tool_name", "")
+    if tool_name != "Agent":
+        return
+
+    tool_input = data.get("tool_input", {})
+    prompt = tool_input.get("prompt", "")
+    agent_type = tool_input.get("subagent_type", "general-purpose")
+    description = tool_input.get("description", "")
+
+    full_text = f"{prompt} {description}".lower()
+
+    # 检查是否涉及写代码
+    is_code_task = any(re.search(kw, full_text, re.IGNORECASE) for kw in CODE_KEYWORDS)
+
+    if is_code_task and agent_type not in CODE_AGENTS:
+        result = {
+            "decision": "block",
+            "reason": f"写代码任务必须用专业 agent（如 python-pro），当前用了 '{agent_type}'。"
+                      f"请改用合适的 subagent_type。",
+        }
+        print(json.dumps(result))
+        return
+
+    # 非代码任务或已用专业 agent，放行
+
+
+if __name__ == "__main__":
+    main()

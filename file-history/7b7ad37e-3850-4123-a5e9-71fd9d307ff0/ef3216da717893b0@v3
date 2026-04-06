@@ -1,0 +1,9 @@
+# Loop 进度
+
+## 状态
+STATUS: RUNNING
+
+## 历史
+- R1: config.py 删除 DIRECTION_FLIP_PROB 和 REPRODUCTION_PROB（无任何文件引用）
+- R2: tree.py 删死 import NUMERIC_TERMINALS/get_available_numeric_terminals; param_optimizer.py 删死代码(166-167行被169覆盖)
+- R3: config.py 更新过时注释; run.py 标记废弃+加 compute_all 缺失检测（P0 防崩）

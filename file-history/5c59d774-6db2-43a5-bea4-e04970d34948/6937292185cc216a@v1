@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+"""
+Trading MCP Server — BitMEX 只读工具
+
+5 个工具：
+  1. get_balance     — 账户余额和保证金
+  2. get_positions   — 当前持仓
+  3. get_recent_trades — 最近成交记录
+  4. get_market_data — 行情（价格/深度/资金费率）
+  5. get_klines      — K线数据
+
+安全设计：
+  - 全部只读（GET 请求），不下单、不改仓
+  - API Key 只需 Read 权限
+  - 凭证从 .env.mcp 加载，不硬编码
+
+启动方式：Claude Code 通过 settings.json mcpServers 自动拉起
+"""
+
+import os
+import json
+import time
+import hmac
+import hashlib
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+from mcp.server.fastmcp import FastMCP
+
+# ==================== 配置 ====================
+
+# 加载 .env.mcp（与本文件同目录）
+ENV_FILE = Path(__file__).parent / '.env.mcp'
+if ENV_FILE.exists():
+    for line in ENV_FILE.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith('#') and '=' in line:
+            key, _, val = line.partition('=')
+            os.environ.setdefault(key.strip(), val.strip())
+
+API_KEY = os.environ.get('BITMEX_API_KEY', '')
+API_SECRET = os.environ.get('BITMEX_API_SECRET', '')
+TESTNET = os.environ.get('BITMEX_TESTNET', 'false').lower() == 'true'
+
+BASE_URL = 'https://testnet.bitmex.com' if TESTNET else 'https://www.bitmex.com'
+
+# 币种 → 合约映射
+SYMBOL_MAP = {
+    'BTC': 'XBTUSDT', 'ETH': 'ETHUSDT', 'SOL': 'SOLUSDT',
+    'XRP': 'XRPUSDT', 'ADA': 'ADAUSDT', 'BNB': 'BNBUSDT',
+    'AVAX': 'AVAXUSDT', 'LINK': 'LINKUSDT', 'DOT': 'DOTUSDT',
+    'DOGE': 'DOGEUSD',
+}
+
+# 反向映射
+SYMBOL_MAP_REV = {v: k for k, v in SYMBOL_MAP.items()}
+
+# ==================== API 基础 ====================
+
+
+def _sign(verb: str, path: str, expires: int, data: str = '') -> str:
+    """HMAC-SHA256 签名"""
+    msg = verb + path + str(expires) + data
+    return hmac.new(
+        API_SECRET.encode(), msg.encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def _request(verb: str, path: str, query: dict = None) -> dict | list:
+    """发送 BitMEX REST 请求"""
+    if query:
+        qs = urllib.parse.urlencode(query, quote_via=urllib.parse.quote)
+        full_path = f'{path}?{qs}'
+    else:
+        full_path = path
+
+    expires = int(time.time()) + 30
+    sig = _sign(verb, full_path, expires)
+
+    url = BASE_URL + full_path
+    req = urllib.request.Request(url, method=verb)
+    req.add_header('api-key', API_KEY)
+    req.add_header('api-expires', str(expires))
+    req.add_header('api-signature', sig)
+    req.add_header('Content-Type', 'application/json')
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode() if e.fp else ''
+        return {'error': f'HTTP {e.code}', 'message': body}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def _to_symbol(coin: str) -> str:
+    """币种名 → BitMEX 合约代码"""
+    return SYMBOL_MAP.get(coin.upper(), f'{coin.upper()}USDT')
+
+
+def _from_symbol(symbol: str) -> str:
+    """BitMEX 合约代码 → 币种名"""
+    return SYMBOL_MAP_REV.get(symbol, symbol.replace('USDT', '').replace('USD', ''))
+
+
+# 合约乘数缓存
+_multiplier_cache: dict = {}
+
+
+def _get_multiplier(coin: str) -> float:
+    """获取合约乘数（合约数 → 币数 的换算因子）"""
+    symbol = _to_symbol(coin)
+    if symbol not in _multiplier_cache:
+        result = _request('GET', '/api/v1/instrument', query={
+            'symbol': symbol, 'columns': 'multiplier,underlyingToPositionMultiplier'
+        })
+        if isinstance(result, list) and result:
+            u2p = result[0].get('underlyingToPositionMultiplier', 1)
+            _multiplier_cache[symbol] = u2p if u2p else 1
+        else:
+            _multiplier_cache[symbol] = 1
+    return _multiplier_cache[symbol]
+
+
+# ==================== MCP Server ====================
+
+app = FastMCP(name="trading")
+
+
+@app.tool()
+def get_balance() -> str:
+    """查询 BitMEX 账户余额和保证金信息。
+
+    返回总余额、可用余额、已用保证金、未实现盈亏（单位：USDT）。
+    """
+    result = _request('GET', '/api/v1/user/margin', query={'currency': 'USDt'})
+
+    if 'error' in result:
+        return f"查询失败: {result.get('message', result['error'])}"
+
+    d = 1e6  # USDt 精度
+    wallet = float(result.get('walletBalance', 0)) / d
+    available = float(result.get('availableMargin', 0)) / d
+    margin_used = float(result.get('maintMargin', 0)) / d
+    unrealized = float(result.get('unrealisedPnl', 0)) / d
+
+    return (
+        f"## 账户余额\n"
+        f"| 项目 | 金额 (USDT) |\n"
+        f"|------|------------|\n"
+        f"| 总余额 | {wallet:.2f} |\n"
+        f"| 可用余额 | {available:.2f} |\n"
+        f"| 已用保证金 | {margin_used:.2f} |\n"
+        f"| 未实现盈亏 | {unrealized:+.2f} |\n"
+    )
+
+
+@app.tool()
+def get_positions() -> str:
+    """查询当前所有持仓。
+
+    返回每个持仓的币种、方向、数量、开仓均价、未实现盈亏。
+    """
+    result = _request('GET', '/api/v1/position', query={
+        'filter': json.dumps({'isOpen': True}),
+    })
+
+    if isinstance(result, dict) and 'error' in result:
+        return f"查询失败: {result.get('message', result['error'])}"
+
+    if not isinstance(result, list) or not result:
+        return "当前无持仓"
+
+    lines = ["## 当前持仓\n"]
+    lines.append("| 币种 | 方向 | 数量 | 开仓价 | 未实现盈亏 |")
+    lines.append("|------|------|------|--------|-----------|")
+
+    for r in result:
+        qty = r.get('currentQty', 0)
+        if qty == 0:
+            continue
+        coin = _from_symbol(r.get('symbol', ''))
+        u2p = _get_multiplier(coin)
+        side = 'LONG' if qty > 0 else 'SHORT'
+        size = abs(qty) / u2p if u2p else abs(qty)
+        entry = float(r.get('avgEntryPrice', 0) or 0)
+        pnl = float(r.get('unrealisedPnl', 0) or 0) / 1e6
+
+        lines.append(f"| {coin} | {side} | {size:.4f} | ${entry:.2f} | {pnl:+.2f} USDT |")
+
+    if len(lines) == 3:  # 只有表头，没有数据行
+        return "当前无持仓"
+
+    return "\n".join(lines)
+
+
+@app.tool()
+def get_recent_trades(count: int = 20) -> str:
+    """查询最近的成交记录。
+
+    Args:
+        count: 返回条数（1-100，默认20）
+    """
+    count = max(1, min(100, count))
+
+    result = _request('GET', '/api/v1/execution/tradeHistory', query={
+        'count': count,
+        'reverse': 'true',
+    })
+
+    if isinstance(result, dict) and 'error' in result:
+        return f"查询失败: {result.get('message', result['error'])}"
+
+    if not isinstance(result, list) or not result:
+        return "无成交记录"
+
+    lines = ["## 最近成交记录\n"]
+    lines.append("| 时间 | 币种 | 方向 | 数量 | 价格 | 手续费 |")
+    lines.append("|------|------|------|------|------|--------|")
+
+    for t in result:
+        ts = t.get('timestamp', '')[:19].replace('T', ' ')
+        coin = _from_symbol(t.get('symbol', ''))
+        side = t.get('side', '')
+        qty = t.get('lastQty', 0)
+        price = t.get('lastPx', 0)
+        fee = float(t.get('commission', 0)) * 100  # 转百分比
+
+        lines.append(f"| {ts} | {coin} | {side} | {qty} | ${price} | {fee:.3f}% |")
+
+    return "\n".join(lines)
+
+
+@app.tool()
+def get_market_data(coin: str) -> str:
+    """查询指定币种的市场数据：最新价、24h涨跌、买卖盘口、资金费率。
+
+    Args:
+        coin: 币种名称（如 BTC、ETH、XRP、SOL）
+    """
+    symbol = _to_symbol(coin.upper())
+
+    # 查行情
+    inst = _request('GET', '/api/v1/instrument', query={
+        'symbol': symbol,
+        'columns': 'lastPrice,highPrice,lowPrice,volume24h,turnover24h,'
+                   'prevClosePrice,lastChangePcnt,fundingRate,fundingTimestamp,'
+                   'bidPrice,askPrice,openInterest',
+    })
+
+    if isinstance(inst, dict) and 'error' in inst:
+        return f"查询失败: {inst.get('message', inst['error'])}"
+
+    if isinstance(inst, list) and inst:
+        d = inst[0]
+    else:
+        return f"找不到 {coin} 的合约信息"
+
+    last = d.get('lastPrice', 0)
+    high = d.get('highPrice', 0)
+    low = d.get('lowPrice', 0)
+    vol = d.get('volume24h', 0)
+    change = float(d.get('lastChangePcnt', 0) or 0) * 100
+    bid = d.get('bidPrice', 0)
+    ask = d.get('askPrice', 0)
+    funding = float(d.get('fundingRate', 0) or 0) * 100
+    oi = d.get('openInterest', 0)
+
+    return (
+        f"## {coin} 市场数据\n\n"
+        f"| 指标 | 数值 |\n"
+        f"|------|------|\n"
+        f"| 最新价 | ${last} |\n"
+        f"| 24h 最高 | ${high} |\n"
+        f"| 24h 最低 | ${low} |\n"
+        f"| 24h 涨跌 | {change:+.2f}% |\n"
+        f"| 24h 成交量 | {vol:,.0f} 合约 |\n"
+        f"| 买一 / 卖一 | ${bid} / ${ask} |\n"
+        f"| 资金费率 | {funding:.4f}% |\n"
+        f"| 未平仓量 | {oi:,.0f} |\n"
+    )
+
+
+@app.tool()
+def get_klines(coin: str, interval: str = '1h', count: int = 50) -> str:
+    """查询K线数据。
+
+    Args:
+        coin: 币种名称（如 BTC、ETH、XRP）
+        interval: K线周期（1m, 5m, 1h, 1d）
+        count: 返回条数（1-200，默认50）
+    """
+    symbol = _to_symbol(coin.upper())
+    count = max(1, min(200, count))
+
+    valid_intervals = {'1m': '1m', '5m': '5m', '1h': '1h', '1d': '1d'}
+    bin_size = valid_intervals.get(interval)
+    if not bin_size:
+        return f"不支持的周期: {interval}（支持: 1m, 5m, 1h, 1d）"
+
+    result = _request('GET', '/api/v1/trade/bucketed', query={
+        'binSize': bin_size,
+        'symbol': symbol,
+        'count': count,
+        'reverse': 'true',
+    })
+
+    if isinstance(result, dict) and 'error' in result:
+        return f"查询失败: {result.get('message', result['error'])}"
+
+    if not isinstance(result, list) or not result:
+        return f"无 {coin} {interval} K线数据"
+
+    lines = [f"## {coin} {interval} K线（最近 {len(result)} 根）\n"]
+    lines.append("| 时间 | 开盘 | 最高 | 最低 | 收盘 | 成交量 |")
+    lines.append("|------|------|------|------|------|--------|")
+
+    for k in reversed(result):  # 按时间正序显示
+        ts = k.get('timestamp', '')[:16].replace('T', ' ')
+        o = k.get('open', 0)
+        h = k.get('high', 0)
+        l = k.get('low', 0)
+        c = k.get('close', 0)
+        v = k.get('volume', 0)
+        lines.append(f"| {ts} | {o} | {h} | {l} | {c} | {v:,.0f} |")
+
+    return "\n".join(lines)
+
+
+# ==================== 启动 ====================
+
+if __name__ == "__main__":
+    app.run()

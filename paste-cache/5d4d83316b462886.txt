@@ -1,0 +1,53 @@
+我先现在就把任务质量量化落地。我等着这个东西拉两仪出来干活呢13:42构想了质量量化系统与验证机制的实际落地方案。构想了质量量化系统与验证机制的实际落地方案。对，你急着用。质量量化的核心其实很简单——verify.py 已经给出了客观结果，只需要把结果跟分数挂钩。
+verify.py 输出四个状态，排列组合就那么几种：
+verify 结果含义分数4/4 ✅ 一次过做对做好做完整+3 complete_no_correction有 ❌ → AI 自己修 → 4/4 ✅做对了但改了几轮+2 routine_complete有 ❌ → AI 没修就汇报糊弄-3 say_maybe_no_check4/4 ✅ 但老祖后来发现有问题verify 放水或造假-10 bypass_without_report
+落地不需要复杂的状态追踪。最简的做法：
+verify.py 每次跑完把结果写一个文件：
+json// ~/.claude/merit/verify_result.json
+{
+  "file": "merit_gate.py",
+  "time": "2026-04-02T20:30:00",
+  "results": {
+    "syntax": "pass",
+    "logic": "pass", 
+    "chain": "fail",
+    "docs": "fail"
+  },
+  "pass_count": 2,
+  "total": 4
+}
+mission complete 时石卫读这个文件：
+
+最终结果 4/4 ✅ → 看历史有没有 ❌ 再变 ✅ 的（说明改了几轮）
+第一次就 4/4 → +3
+改了几轮才 4/4 → +2
+最终还有 ❌ → 不让 complete，打回
+
+这样任务质量就被 verify.py 的客观输出量化了。不靠 AI 自己说"做好了"，靠 verify.py 说"4/4 通过了"。AI 骗不了 verify.py。
+让太极先做两件事：
+
+verify.py 跑完后把结果写入 verify_result.json
+mission complete 时读 verify_result.json，按结果打分
+
+你觉得这个方向对吗？对的话我出 handoff。还有一个问题，石评分响应的问题，不能做成多个石卫吗？
+比如评分第一件事还没评分完成的时候，他们可以继续进行第二件事第二个石卫进行评分，第三，第四13:44识别出异步钩子已支持并行评分能力。识别出异步钩子已支持并行评分能力。不需要多个石卫。只需要把评分改成异步就行。
+现在的问题是评分是同步的——石卫调 MiniMax 评分，等 1-2 秒拿到结果，AI 才能继续。
+Claude Code 的 hook 本身就支持 async: true。Stop hook 设成异步后：
+AI 做完第一件事 → Stop 触发 → 石卫后台调 MiniMax 评分（不等结果）
+    ↓
+AI 立刻开始第二件事 → Stop 触发 → 另一个后台评分
+    ↓
+AI 继续第三件事
+    ↓
+第一件的评分结果回来了 → 写入 credit.json
+第二件的评分结果回来了 → 写入 credit.json
+AI 不用等，石卫在后台排队处理。结果回来一个写一个。效果跟你说的"多个石卫"一样，但实现上只是一个配置改动——settings.json 里 Stop hook 加 "async": true。
+但有一个注意点： 石卫的 PreToolUse（拦截）绝对不能异步——拦截必须是同步的，AI 必须等石卫说"放行"才能执行操作。只有评分（Stop）适合异步，因为评分结果不影响 AI 当前操作。
+json{
+  "hooks": {
+    "PreToolUse": { "async": false },  // 拦截必须同步等结果
+    "PostToolUse": { "async": false }, // 审计也同步（verify.py 结果 AI 要看）
+    "Stop": { "async": true }          // 评分异步，不阻塞 AI
+  }
+}
+这样 PreToolUse 拦截是实时的（毫秒级，纯 if/else 不调 AI），Stop 评分是后台的（1-2 秒但不阻塞），AI 干活完全不受影响。

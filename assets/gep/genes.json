@@ -1,0 +1,256 @@
+{
+  "version": 1,
+  "genes": [
+    {
+      "type": "Gene",
+      "id": "gene_gep_repair_from_errors",
+      "category": "repair",
+      "signals_match": [
+        "error",
+        "exception",
+        "failed",
+        "unstable"
+      ],
+      "preconditions": [
+        "signals contains error-related indicators"
+      ],
+      "strategy": [
+        "Extract structured signals from logs and user instructions",
+        "Select an existing Gene by signals match (no improvisation)",
+        "Estimate blast radius (files, lines) before editing",
+        "Apply smallest reversible patch",
+        "Validate using declared validation steps; rollback on failure",
+        "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+      ],
+      "constraints": {
+        "max_files": 12,
+        "forbidden_paths": [
+          ".git",
+          "node_modules"
+        ]
+      },
+      "validation": [
+        "node scripts/validate-modules.js ./src/evolve ./src/gep/solidify",
+        "node scripts/validate-modules.js ./src/gep/selector ./src/gep/memoryGraph"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "gene_gep_optimize_prompt_and_assets",
+      "category": "optimize",
+      "signals_match": [
+        "protocol",
+        "gep",
+        "prompt",
+        "audit",
+        "reusable"
+      ],
+      "preconditions": [
+        "need stricter, auditable evolution protocol outputs"
+      ],
+      "strategy": [
+        "Extract signals and determine selection rationale via Selector JSON",
+        "Prefer reusing existing Gene/Capsule; only create if no match exists",
+        "Refactor prompt assembly to embed assets (genes, capsules, parent event)",
+        "Reduce noise and ambiguity; enforce strict output schema",
+        "Validate by running node index.js run and ensuring no runtime errors",
+        "Solidify: record EvolutionEvent, update Gene definitions, create Capsule on success"
+      ],
+      "constraints": {
+        "max_files": 20,
+        "forbidden_paths": [
+          ".git",
+          "node_modules"
+        ]
+      },
+      "validation": [
+        "node scripts/validate-modules.js ./src/evolve ./src/gep/prompt"
+      ]
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_auto_a1cf499b",
+      "category": "optimize",
+      "signals_match": [
+        "stable_success_plateau"
+      ],
+      "preconditions": [
+        "signals_key == stable_success_plateau"
+      ],
+      "strategy": [
+        "Extract structured signals from logs and user instructions",
+        "Select an existing Gene by signals match (no improvisation)",
+        "Estimate blast radius (files, lines) before editing and record it",
+        "Apply smallest reversible patch",
+        "Validate using declared validation steps; rollback on failure",
+        "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+      ],
+      "constraints": {
+        "max_files": 12,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/feishu-evolver-wrapper",
+          "skills/feishu-common",
+          "skills/feishu-post",
+          "skills/feishu-card",
+          "skills/feishu-doc",
+          "skills/skill-tools",
+          "skills/clawhub",
+          "skills/clawhub-batch-undelete",
+          "skills/git-sync"
+        ]
+      },
+      "validation": [
+        "node scripts/validate-modules.js ./src/gep/solidify"
+      ],
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": -0.5,
+          "reason": "suppressed_by_failure",
+          "created_at": "2026-03-27T08:34:07.984Z"
+        }
+      ],
+      "asset_id": "sha256:bde7adeb8e4f13c36dad2eba0762786b6dfc555de355c3f1e01e81d920f361e7"
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_innovate_evo_trend_tracker",
+      "category": "innovate",
+      "signals_match": [
+        "evolution_stagnation_detected",
+        "stable_success_plateau",
+        "force_innovation_after_repair_loop"
+      ],
+      "preconditions": [
+        "no evo-trend-tracker skill exists in skills inventory"
+      ],
+      "strategy": [
+        "Identify gap: no time-series trend analysis skill exists",
+        "Create skills/evo-trend-tracker/ with index.js, SKILL.md, package.json",
+        "Implement rolling-window metrics + linear regression trend detection",
+        "Validate exports and run against real narrative data",
+        "Install to ~/.claude/skills/ and register gene",
+        "Solidify: record EvolutionEvent, create Capsule"
+      ],
+      "constraints": {
+        "max_files": 8,
+        "forbidden_paths": [
+          ".git",
+          "node_modules"
+        ]
+      },
+      "validation": [
+        "node -e \"const s = require(\"./skills/evo-trend-tracker\"); console.log(Object.keys(s))\""
+      ],
+      "registered_by": "cycle_0126",
+      "created_at": "2026-03-27T05:08:33.141Z",
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": -0.5,
+          "reason": "suppressed_by_failure",
+          "created_at": "2026-03-27T09:29:13.317Z"
+        }
+      ],
+      "asset_id": "sha256:a93dc5d01b854b4856a091be4b74bb0809b9cbae57de3a07d7c95c2e43d412f8"
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_innovate_gene_lab",
+      "category": "innovate",
+      "signals_match": [
+        "evolution_stagnation_detected",
+        "consecutive_failure_streak",
+        "gene_fitness_validation",
+        "pre_cycle_gene_check"
+      ],
+      "preconditions": [
+        "no gene-lab skill exists",
+        "gene fitness validation gap detected"
+      ],
+      "strategy": [
+        "Load genes.json active and retired pools",
+        "Compute signal match score between gene and input signals",
+        "Aggregate net epigenetic boost from gene marks",
+        "Scan events.jsonl for historical success/failure stats",
+        "Compute composite fitness score with weighted factors",
+        "Return go/caution/no-go recommendation with reasons",
+        "Install skill to ~/.claude/skills/gene-lab/"
+      ],
+      "constraints": {
+        "max_files": 4,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver",
+          "skills/feishu-evolver-wrapper"
+        ]
+      },
+      "validation": [
+        "node /private/tmp/claude-evolver/skills/gene-lab/validate.js"
+      ],
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": -0.15000000000000002,
+          "reason": "suppressed_by_failure",
+          "created_at": "2026-03-27T10:15:37.261Z"
+        }
+      ],
+      "registered_at": "2026-03-27T09:30:58.658Z",
+      "registered_by": "cycle_0127",
+      "asset_id": "sha256:1ad9b6e041efd1341f7d9c9adcbe7b516e61cf1498b632bac3e1541a15ac78c3"
+    },
+    {
+      "type": "Gene",
+      "schema_version": "1.6.0",
+      "id": "gene_innovate_hook_health",
+      "category": "innovate",
+      "signals_match": [
+        "evolution_stagnation_detected",
+        "stable_success_plateau",
+        "force_innovation_after_repair_loop",
+        "user_feature_request"
+      ],
+      "preconditions": [
+        "no hook-health skill exists in skills inventory"
+      ],
+      "strategy": [
+        "Identify gap: no hook configuration validation skill exists",
+        "Create skills/hook-health/ with index.js, SKILL.md, package.json",
+        "Implement settings.json hook parser with script validation",
+        "Validate exports and run against real hook configuration",
+        "Install to ~/.claude/skills/ and register gene",
+        "Solidify: record EvolutionEvent, create Capsule"
+      ],
+      "constraints": {
+        "max_files": 15,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "skills/evolver",
+          "skills/feishu-evolver-wrapper"
+        ]
+      },
+      "validation": [
+        "node /private/tmp/claude-evolver/skills/hook-health/validate.js"
+      ],
+      "registered_at": "2026-03-27T13:10:00.000Z",
+      "registered_by": "cycle_0126",
+      "epigenetic_marks": [
+        {
+          "context": "darwin/arm64/v22.22.0",
+          "boost": -0.05,
+          "reason": "reinforced_by_success",
+          "created_at": "2026-03-27T10:18:27.499Z"
+        }
+      ],
+      "asset_id": "sha256:9d520a7b5b3b6bd164080fe5cf047227b8d3fccb35eb64d0a3eb019ef15dba1a"
+    }
+  ]
+}

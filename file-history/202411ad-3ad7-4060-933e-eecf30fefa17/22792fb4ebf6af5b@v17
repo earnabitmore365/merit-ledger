@@ -1,0 +1,127 @@
+# Plan: 数据层通报系统（Gateway Notifier）
+
+## Context
+
+Gateway 内部没有主动通报能力。WS 断线/重连/数据断流这些关键事件执事在 Telegram 看不到。
+执事确认：10 种通报，数据层统一用 `TELEGRAM_GATEWAY_THREAD_ID`。
+
+---
+
+## 通报清单（10 种）
+
+```
+Gateway 内部（实时，秒级）
+├── 1. 启动成功        ✅ Gateway 启动: 9币种, ZMQ 5555
+├── 2. WS 断线         🔌 WebSocket 断线: {reason}
+├── 3. WS 重连成功     ✅ WebSocket 重连成功
+├── 4. WS 重连失败     🔴 WebSocket 重连失败 (第N次, Ns后重试)
+├── 5. 数据异常         ⚠️ 数据异常: {coin} {issue}
+├── 6. 优雅停止        ⏹ Gateway 停止
+├── 7. 每小时摘要      📊 数据层摘要: 9/9币种, KLINE xxx根, 重连0次
+├── 8. 历史K线加载失败  🔴 历史加载失败: {coin} {error}
+├── 9. 币种数据断流     ⚠️ {coin} 超过3分钟无新KLINE
+└── 10. Watchdog触发   🔴 Watchdog: 30秒无消息/60秒无K线
+```
+
+全部发到 `TELEGRAM_GATEWAY_THREAD_ID`（与 gateway_monitor.sh 同一 thread）。
+
+---
+
+## 步骤
+
+### Step 1: 新建 `src/data/gateway_notifier.py`
+
+```python
+class GatewayNotifier:
+    """Gateway 数据层 Telegram 通报."""
+
+    def __init__(self):
+        self._bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        self._chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        self._thread_id = int(os.getenv("TELEGRAM_GATEWAY_THREAD_ID", "0"))
+        self._last_sent: dict[str, float] = {}  # 节流
+        # 统计（每小时摘要用）
+        self._stats = {"klines": 0, "ticks": 0, "reconnects": 0, "errors": 0}
+
+    def _send(self, text: str, throttle_key: str = "", min_interval: int = 60):
+        """发送到 Gateway thread，带节流."""
+
+    # === 10 种通报 ===
+    def notify_startup(self, coins, intervals, zmq_port)
+    def notify_shutdown(self, reason="正常停止")
+    def notify_ws_disconnect(self, reason)
+    def notify_ws_reconnect_success(self)
+    def notify_ws_reconnect_failed(self, attempt, delay)
+    def notify_data_anomaly(self, coin, issue)
+    def notify_hourly_summary(self)
+    def notify_history_failed(self, coin, error)
+    def notify_coin_stale(self, coin, seconds)
+    def notify_watchdog(self, trigger_type, elapsed)
+```
+
+### Step 2: 在 `feed_gateway.py` 接入
+
+- `__init__`: 创建 `GatewayNotifier`
+- `start()`: 启动成功 → `notify_startup()`
+- `stop()`: 停止 → `notify_shutdown()`
+- `_load_history()`: 加载失败 → `notify_history_failed()`
+- `_on_ws_table()`: 统计 KLINE/TICK 计数 + 检测单币种断流
+- 新增 `_hourly_summary_loop()`: 每小时调 `notify_hourly_summary()`
+- 注册 WS 回调（断线/重连/Watchdog）
+
+### Step 3: 在 `bitmex/websocket.py` 加回调钩子
+
+在 `__init__` 加三个可选回调：
+```python
+self._on_disconnect_callback = None
+self._on_reconnect_failed_callback = None
+self._on_watchdog_callback = None
+```
+
+触发点：
+- `_on_close()` → 调 `_on_disconnect_callback(reason)`
+- `_reconnect()` 循环失败 → 调 `_on_reconnect_failed_callback(attempt, delay)`
+- `_watchdog()` 判死/数据流中断 → 调 `_on_watchdog_callback(type, elapsed)`
+- `_reconnect()` 成功 → 已有 `_on_reconnect_callback`，Gateway 已注册
+
+### Step 4: 单币种断流检测
+
+在 `feed_gateway._on_ws_table()` 里：
+```python
+# 每收到 KLINE 更新该币种的最后时间
+self._last_kline_per_coin[coin] = time.time()
+```
+
+在 `_hourly_summary_loop()`（或单独 timer）里每 60 秒检查：
+```python
+for coin in self.coins:
+    elapsed = time.time() - self._last_kline_per_coin.get(coin, 0)
+    if elapsed > 180:  # 3分钟
+        notifier.notify_coin_stale(coin, elapsed)
+```
+
+### Step 5: 部署到 Vultr + 验证
+
+rsync → 重启 Gateway → 确认 Telegram 收到启动通知
+
+### Step 6: wuji-verify + CHANGELOG + 自审
+
+---
+
+## 关键文件
+
+| 文件 | 操作 |
+|------|------|
+| `src/data/gateway_notifier.py` | 新建 |
+| `src/data/feed_gateway.py` | 接入 notifier + 币种断流检测 + 每小时摘要 |
+| `src/exchange/bitmex/websocket.py` | 加 3 个回调钩子 |
+
+---
+
+## 验证标准
+
+- 启动 Gateway → Telegram 收到 "✅ Gateway 启动"
+- 手动断网/kill WS → 收到 "🔌 断线" + "✅ 重连"
+- Ctrl+C → 收到 "⏹ 停止"
+- 节流：60 秒内同类消息不重复
+- wuji-verify 全绿

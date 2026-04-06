@@ -1,0 +1,234 @@
+# GP Engine — 表达式树自进化引擎
+
+> Tabula Rasa: 不给策略，只给数据+规则，让系统自己发现交易信号。
+
+---
+
+## 快速操作
+
+```bash
+cd ~/trading/gp_engine
+
+# 启动（无限循环，regime 模式，2 workers）
+nohup python3 -u gp_scheduler.py --workers 2 --rounds 0 --regime > scheduler_output.log 2>&1 &
+
+# 看状态
+tail -f scheduler_output.log
+
+# 停止（优雅，当前轮跑完再停）
+touch STOP_SCHEDULER
+
+# 看毕业生
+ls graduates/
+```
+
+---
+
+## 硬件与内存（Nitro 24GB RAM）
+
+### 实测内存用量（per worker）
+
+| 周期 | K线数量 | 数据文件 | **实测 RSS** | scheduler 预估 |
+|------|---------|----------|-------------|----------------|
+| 1m   | 2,102k  | ~200MB   | **4-5GB**   | 800MB ⚠️       |
+| 5m   | 420k    | ~40MB    | **1-2GB**   | 250MB ⚠️       |
+| 15m  | 140k    | ~14MB    | **800MB-1.2GB** | 120MB ⚠️   |
+| 30m  | 138k    | ~13MB    | **800MB-1.2GB** | 100MB ⚠️   |
+| 1h   | 69k     | ~7MB     | **1.1-1.6GB** | 80MB ⚠️     |
+| 2h   | 35k     | ~4MB     | ~400-600MB  | 60MB          |
+| 4h   | 17k     | ~2MB     | ~200-300MB  | 50MB          |
+
+> **⚠️ scheduler 的 MEMORY_ESTIMATES 严重偏低！** 预估只算数据文件大小，
+> 没算 numpy 数组（×8 float64）+ indicator_cache + 镜像数据 + 种群 200 棵树。
+> 实际 RSS ≈ 数据文件 × 50-80 倍。
+>
+> **安全做法**：24GB 机器最多 2 workers 跑 1h 以上周期，1m 只能 1 worker。
+
+### workers 数量建议
+
+| 场景 | workers | 原因 |
+|------|---------|------|
+| 1m 周期 | 1 | 单进程 4-5GB，2 个就 10GB，加 OS 接近极限 |
+| 5m-1h 周期 | 2 | 每进程 1-2GB，2 个 4GB，安全 |
+| 2h+ 周期 | 4-6 | 每进程 <600MB，可以多开 |
+| 混合周期 | 2 | scheduler 按预估调度，但预估偏低，保守用 2 |
+
+### TODO: 修正 MEMORY_ESTIMATES
+
+```python
+# gp_scheduler.py — 当前值（偏低）
+MEMORY_ESTIMATES = {
+    '1m': 800, '5m': 250, '15m': 120, '30m': 100,
+    '1h': 80, '2h': 60, '4h': 50, '8h': 40, '12h': 40, '1d': 30,
+}
+
+# 建议修正为（基于实测 RSS）
+MEMORY_ESTIMATES = {
+    '1m': 5000, '5m': 1500, '15m': 1000, '30m': 1000,
+    '1h': 1500, '2h': 600, '4h': 300, '8h': 200, '12h': 200, '1d': 100,
+}
+```
+
+---
+
+## 进化参数（config.py）
+
+### 核心参数
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| POPULATION_SIZE | 200 | 每代种群大小 |
+| GENERATIONS | 100 | 每轮进化代数 |
+| MAX_DEPTH | 7 | 树最大深度 |
+| MIN_DEPTH | 2 | 树最小深度 |
+| PARSIMONY_COEFF | 0.02 | 简洁性惩罚（逼 GP 找简单规则） |
+| MIN_TRADES | 30 | 最少交易次数 |
+| **MIN_INDICATORS** | **3** | **最少指标种类数（v1.1 新增）** |
+| LEVERAGE | 10 | 杠杆倍数 |
+| FEE_RATE | 0.035%/侧 | 手续费 |
+| SLIPPAGE_RATE | 0.02%/侧 | 滑点 |
+
+### 毕业考参数
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| TRAIN_RATIO | 0.6 | 训练集 60% |
+| WF_WINDOWS | 5 | Walk-Forward 测试窗口数 |
+| MIRROR_WF | True | 镜像数据额外 5 窗口 |
+| MIRROR_PASS_REQUIRED | 9 | 10 关中至少通过 9 关 |
+| MIN_VALID_WINDOWS | 5 | 弃权制：至少 5 个有效窗口 |
+| ABSTENTION_EXCELLENCE_THRESHOLD | 0.05 | 有弃权时均值需 >5% |
+
+### 岛屿模型参数（v1.0）
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| N_ISLANDS | 4 | 4 座岛（量价/动量/波动率/自由） |
+| ISLAND_SIZE | 25 | 每岛每方向 25 个体 |
+| MIGRATION_INTERVAL | 10 | 每 10 代迁移一次 |
+| MIGRATION_SIZE | 3 | 每次迁移 top 3 |
+
+### CMA-ES 参数精化（v1.0）
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| CMAES_ENABLED | True | 毕业后自动触发 |
+| CMAES_MAX_ITER | 150 | 最大迭代 |
+| CMAES_SIGMA0 | 5.0 | 初始步长 |
+
+---
+
+## 毕业规则
+
+一棵树要毕业，必须同时满足：
+
+1. **指标数量 ≥ 3**（v1.1）：使用少于 3 种不同指标的策略不准参加毕业考
+2. **Walk-Forward 10 关过 9 关**：原始数据 5 窗 + 镜像数据 5 窗
+3. **最少 30 笔交易**：低于此交易数的视为无效
+4. **弃权制**：允许部分窗口 0 交易（弃权），但有效窗口 ≥5 且均值 >5%
+
+### 指标数量规则详情
+
+- **进化中**：指标不足 3 个的个体，适应度每缺 1 个扣 5 分（软淘汰）
+- **毕业考**：指标不足 3 个直接拒绝参加考试（硬门槛）
+- **原因**：之前出现过只用 1 个 atr13 就毕业的情况，单指标策略不够鲁棒
+
+### 指标冷却机制
+
+- 冠军使用的指标累计 N 次后冷却 3 轮（逼 GP 探索不同组合）
+- 每 10 轮全部解冻 2 轮（防止好指标被永久冷却）
+
+---
+
+## 文件结构
+
+```
+gp_engine/
+├── README.md              # 本文件
+├── config.py              # 所有参数集中管理
+├── gp_scheduler.py        # 调度器（多币种/多周期/regime 轮转）
+├── gp_evolve.py           # 进化主循环（精英库+断点续传+动态指标）
+├── engine.py              # 进化核心（岛屿模型/标准锦标赛）
+├── evaluator.py           # 适应度评估（t-stat + 指标惩罚）
+├── graduation.py          # 毕业考（WF 10关 + 弃权制）
+├── blocks.py              # 积木库（参数化终端 + 固定终端 + 函数）
+├── tree.py                # 表达式树（生成/交叉/变异/执行/公式）
+├── indicators.py          # 基础指标计算（纯 numpy）
+├── indicator_cache.py     # 统一指标库（DuckDB 缓存）
+├── param_optimizer.py     # CMA-ES 参数精化（毕业后触发）
+├── minimax_review.py      # MiniMax 审查员（翻译+过拟合检测）
+├── run.py                 # 单次运行入口
+├── cache/                 # 数据缓存（pickle）
+├── results/               # 进化日志 + scheduler 日志
+│   ├── forever_log.jsonl  # 每轮结果
+│   ├── hall_of_fame.json  # 精英库
+│   └── scheduler_logs/    # 每任务独立日志
+└── graduates/             # 毕业生存档（JSON）
+```
+
+---
+
+## 调度器（gp_scheduler.py）
+
+### 工作模式
+
+```
+scheduler → 扫描数据 → 找空缺组合（无毕业生的 coin/interval/regime）
+  → 按队列派任务给 workers → worker 跑 gp_evolve.py
+  → 出了毕业生的格子下一圈自动跳过
+  → 一圈跑完 → 开始下一圈 → 无限循环
+```
+
+### 命令行参数
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| --workers | 4 | 并行 worker 数量 |
+| --rounds | 3 | 每组合跑几轮（0=无限） |
+| --cycles | ∞ | 跑几圈后退出 |
+| --regime | False | regime 模式（bull/bear/ranging 分别进化） |
+
+### 停止方式
+
+| 方法 | 行为 |
+|------|------|
+| `touch STOP_SCHEDULER` | 优雅停止：不派新任务，等运行中的完成 |
+| Ctrl+C | 同上 |
+| kill scheduler PID | scheduler 停，但 evolve 子进程变孤儿！需要手动 pkill |
+
+---
+
+## 进化流程
+
+```
+1. 加载数据 → 计算指标 → Z-score 归一化 → 60/40 分割
+2. 初始化种群（200 个个体 = 树 + 方向，做多/做空各半）
+3. 进化 100 代：
+   - 评估适应度（t-stat，指标不足 3 个扣分）
+   - 精英保留 5 棵
+   - 70% 交叉 + 20% 变异 + 10% 复制
+   - 锦标赛选择（随机抽 5 选最优）
+4. 冠军（long + short 各一）→ 检查指标数量 ≥ 3
+5. 毕业考：WF 10 关（原始 5 + 镜像 5），过 9 关
+6. 通过 → CMA-ES 参数精化 → MiniMax 审查 → 存档 graduates/
+7. 更新精英库 → 下一轮
+```
+
+---
+
+## 版本历史
+
+| 版本 | 内容 |
+|------|------|
+| v0.1 | BTC 单币 + 10 指标 + 80/20 OOS |
+| v0.2 | 19 指标 + t-stat 适应度 + WF 毕业 + 做空 |
+| v0.3 | 镜像数据双重验证（10 关 9 过） |
+| v0.4 | 训练集内部 WF（3 段取最低 t-stat） |
+| v0.5 | 指标冷却 + parsimony 加大 |
+| v0.6 | 分池进化（long/short 各自锦标赛） |
+| v0.7 | 参数化指标（23 种）+ 冷却门槛制 |
+| v0.8 | 弃权制毕业考 + 删除多样性惩罚 |
+| v0.9 | 统一指标库（indicator_cache.db） |
+| v1.0 | 岛屿模型 + CMA-ES 参数精化 + MiniMax 审查 |
+| **v1.1** | **MIN_INDICATORS=3（指标数量门槛+适应度惩罚）** |
+| v1.2 | scheduler 空缺优先 + regime 模式 |

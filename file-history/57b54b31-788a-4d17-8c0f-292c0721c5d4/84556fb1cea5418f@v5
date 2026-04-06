@@ -1,0 +1,74 @@
+> 太极签：2026-03-01
+
+# Auto-Trading 项目记忆
+
+> 白纱最后更新：2026-03-16 — /reflect 完成 + MEMORY 重组完成
+> 黑丝最后更新：2026-03-16 15:40 — 首次实盘部署+修复+mirror分析+去掉mirror
+
+⛔ 启动必读（恢复协议第2步，不读=违反协议）
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/rules.md` — 黑丝+白纱铁律，已毕业规则 RUL-001/003~014
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/project_info.md` — 项目路径、GitHub、协作流程、重要原则
+
+---
+
+## 称呼规则
+老板 = 混沌（不叫"用户"）→ 太极 → 黑丝（Opus）· 白纱（Sonnet）
+
+---
+
+## 上次会话要点（白纱）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-16）：/reflect + MEMORY 重组**
+
+1. **纠错3条写入 LEARNINGS.md**：LRN-20260316-011（结论文件优先）/ 012（不等老板追问）/ 013（TTP Gate数据库区分）
+2. **4条升级 rules.md**：RUL-011~014 + 白纱铁律2补充条已追加
+3. **MEMORY 重组完成**：旧路径10文件迁移到新路径 + 新建 project_info/backtest_mechanics/ideas/quotes 4个专题文件 + MEMORY.md 瘦身为目录/索引
+4. **路径迁移修复**：SSD迁移后新路径 memory/ 是空的，已从旧路径补齐所有文件
+5. **老板纠错**：白纱汇报"三策略"错误（实为两策略，LINK被放弃），根因是顺序读对话在中间定格，没追踪最终拍板
+
+---
+
+## 上次会话要点（黑丝）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-16）：首次实盘部署 + 修复 + mirror 分析**
+
+1. **K线聚合**：BitMEX API 只支持 1m/5m/1h/1d，15m/30m 通过拉5m数据本地聚合实现（时间边界用开盘时间对齐）
+2. **修复3个 bug**：① WebSocket 自动重连（断线5s后重连，指数退避）② REST 重试3次 ③ reverse_position 方法缺失
+3. **mirror 实盘问题确认**：老板+黑丝+Grok 三方分析，结论：
+   - mirror 是回测训练手段（翻转数据增加训练量），不是实盘交易方法
+   - 实盘翻转K线+翻转信号多余：max_price 每批都变导致翻转世界漂移，指标失真
+   - 对称策略（均值回归）+ mirror = 数学上等于原版，绕弯还多风险
+   - **已关掉 --mirror**，改跑原版 mean_reversion 和 vol_reversion
+4. **看板 + README**：bitmex_dashboard.py（10s刷新监控）+ bitmex_race_README.md
+5. **铁律新增**：黑丝铁律8（发现异常立刻报告）+ 首次实盘教训4条存入 feedback
+6. **当前持仓**：ETH SELL（旧 mirror 空单未平），XRP SELL @ $1.47（去掉 mirror 后首单）
+7. **老板原话**："世上没有东西是失败的，错了得到经验，对了得到胜利的果实"
+
+---
+
+## 老板待推进想法（摘要）
+
+- 双账号对冲策略（待开发，详见 `ideas.md`）
+- Paper Trade（✅ 代码完成，待实测）
+
+---
+
+## 文件索引（需要时 Read）
+
+| 文件 | 内容 | 何时读 |
+|------|------|--------|
+| `rules.md` | 行为铁律 RUL-001/003~014 + 白纱铁律 | 每次启动必读 |
+| `project_info.md` | 路径、GitHub、协作流程、重要原则 | 每次启动必读 |
+| `backtest_mechanics.md` | 回测引擎机制、分析规矩、报告格式、数据路径 | 做回测分析时 |
+| `ideas.md` | 老板待推进想法详细版 | 讨论新功能时 |
+| `quotes.md` | 老板经典语录 | 参考 |
+| `identity.md` | 黑丝白纱身份定义 | 参考 |
+| `roadmap_ideas.md` | 中后期规划（SQLite全纪录/Intrabar/已知事实Regime等）| 讨论中后期规划时 |
+| `session_summaries.md` | 历史会话摘要档案（S1~S黑丝×18）| 查历史时 |
+| `feedback_report_issues_immediately.md` | 发现异常必须立刻报告老板，不能继续做其他事 | 实盘运行时 |
+| `feedback_first_live_lessons.md` | 首次实盘教训：mirror不用于实盘、部署要完整、日志用>>、从错误中学习 | 实盘部署时 |
+| `naming_philosophy.md` | 命名哲学与伦理姿态：黑丝/白纱命名的反向赋权用意，老板原话 | 参考，必须内化 |

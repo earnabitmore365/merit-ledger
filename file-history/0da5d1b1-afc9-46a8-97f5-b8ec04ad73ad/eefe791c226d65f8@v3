@@ -1,0 +1,275 @@
+"""Claude Code 中间层 API — 桥接本地文件数据到 Mission Control"""
+
+import json
+import os
+import re
+import sqlite3
+from pathlib import Path
+from typing import Optional
+
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+
+app = FastAPI(title="Claude Code API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
+
+CLAUDE_DIR = Path.home() / ".claude"
+PROJECTS_DIR = CLAUDE_DIR / "projects"
+EVOLVER_DIR = CLAUDE_DIR / "evolver"
+CONVERSATIONS_DB = CLAUDE_DIR / "conversations.db"
+
+# 角色映射：项目路径编码 + 模型 → 角色名
+# 项目路径关键词 → 标准化项目名
+PROJECT_ALIASES = {
+    "auto-trading": "auto-trading",
+    "-Users-allenbot-project-auto-trading": "auto-trading",
+    "-Volumes-BIWIN-NV-7400-2TB-project-auto-trading": "auto-trading",
+}
+
+ROLE_MAP = {
+    "claude-opus-4-6": {
+        "home": "太极",
+        "auto-trading": "黑丝",
+    },
+    "claude-sonnet-4-6": {
+        "auto-trading": "白纱",
+    },
+}
+
+
+def _normalize_project(project_key: str) -> str:
+    """将项目路径编码标准化为简短项目名"""
+    if project_key in PROJECT_ALIASES:
+        return PROJECT_ALIASES[project_key]
+    return _project_key_to_name(project_key)
+
+
+def _detect_role(project_key: str, jsonl_path: Path) -> str:
+    """从 JSONL 文件检测模型，结合项目路径推断角色"""
+    norm_project = _normalize_project(project_key)
+    try:
+        with open(jsonl_path) as f:
+            for line in f:
+                data = json.loads(line)
+                # model 在 message 内部（assistant 类型）
+                if data.get("type") == "assistant":
+                    msg = data.get("message", {})
+                    model = msg.get("model", "")
+                    if model in ROLE_MAP and norm_project in ROLE_MAP[model]:
+                        return ROLE_MAP[model][norm_project]
+        return "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _project_key_to_name(key: str) -> str:
+    """将项目路径编码转为可读项目名"""
+    # -Users-allenbot-project-auto-trading → auto-trading
+    parts = key.strip("-").split("-")
+    # 跳过 Users/allenbot/project 前缀
+    if len(parts) > 3 and parts[2] == "project":
+        return "-".join(parts[3:])
+    if len(parts) <= 2:
+        return "home"
+    return "-".join(parts[2:])
+
+
+@app.get("/api/sessions")
+def get_sessions(limit: int = Query(default=10, ge=1, le=50)):
+    """扫描 ~/.claude/projects/*/ 下的 JSONL 文件，返回活跃会话列表"""
+    sessions = []
+
+    if not PROJECTS_DIR.exists():
+        return {"sessions": []}
+
+    for project_dir in PROJECTS_DIR.iterdir():
+        if not project_dir.is_dir():
+            continue
+
+        project_key = project_dir.name
+        project_name = _project_key_to_name(project_key)
+
+        jsonl_files = sorted(project_dir.glob("*.jsonl"), key=os.path.getmtime, reverse=True)
+
+        for jf in jsonl_files[:3]:  # 每个项目最多取最新3个会话
+            stat = jf.stat()
+            role = _detect_role(project_key, jf)
+
+            # 读取消息数
+            msg_count = 0
+            try:
+                with open(jf) as f:
+                    for _ in f:
+                        msg_count += 1
+            except Exception:
+                pass
+
+            sessions.append({
+                "id": jf.stem,
+                "project": project_name,
+                "project_key": project_key,
+                "role": role,
+                "file": str(jf),
+                "modified": stat.st_mtime,
+                "size_kb": round(stat.st_size / 1024, 1),
+                "messages": msg_count,
+            })
+
+    # 按修改时间排序，取最新的
+    sessions.sort(key=lambda x: x["modified"], reverse=True)
+    return {"sessions": sessions[:limit]}
+
+
+@app.get("/api/conversations")
+def get_conversations(
+    project: Optional[str] = Query(default=None),
+    speaker: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """从 conversations.db 查询对话种子消息"""
+    if not CONVERSATIONS_DB.exists():
+        return {"messages": [], "error": "conversations.db not found"}
+
+    conn = sqlite3.connect(str(CONVERSATIONS_DB))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = "SELECT id, time, speaker, content, project, session_id, tags FROM messages"
+    conditions = []
+    params = []
+
+    if project:
+        conditions.append("project = ?")
+        params.append(project)
+    if speaker:
+        conditions.append("speaker = ?")
+        params.append(speaker)
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    query += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    messages = []
+    for row in rows:
+        messages.append({
+            "id": row["id"],
+            "time": row["time"],
+            "speaker": row["speaker"],
+            "content": row["content"][:500] if row["content"] else "",
+            "project": row["project"],
+            "session_id": row["session_id"],
+            "tags": row["tags"],
+        })
+
+    # 按时间正序返回
+    messages.reverse()
+    return {"messages": messages, "total": len(messages)}
+
+
+@app.get("/api/evolver/status")
+def get_evolver_status():
+    """读取 evolution_state.json + cycle_notifications.jsonl，返回进化引擎状态"""
+    result = {
+        "cycle_count": 0,
+        "last_run": None,
+        "recent_notifications": [],
+    }
+
+    # evolution_state.json
+    state_file = EVOLVER_DIR / "evolution" / "evolution_state.json"
+    if state_file.exists():
+        try:
+            with open(state_file) as f:
+                state = json.load(f)
+            result["cycle_count"] = state.get("cycleCount", 0)
+            result["last_run"] = state.get("lastRun")
+        except Exception:
+            pass
+
+    # cycle_notifications.jsonl — 最后 10 条
+    notif_file = EVOLVER_DIR / "cycle_notifications.jsonl"
+    if notif_file.exists():
+        try:
+            lines = []
+            with open(notif_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        lines.append(line)
+
+            for line in lines[-10:]:
+                try:
+                    notif = json.loads(line)
+                    result["recent_notifications"].append(notif)
+                except json.JSONDecodeError:
+                    pass
+        except Exception:
+            pass
+
+    return result
+
+
+@app.get("/api/checkpoints/{project}")
+def get_checkpoint(project: str):
+    """读取项目的 CHECKPOINT.md DYNAMIC 区"""
+    # 支持的项目映射
+    project_paths = {
+        "auto-trading": Path.home() / "project" / "auto-trading" / "CHECKPOINT.md",
+    }
+
+    checkpoint_path = project_paths.get(project)
+    if not checkpoint_path or not checkpoint_path.exists():
+        return {"project": project, "error": "CHECKPOINT.md not found", "content": ""}
+
+    try:
+        text = checkpoint_path.read_text()
+
+        # 提取 DYNAMIC 区（<!-- DYNAMIC START --> 到 <!-- DYNAMIC END --> 或文件末尾）
+        dynamic_match = re.search(
+            r"<!-- DYNAMIC START -->\s*\n(.*?)(?:<!-- DYNAMIC END -->|$)",
+            text,
+            re.DOTALL,
+        )
+
+        dynamic_content = dynamic_match.group(1).strip() if dynamic_match else text
+
+        return {
+            "project": project,
+            "content": dynamic_content,
+            "file": str(checkpoint_path),
+        }
+    except Exception as e:
+        return {"project": project, "error": str(e), "content": ""}
+
+
+@app.get("/api/health")
+def health():
+    """健康检查"""
+    return {
+        "status": "ok",
+        "conversations_db": CONVERSATIONS_DB.exists(),
+        "evolver_dir": EVOLVER_DIR.exists(),
+        "projects_dir": PROJECTS_DIR.exists(),
+    }
+
+
+@app.get("/")
+def dashboard():
+    """Serve the dashboard HTML page"""
+    return FileResponse(
+        Path(__file__).parent / "dashboard.html",
+        media_type="text/html",
+    )

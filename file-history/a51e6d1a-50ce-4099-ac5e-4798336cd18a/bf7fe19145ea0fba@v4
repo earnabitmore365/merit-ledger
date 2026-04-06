@@ -1,0 +1,156 @@
+# Handoff → 外部顾问 Opus：补充测试结果 + 费用异常
+
+> 黑丝（Opus，Claude Code）写于 2026-03-21
+> 状态：3 项补充测试已完成，发现 inverse 费用严重膨胀
+
+---
+
+## 补充测试 1：Mirror linear vs inverse（24 组，1m 待补）
+
+```
+策略                               IV       模式      总PnL    一致
+--------------------------------------------------------------
+mean_reversion_mirror            5m   linear    -9.57%
+mean_reversion_mirror            5m  inverse   -11.87%   ✅
+mean_reversion_mirror           15m   linear    -6.78%
+mean_reversion_mirror           15m  inverse    -8.39%   ✅
+mean_reversion_mirror           30m   linear    -4.92%
+mean_reversion_mirror           30m  inverse    -6.24%   ✅
+mean_reversion_mirror            1h   linear    +1.67%
+mean_reversion_mirror            1h  inverse    -6.66%   ❌
+
+mean_reversion_07_mirror         5m   linear    -5.75%
+mean_reversion_07_mirror         5m  inverse    -6.98%   ✅
+mean_reversion_07_mirror        15m   linear    -6.02%
+mean_reversion_07_mirror        15m  inverse    -5.92%   ✅
+mean_reversion_07_mirror        30m   linear    -6.71%
+mean_reversion_07_mirror        30m  inverse    -5.01%   ✅
+mean_reversion_07_mirror         1h   linear    +0.83%
+mean_reversion_07_mirror         1h  inverse    -5.69%   ❌
+
+mean_reversion_10_mirror         5m   linear    -6.01%
+mean_reversion_10_mirror         5m  inverse    -4.12%   ✅
+mean_reversion_10_mirror        15m   linear    -6.32%
+mean_reversion_10_mirror        15m  inverse    -3.90%   ✅
+mean_reversion_10_mirror        30m   linear    -6.57%
+mean_reversion_10_mirror        30m  inverse    -3.72%   ✅
+mean_reversion_10_mirror         1h   linear    +0.54%
+mean_reversion_10_mirror         1h  inverse    -4.70%   ❌
+```
+
+**9/12 方向一致 ✅，3 个 ❌ 全在 1h**（linear 微赚 +0.5~1.7%，inverse 亏 -4.7~-6.7%）
+
+---
+
+## 补充测试 2：做多/做空分拆
+
+```
+策略                               IV       模式      总PnL      多PnL      空PnL    多笔    空笔
+mean_reversion_mirror            5m   linear    -9.57%    -3.52%    -6.04%  2588  2589
+mean_reversion_mirror            5m  inverse   -11.87% -2340.76% -2364.40%  2588  2589
+mean_reversion_mirror            1h   linear    +1.67%    +6.24%    -4.57%  1254  1255
+mean_reversion_mirror            1h  inverse    -6.66%   -77.82%   -75.26%  1254  1255
+```
+
+inverse 的分拆百分比异常大是因为除以了初始币数（~0.8 BNB），百分比被放大。但关键发现：**inverse 下做多和做空都亏**，做空并没有因为"赢放亏缩"而表现更好。
+
+---
+
+## 补充测试 3：费用明细 🚨 发现根因
+
+### mean_reversion_mirror 1h，同一组 5 笔交易对比：
+
+**Linear 模式：**
+```
+ # direction    raw+fee      fee     slip     fund    net_pnl  费用占比
+ 1     SHORT  -0.116724 0.007000 0.004000 0.001000  -0.128724    10.3%
+ 2      LONG  -0.109969 0.007000 0.004000 0.002000  -0.122969    11.8%
+ 3     SHORT  -0.023241 0.007000 0.004000 0.002000  -0.036241    55.9%
+ 4      LONG  +0.129575 0.007000 0.004000 0.003000  +0.115575    10.8%
+ 5     SHORT  +0.181329 0.007000 0.004000 0.002000  +0.168329     7.2%
+```
+
+**Inverse 模式：**
+```
+ # direction    raw+fee      fee     slip     fund    net_pnl  费用占比
+ 1     SHORT  -0.005261 0.006919 0.003954 0.000988  -0.017122   225.5%
+ 2      LONG  -0.005011 0.007078 0.004044 0.002022  -0.018156   262.3%
+ 3     SHORT  -0.001057 0.006984 0.003991 0.001995  -0.014027  1227.5%
+ 4      LONG  +0.005816 0.006910 0.003949 0.002962  -0.008005   237.6%
+ 5     SHORT  +0.008289 0.007129 0.004074 0.002037  -0.004951   159.7%
+```
+
+### 问题一目了然：
+
+| 项目 | Linear | Inverse | 问题 |
+|------|--------|---------|------|
+| 笔4 raw_pnl | +0.129575 | +0.005816 | inverse 赚的少（正常，公式不同） |
+| 笔4 fee | 0.007000 | 0.006910 | **费用几乎一样大！** |
+| 笔4 net_pnl | **+0.115575** | **-0.008005** | linear 赚钱，inverse 被费用吃成亏 |
+| 笔4 费用占比 | 10.8% | **237.6%** | 费用 > 利润的 2 倍 |
+
+**根因：inverse 的 raw_pnl 数量级是 0.005（BNB），但费用是 0.007（BNB）。** 费用比利润还大。
+
+### 为什么会这样？
+
+费用计算代码：
+```python
+# inverse 模式
+notional_usd = position_size * entry_p     # 10 BNB × $500 = $5000
+fee_usd = notional_usd * fee_rate * 2      # $5000 × 0.035% × 2 = $3.50
+fee_coins = fee_usd / exit_p               # $3.50 / $500 = 0.007 BNB
+```
+
+PnL 计算代码：
+```python
+# inverse 模式
+raw_pnl = position_size * diff / (entry_p * exit_p)  # 10 × 10 / (500×510) = 0.000392 BNB
+```
+
+**问题**：`position_size = 10`（BNB），名义 USD = 10 × $500 = $5000。费用基于 $5000 算。但 PnL 基于 `10 / (500×510)` 算——分母是 `entry × exit ≈ 250000`，所以 PnL 量级极小。
+
+**费用和 PnL 的计算基础不匹配：**
+- 费用：基于 `position_size × entry_p`（名义 USD）
+- PnL：基于 `position_size / (entry_p × exit_p)`（双重除以价格）
+
+在 linear 模式下，PnL = `position_size × diff / entry_p`，跟费用的 `position_size × entry_p × rate` 数量级匹配（都是 position_size × 价格级别）。
+
+在 inverse 模式下，PnL 多除了一个 `exit_p`，但费用没有对应缩小。**这导致费用相对于 PnL 膨胀了大约 `exit_p` 倍（~500x）。**
+
+---
+
+## 我的初步判断
+
+费用换算公式可能有问题。当前：
+```python
+notional_usd = position_size * entry_p    # 10 BNB × $500 = $5000
+fee_coins = fee_usd / exit_p              # $3.50 / $500 = 0.007
+```
+
+但 inverse 模式下，`position_size = 10` 代表 10 BNB（不是 10 USD）。如果 `fixed_bet_amount = 1`（1 BNB），`position_size = 1 × 10 = 10 BNB`。名义 USD = $5000，这没问题。
+
+**问题可能在于 PnL 公式的 `position_size` 含义**：
+- Linear: `position_size` = USD 名义价值 = $10
+- Inverse: `position_size` = BNB 名义数量 = 10 BNB
+
+但 `_calc_raw_pnl` 的 inverse 分支用的是：
+```python
+return position_size * diff / (entry_p * exit_p)
+```
+
+如果 position_size = 10 BNB，diff = $10，entry×exit = 250000：
+PnL = 10 × 10 / 250000 = 0.0004 BNB
+
+但 Binance 官方公式用的是**合约数量 × 面值**，不是 BNB 数量。可能 `position_size` 在 inverse 模式下的单位定义需要重新审视。
+
+**请顾问判断：是费用公式有问题，还是 PnL 公式里的 position_size 单位不对？**
+
+---
+
+## 交付清单
+
+1. ✅ 补充测试 1 — Mirror 24 组对比表（1m 待补）
+2. ✅ 补充测试 2 — 做多/做空分拆
+3. ✅ 补充测试 3 — 5 笔费用明细，发现费用膨胀 200%+
+
+**核心问题：inverse 费用相对 PnL 膨胀约 500 倍，导致所有盈利被吃掉。请确认是费用公式还是 PnL 公式的单位问题。**

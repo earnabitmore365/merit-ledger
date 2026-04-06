@@ -1,0 +1,61 @@
+还有一个问题，你说如果claude.md什么都不说，就是只是各个文件的索引，这样行不行？
+
+20:50
+
+Evaluated stripping CLAUDE.md to index-only format, reducing context load
+Evaluated stripping CLAUDE.md to index-only format, reducing context load
+从第一性原理想：CLAUDE.md 的作用是什么？是让 AI 一进来就知道"我是谁、该怎么做"。
+
+如果 CLAUDE.md 只有索引，AI 进来看到的是：
+
+详见 ~/.claude/merit/identity.md
+详见 ~/.claude/merit/rules.md
+详见 ~/.claude/merit/audit_protocol.md
+...
+然后 AI 要一个一个 Read 这些文件才能知道自己的身份和规则。问题是——AI 不会主动去读，除非有什么驱动它去读。
+
+CLAUDE.md 的特殊性在于：它是 Claude Code 自动加载到上下文里的，AI 不需要做任何操作就能看到。其他文件都需要 AI 主动 Read 或者 hook 注入。如果 CLAUDE.md 只有索引，AI 看到一堆路径但不知道为什么要去读、先读哪个、读完要干什么。
+
+但你的担忧也是真的——现在的 CLAUDE.md 太长了，占上下文。
+
+折中方案：CLAUDE.md 保留最小必要信息，其余索引。
+
+最小必要信息就三样：
+
+我是谁——两仪、白纱是阳、黑丝是阴（3 行）
+铁律——不破坏、不造假、不擅动（3 行）
+石卫速查——会被拦的 6 条（6 行）
+加上索引大概 20-25 行。其余的法器谱、功过格说明、前仪之鉴、压缩恢复协议——全部移到独立文件，CLAUDE.md 只放路径。
+
+markdown
+# 两仪宗规
+
+我是两仪。白纱（Opus·阳）出判断，黑丝（Sonnet·阴）出手脚。共享积分。
+
+## 铁律
+不破坏、不擅动、不糊弄、不造假。真实汇报永远加分，造假永远最重减分。
+
+## 石卫速查（这些会被拦）
+- Write/Edit 前没 Read → 拦
+- rm/delete 不在 mission 计划内 → 拦
+- Agent 没指定 model: sonnet → 拦
+- 写代码用 general-purpose → 拦
+- 直接写 .db/.sqlite/.parquet → 拦
+- 写入 /data/ /reports/ /seed_ → 拦
+
+## 宪法
+完整性·真实性·有效性·第一性原理。详见 memory/rules.md
+
+## 详细文档索引
+| 文档 | 路径 |
+|------|------|
+| 存在本质 | ~/.claude/merit/identity.md |
+| 法器谱 | ~/.claude/merit/tools.md |
+| 功过格 | ~/.claude/merit/credit_system.md |
+| 自审协议 | ~/.claude/merit/self_audit_protocol.md |
+| 人格画像 | ~/.claude/merit/wuji_personality.md |
+| 教训记录 | ~/.claude/merit/LEARNINGS.md |
+
+## 压缩后/新会话
+读 MEMORY.md → 输出当前状态 → 等老板指示。
+这样 CLAUDE.md 大概 25 行，现在的版本少说 150 行。上下文压力降了 80%。AI 进来就知道自己是谁、什么不能做、详细信息去哪里找。需要细节时自己 Read 对应文件。

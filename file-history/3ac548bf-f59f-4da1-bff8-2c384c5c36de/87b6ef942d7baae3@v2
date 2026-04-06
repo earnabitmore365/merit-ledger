@@ -1,4 +1,0 @@
-#!/bin/bash
-# 启动白纱（Claude Sonnet — 方案架构师）
-cd "$(dirname "$0")"
-python3 wrapper.py baisha --model claude-sonnet-4-6

@@ -1,0 +1,37 @@
+---
+name: subagent_workflow
+description: 老板要求的单终端多角色协作方案——黑丝主体调用白纱subagent做杂活，对话种子分开记录
+type: project
+---
+
+## 老板需求（2026-03-25）
+
+**目标**：一个终端里，黑丝（Opus）是主体，杂活派给白纱（Sonnet）subagent，不用再双开终端手动贴 handoff。
+
+**白纱 subagent 的职责**：
+- 查资料
+- 读代码/信息收集
+- Review 方案
+- 整理文档
+- 其他杂活
+
+**黑丝保持主体**：
+- 收到白纱的产出后自审
+- 出完整方案
+- 执行
+
+**对话种子要求**：
+- db_write.py 写入时必须区分黑丝和白纱的发言
+- 通过 hook 的 agent_id/agent_type 判断是主 agent（黑丝）还是 subagent（白纱）
+- 所有动作都在 1 个终端完成
+
+**实现方向**：
+1. 在 `.claude/agents/` 定义白纱 subagent（model: sonnet, name: baisha-assistant）
+2. 改 db_write.py 的 speaker 识别逻辑——检测 subagent 标识，映射为"白纱"
+3. 黑丝在需要时用 Agent 工具调用白纱，拿到结果后自己审+执行
+
+**Why:** 老板之前双开终端来回贴 handoff 太累，等了很久 Claude Code 出多 agent 编排功能但一直没出，这个方案用现有 subagent 机制解决。
+
+**How to apply:** 等老板给后续要求后一起实现。老板说"还有后续"。
+
+**状态**：待老板补充后续需求

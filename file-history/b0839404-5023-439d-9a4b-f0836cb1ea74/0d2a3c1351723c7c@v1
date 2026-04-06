@@ -1,0 +1,229 @@
+# 三层知识索引机制 + 哨兵营接入指标库
+
+## Context
+
+哨兵营 v3 改标签时，data_loader.py 自己算指标（`_compute_indicators`），没有调用统一指标库 `indicator_cache`。这是老板之前定好的架构决策（GP v0.9 已执行），但哨兵营漏了。根因：架构决策只存在对话历史里，压缩后丢失，没有沉淀到代码和文档中。
+
+---
+
+## 第一部分：三层知识索引机制
+
+### 层1：代码头部 `@see` 索引（最可靠 — 读代码自动看到）
+
+每个 .py 文件头部 docstring 加 `@see` 行，指向相关架构文档。这样我出方案前读代码时**自动看到约束**。
+
+**格式：**
+```python
+"""
+哨兵营数据加载器
+@see lab/README.md#architecture — 架构约束（指标统一调用 indicator_cache）
+"""
+```
+
+**本次先改的文件（涉及指标的）：**
+- `lab/sentinel_camp/data_loader.py`
+- `lab/sentinel_camp/evaluator.py`
+- `lab/sentinel_camp/engine.py`
+- `lab/sentinel_camp/sentinel_evolve.py`
+- `lab/gp_engine/indicators.py`（已经有注释说"指标全走 indicator_cache"，加 @see 格式化）
+
+### 层2：lab/README.md 加「架构约束」区（模块级规则）
+
+在 lab/README.md 的目录结构之后、工作流之前，加一个 `## 架构约束` 区：
+
+```markdown
+## 架构约束（改任何模块前必读）
+
+### 指标系统（v0.9 统一，2026-03-10 定稿）
+- **唯一入口**：`src/core/indicator_cache.py`（47个指标，SQLite 缓存）
+- **调用方式**：`init_cache(coin, interval, candles)` → `get_indicator('rsi', period=14)`
+- **适用范围**：GP 进化 ✅ | 哨兵营 ✅ | 回测引擎 ✅ | 实盘 ✅
+- **禁止**：各模块自己计算技术指标（旧的 compute_all / _compute_indicators 都已废弃）
+
+### 模块依赖关系
+- sentinel_camp → indicator_cache（指标）+ live_regime（regime 标签生成）
+- gp_engine → indicator_cache（指标）
+- live_regime → 独立（摆动追踪不依赖指标库）
+```
+
+### 层3：memory/pending_decisions.md（已定未做的待办）
+
+新建 memory/pending_decisions.md，记录老板拍板过但还没执行的事项。恢复协议时读到，任务开始前检查。
+
+### 铁律7 补充
+
+在 rules.md 铁律7 后加一句：
+> 开始新任务前先读涉及模块的 `@see` 索引和 lab/README.md 架构约束区。
+
+### MEMORY.md 索引更新
+
+文件索引加一行：
+| `pending_decisions.md` | 已定未做的待办事项 | 每次启动必读 |
+
+---
+
+## 第二部分：哨兵营接入指标库
+
+### 问题
+`data_loader.py` 的 `_compute_indicators()`（120行）自己算 27 个指标，没用 indicator_cache。导致：
+- 重复代码，维护两套
+- 没有 SQLite 缓存，每次重算慢
+- 指标库新增的指标哨兵营用不到
+
+### 方案
+删除 `_compute_indicators()`，改为调用 `indicator_cache.get_indicator()`。
+
+**关键适配点：**
+1. indicator_cache 的 `init_cache()` 需要 candles 是 list of dict — 需从 numpy arrays 构造
+2. 子采样（sample=5）保持现有顺序：**先子采样再算指标**（不改数据流）
+3. interval 用 `f'sentinel_{sample}m'` 避免跟真正 1m 缓存冲突
+4. 镜像数据也要调 init_cache，interval 用 `f'sentinel_{sample}m_mirror'`
+5. db_path 需显式传（sentinel_camp 工作目录不同，默认相对路径会错）→ 用 `lab/reports/indicator_cache.db`
+6. load_all_coins 结束后调 `close_cache()`
+7. indicator_cache 返回 list → 需 `np.array()` 转换
+
+**改动文件：**
+
+| 文件 | 改动 |
+|------|------|
+| `lab/sentinel_camp/data_loader.py` | 删 `_compute_indicators`（~120行），改为调用 indicator_cache |
+| `lab/README.md` | 加架构约束区 + 更新 sentinel_camp 描述 |
+| `lab/sentinel_camp/*.py` | 头部加 `@see` 索引 |
+| `memory/rules.md` | 铁律7 补充 |
+| `memory/pending_decisions.md` | 新建 |
+| `memory/MEMORY.md` | 索引更新 |
+
+### data_loader.py 改动细节
+
+**子采样策略：** 保持现有流程（先子采样再算指标）。子采样后的数据调 init_cache，interval 标记为 `f'sentinel_{sample}m'`。镜像数据用 `f'sentinel_{sample}m_mirror'`。首次算完后 SQLite 缓存，后续秒加载。
+
+**指标映射（27个全部对上，indicator_cache 48个注册指标覆盖）：**
+
+| data_loader 现有名 | indicator_cache 调用 | 返回类型 |
+|---|---|---|
+| `close` | 直接复制 ohlcv['close'] | — |
+| `volume` | 直接复制 ohlcv['volume'] | — |
+| `volume_ratio` | `sma('volume', period=20)` → `volume / sma_vol` | 需一行手动算 |
+| `obv_slope` | `obv()` → 取 10 期差值 | 需一行手动算 |
+| `sma_5/10/20/50` | `get_indicator('sma', period=N)` | list |
+| `ema_9/21` | `get_indicator('ema', period=N)` | list |
+| `rsi_7/14/21` | `get_indicator('rsi', period=N)` | list |
+| `atr_7/14` | `get_indicator('atr', period=N)` | list |
+| `adx` | `get_indicator('adx')['adx']` | dict→取key |
+| `macd_hist` | `get_indicator('macd')['histogram']` | dict→取key |
+| `bb_upper` | `get_indicator('bb')['upper']` | dict→取key |
+| `bb_lower` | `get_indicator('bb')['lower']` | dict→取key |
+| `stoch_k` | `get_indicator('stochastic')['k']` | dict→取key |
+| `stoch_d` | `get_indicator('stochastic')['d']` | dict→取key |
+| `obv` | `get_indicator('obv')` | list |
+| `ad` | `get_indicator('ad')` | list |
+| `cmf_20` | `get_indicator('cmf', period=20)` | list |
+| `cmf_50` | `get_indicator('cmf', period=50)` | list |
+| `ad_roc_20` | `get_indicator('ad')` → 手动算 20 期 ROC | 需两行 |
+| `bop` | `get_indicator('bop')` | list |
+
+**3 个需微量手动计算的（从 indicator_cache 结果衍生）：**
+- `volume_ratio` = volume / sma(volume, 20)
+- `obv_slope` = obv[i] - obv[i-10]
+- `ad_roc_20` = (ad[i] - ad[i-20]) / (abs(ad[i-20]) + 1e-10)
+
+**代码骨架：**
+```python
+# 导入（路径适配）
+_IC_DIR = os.path.join(_THIS_DIR, '..', 'src', 'core')
+sys.path.insert(0, _IC_DIR)
+from indicator_cache import init_cache, get_indicator, close_cache
+
+# 显式 db_path（从 sentinel_camp 调用时相对路径不对）
+_DB_PATH = os.path.join(_BASE, 'reports', 'indicator_cache.db')
+
+def _ohlcv_to_candles(ohlcv, timestamps):
+    """numpy arrays → indicator_cache 需要的 list of dict"""
+    return [{'open': float(o), 'high': float(h), 'low': float(l),
+             'close': float(c), 'volume': float(v), 'time': int(t)}
+            for o, h, l, c, v, t in zip(
+                ohlcv['open'], ohlcv['high'], ohlcv['low'],
+                ohlcv['close'], ohlcv['volume'], timestamps)]
+
+def _get_indicators_from_cache(ohlcv, timestamps, coin, sample, is_mirror=False):
+    """通过统一指标库获取哨兵需要的指标
+    @see lab/README.md#architecture — 指标统一调用 indicator_cache
+    """
+    candles = _ohlcv_to_candles(ohlcv, timestamps)
+    suffix = '_mirror' if is_mirror else ''
+    init_cache(coin=coin, interval=f'sentinel_{sample}m{suffix}',
+               candles=candles, db_path=_DB_PATH)
+
+    result = {'close': ohlcv['close'].copy(), 'volume': ohlcv['volume'].copy()}
+
+    # 直接映射（20个）
+    for p in [5, 10, 20, 50]:
+        result[f'sma_{p}'] = np.array(get_indicator('sma', period=p))
+    for p in [9, 21]:
+        result[f'ema_{p}'] = np.array(get_indicator('ema', period=p))
+    for p in [7, 14, 21]:
+        result[f'rsi_{p}'] = np.array(get_indicator('rsi', period=p))
+    for p in [7, 14]:
+        result[f'atr_{p}'] = np.array(get_indicator('atr', period=p))
+    result['adx'] = np.array(get_indicator('adx')['adx'])
+    result['macd_hist'] = np.array(get_indicator('macd')['histogram'])
+    bb = get_indicator('bb')
+    result['bb_upper'] = np.array(bb['upper'])
+    result['bb_lower'] = np.array(bb['lower'])
+    stoch = get_indicator('stochastic')
+    result['stoch_k'] = np.array(stoch['k'])
+    result['stoch_d'] = np.array(stoch['d'])
+    result['obv'] = np.array(get_indicator('obv'))
+    result['ad'] = np.array(get_indicator('ad'))
+    result['cmf_20'] = np.array(get_indicator('cmf', period=20))
+    result['cmf_50'] = np.array(get_indicator('cmf', period=50))
+    result['bop'] = np.array(get_indicator('bop'))
+
+    # 衍生指标（3个）
+    vol_sma20 = np.array(get_indicator('sma', period=20, source='volume'))
+    result['volume_ratio'] = np.where(vol_sma20 > 1e-10, ohlcv['volume'] / vol_sma20, 1.0)
+    obv_arr = result['obv']
+    obv_shifted = np.roll(obv_arr, 10); obv_shifted[:10] = obv_arr[:10]
+    result['obv_slope'] = obv_arr - obv_shifted
+    ad_arr = result['ad']
+    ad_shifted = np.roll(ad_arr, 20); ad_shifted[:20] = ad_arr[:20]
+    result['ad_roc_20'] = (ad_arr - ad_shifted) / (np.abs(ad_shifted) + 1e-10)
+
+    # 统一 NaN/Inf 处理
+    for k in result:
+        result[k] = np.nan_to_num(result[k], nan=0.0, posinf=0.0, neginf=0.0)
+
+    return result
+```
+
+**load_all_coins 改动（3处）：**
+1. `_compute_indicators(ohlcv)` → `_get_indicators_from_cache(ohlcv, timestamps, coin, sample)`
+2. 镜像的 `_compute_indicators(mirror_ohlcv)` → `_get_indicators_from_cache(mirror_ohlcv, timestamps, coin, sample, is_mirror=True)`
+3. 函数末尾 `return` 前加 `close_cache()`
+
+**删除（约 220 行）：**
+- `_rsi()`, `_atr()`, `_adx()`, `_rolling_sum()`, `_compute_indicators()` — 全部删除
+
+**保留：**
+- `import indicators as gp_ind` — normalize/mirror/warmup_bars 还在用
+
+---
+
+### 旧缓存清理
+
+旧的 `sentinel_data_*.pkl` 里的指标值是用 `_compute_indicators` 算的，indicator_cache 的实现可能有微小差异。
+**删除旧 pkl 缓存**（不删 regime_labels_*.pkl）：
+```bash
+rm lab/sentinel_camp/cache/sentinel_data_*.pkl
+```
+
+---
+
+## 验证
+
+1. `py_compile` 所有改动的 .py 文件
+2. 跑 `python3 lab/sentinel_camp/generate_regime_labels.py --coins BTC` — 标签生成不受影响（不依赖 _compute_indicators）
+3. 跑 `cd lab/sentinel_camp && python3 sentinel_evolve.py --rounds 1 --coins BTC --no-cache` — 哨兵能正常加载数据+训练
+4. 检查 `lab/reports/indicator_cache.db` 有新增 sentinel_5m 的缓存条目
+5. 检查 lab/README.md 架构约束区、所有 @see 索引、memory 文件更新完整
+6. 更新 CHECKPOINT.md + lab/README.md（铁律7 收尾流程）

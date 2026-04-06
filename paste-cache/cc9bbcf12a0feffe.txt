@@ -1,0 +1,20 @@
+ 被门卫拦的 3 个文件（路径名含 /data/ 或 /seed_，误触发 G-003）：                      
+  1. backtest/dashboard/seed_dashboard.py — 文件名含 seed_     
+  2. src/data/feed_gateway.py — 路径含 /data/                                           
+  3. data/build_klines_indicators.py — 路径含 /data/
+                                                                                        
+  这 3 个都是代码文件不是数据文件，修改内容是改路径定义。门卫误判了。老板是否允许修改这 
+  3 个文件？                                                                            
+                                                                                        
+  同时我检查 backtest/ 的 34 个文件完成了多少：                                         
+                                                               
+⏺ Bash(cd /Volumes/SSD-2TB/project/wuji-auto-trading && echo "=== backtest/ 已改 ===" &&
+       grep -rl "wuji-root" backtest/ --include="*.py" | grep -v __pycache__ | wc -l  
+      &&…)                                                     
+  ⎿  === backtest/ 已改 ===                    
+     1                                                                                  
+     … +27 lines (ctrl+o to expand)   
+  ⎿  Shell cwd was reset to /Volumes/SSD-2TB/project/auto-trading                       
+                                                    
+⏺ backtest/ 基本全没改（只改了 1 个），seed_dashboard.py 被拦后整批停了。重新派白纱处理
+  backtest/ 剩余的 33 个。                                     

@@ -1,0 +1,11 @@
+---
+name: 回测按周期优先排序
+description: 种子生成按周期大到小排序（1d→1m），不按币种，早出结果早发现问题
+type: feedback
+---
+
+回测跑种子按时间周期大到小排序，不按币种遍历。
+
+**Why:** 老板指示（2026-03-30）。大周期秒出结果，能早发现策略代码/数据问题。1m 是硬骨头放最后啃。按币种遍历会被一个币的 1m 卡住，其他币的大周期全等着。
+
+**How to apply:** _run_seed 的 task_list 构建用 `for iv in _iv_order: for coin in coins:`，不用 `for coin: for iv:`。_run_seed_parallel 已经是周期优先。

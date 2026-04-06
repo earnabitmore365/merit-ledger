@@ -1,0 +1,38 @@
+# Plan: trader_report.py — 交易解说员
+
+## Context
+顾问设计了 `trader_report.py`（Telegram 交易解说员），需要黑丝照顾问完整代码实现，写完不部署，交顾问审。
+
+## 关键调整（vs 顾问原稿）
+1. **`requests` → `urllib.request`**：项目不用 requests（用 httpx/urllib），改用 stdlib 的 urllib.request.urlopen，零新依赖
+2. **THREAD_ID 从 .env 读**：顾问硬编码 `THREAD_ID = 12030`，改为 `int(os.getenv('TELEGRAM_TRADER_THREAD_ID', '12030'))`，与 .env 一致
+3. **其余完全照顾问代码**，不改逻辑、不加功能
+
+## 文件改动
+
+### 新建：`lab/trader_report.py`
+- 顾问完整代码，仅改 `requests.post` → `urllib.request`
+- `_send()` 方法用 `urllib.request.urlopen(req, timeout=10)` 替代 `requests.post()`
+- 删 `import requests`，加 `import urllib.request`
+
+### 修改：`lab/unified_trader.py`（6 处接入）
+1. **__init__**（~69行）：`from trader_report import TraderReport; self.report = TraderReport()`
+2. **_execute()**（~263行 after_open 之后）：开仓通知 + analyze_signal
+3. **_execute()**（~263行 after_open 之后）：SL 挂单结果通知（读 strategy.sl_order_id）
+4. **_close_position()**（~302行 log_trade 之后）：平仓通知
+5. **_circuit_break()**（~415行）：熔断报警
+6. **_reconcile()**（~626行末尾）：每小时摘要
+
+## 验证
+```bash
+python3 -m py_compile lab/trader_report.py && echo "✅"
+python3 -m py_compile lab/unified_trader.py && echo "✅"
+```
+
+## 自审 checklist
+- [ ] urllib.request 替换 requests，参数正确（json body → data bytes + Content-Type header）
+- [ ] THREAD_ID 从 .env 读
+- [ ] 6 处接入点行号与实际代码对得上
+- [ ] strategy 属性（sl_order_id/open_time/_last_ttp_level）都存在
+- [ ] dispatcher.get_window() 调用参数正确
+- [ ] 不部署，写完交顾问审

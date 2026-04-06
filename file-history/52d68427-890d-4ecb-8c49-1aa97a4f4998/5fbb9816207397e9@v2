@@ -1,0 +1,45 @@
+#!/bin/bash
+# 每日凌晨4点自动管线 — 下载 → 纯信号回测 → TTP回测
+# cron: 0 4 * * * /Volumes/BIWIN\ NV\ 7400\ 2TB/project/auto-trading/lab/daily_cron.sh >> /Volumes/BIWIN\ NV\ 7400\ 2TB/project/auto-trading/lab/logs/daily_cron.log 2>&1
+
+PROJECT_DIR="/Volumes/BIWIN NV 7400 2TB/project/auto-trading"
+LAB_DIR="$PROJECT_DIR/lab"
+LOG_DIR="$LAB_DIR/logs"
+
+mkdir -p "$LOG_DIR"
+
+echo "========================================"
+echo "每日管线开始: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "========================================"
+
+# 步骤1: 下载最新K线（全周期全币种）
+echo ""
+echo ">>> 步骤1: 下载最新K线"
+cd "$PROJECT_DIR"
+python3 download_latest_coins_2.0.py
+DOWNLOAD_EXIT=$?
+if [ $DOWNLOAD_EXIT -ne 0 ]; then
+    echo "❌ 下载失败 (exit=$DOWNLOAD_EXIT)"
+fi
+
+# 步骤2: 纯信号增量回测 + 报告重算 + 看板
+echo ""
+echo ">>> 步骤2: 纯信号管线"
+cd "$LAB_DIR"
+python3 daily_pipeline.py --skip-download
+SIGNAL_EXIT=$?
+
+# 步骤3: TTP增量回测 + 报告重算 + 看板
+echo ""
+echo ">>> 步骤3: TTP管线"
+python3 daily_pipeline.py --skip-download --ttp
+TTP_EXIT=$?
+
+# 汇总
+echo ""
+echo "========================================"
+echo "每日管线完成: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "  下载: $([ $DOWNLOAD_EXIT -eq 0 ] && echo '✅' || echo '❌')"
+echo "  纯信号: $([ $SIGNAL_EXIT -eq 0 ] && echo '✅' || echo '❌')"
+echo "  TTP: $([ $TTP_EXIT -eq 0 ] && echo '✅' || echo '❌')"
+echo "========================================"

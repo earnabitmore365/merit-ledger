@@ -1,0 +1,153 @@
+# MEMORY 重组计划
+
+## Context
+
+**老板原始构思**：MEMORY.md = 目录/索引，压缩回来的 AI 从 MEMORY.md 被带到各个必读文件。
+MEMORY.md 本身不装内容，只装指针 + 动态更新区（上次会话要点）。
+
+**现状问题**：
+1. MEMORY.md 已变成 479 行内容大杂烩，超出 200 行截断限制，后面内容看不到
+2. MEMORY.md 里堆了铁律、分析规矩、回测机制、项目信息、老板语录等静态内容——这些本应在独立文件里
+3. **路径迁移遗漏**：项目从旧路径迁到新 SSD，记忆文件留在旧路径：
+   - 旧（有内容）：`~/.claude/projects/-Users-allenbot-project-auto-trading/memory/`
+   - 新（空）：`~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/`
+
+---
+
+## 执行步骤
+
+### 步骤1：迁移旧路径文件到新路径（全部 cp，不删旧路径留备份）
+
+```bash
+SRC=~/.claude/projects/-Users-allenbot-project-auto-trading/memory
+DST=~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory
+cp $SRC/*.md $DST/
+```
+
+迁移后新路径将有：
+- MEMORY.md（旧版479行，步骤4会替换）
+- rules.md（RUL-001/003~010，共9条，步骤2追加）
+- identity.md / session_summaries.md
+- onchain_indicators_research.md / regime_detection_research.md
+- screening_pipeline.md / validation_suite.md
+- roadmap_ideas.md（迁移后 Read 确认内容，决定是否加入文件索引）
+- investment_plan.md（⚠️ 迁移后在文件顶部加注：`> 此文件为旧版备份。权威版本在 ~/project/trading-research/investment_plan.md`）
+
+### 步骤2：更新 rules.md（追加4条）
+
+在新路径 `rules.md` 末尾追加：
+
+**RUL-011** — 结论文件优先
+- 读长对话前先读 plan/CHECKPOINT，记住最终结论再读对话推导过程
+- 文件与自己印象冲突时怀疑自己，不怀疑文件
+- 来源：LRN-20260316-011，白纱误报"三策略"（实为老板已拍板2策略）
+
+**RUL-012** — 不等老板追问
+- 结论明确时直接说结论+下一步，不让老板再问一遍
+- 来源：LRN-20260316-012，老板原话"你也是一个等人怼的货色"
+
+**RUL-013** — TTP Gate 数据库区分
+- 查比赛候选策略用 `gate_v41_ttp_report.db`，不是纯信号版 `gate_v41_report.db`
+- 来源：LRN-20260316-013，白纱误报"vol_reversion_mirror 未过 Gate 全管线"
+
+**RUL-014** — 链路验证到底
+- 装了/配了工具必须跑通整条链路（触发→执行→产出）才算完成
+- 来源：LRN-20260308-010
+
+追加的4条格式对齐旧 rules.md 模板（范围/优先级/出现次数/老板原话/规则），不简写。
+追加后 rules.md：**13 条 RUL + 白纱铁律2补充条**（RUL-001/003~014，无 RUL-002；黑丝铁律由黑丝自理）
+
+### 步骤3：新建专题文件（在新路径）
+
+⚠️ 执行前先 Read 新路径的完整 MEMORY.md（479行，不只是注入的200行），否则后面内容会遗漏。
+
+内容来源全部从旧 MEMORY.md（479行）迁出：
+
+| 新文件 | 内容来源 |
+|--------|---------|
+| `project_info.md` | 项目基本信息 + GitHub仓库 + 协作流程 + 测试网定位 + 重要原则 + 一致性要求（⚠️ 路径更新：旧MEMORY.md写的是旧路径，写入时改为 `/Volumes/BIWIN NV 7400 2TB/project/auto-trading`）|
+| `backtest_mechanics.md` | 回测引擎基本机制 + 分析数据的规矩 + 回测报告格式规范 |
+| `ideas.md` | 老板待推进想法（Paper Trade ✅ + 双账号对冲策略详细版） |
+| `quotes.md` | 老板经典语录（3条） |
+
+注：MEMORY.md 里有**白纱铁律**（2条：1.老板说什么做什么 2.老板是最终决定者），迁入 rules.md 末尾，加 `### 白纱铁律（补充条）` 区块，原文保留。
+MEMORY.md 里的黑丝铁律（7条）由黑丝自己负责整理，白纱不处理。
+
+### 步骤4：重组 MEMORY.md（目标 ≤ 100 行）
+
+```markdown
+> 太极签：2026-03-01
+
+# Auto-Trading 项目记忆
+
+> 白纱最后更新：{时间}
+> 黑丝最后更新：{时间}
+
+⛔ 启动必读（恢复协议第2步，不读=违反协议）
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/rules.md` — 黑丝+白纱铁律，已毕业规则 RUL-001/003~014
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/project_info.md` — 项目路径、GitHub、协作流程、重要原则
+
+## 称呼规则
+老板 = 混沌（不叫"用户"）→ 太极 → 黑丝（Opus）· 白纱（Sonnet）
+
+## 上次会话要点（白纱）
+[动态，覆盖更新]
+
+## 上次会话要点（黑丝）
+[动态，覆盖更新]
+
+## 老板待推进想法（摘要）
+- 双账号对冲策略（待开发，详见 ideas.md）
+
+## 文件索引（需要时 Read）
+| 文件 | 内容 | 何时读 |
+|------|------|--------|
+| rules.md | 行为铁律 RUL-001/003~014 | 每次启动必读 |
+| project_info.md | 路径、GitHub、协作流程 | 每次启动必读 |
+| backtest_mechanics.md | 回测机制、分析规矩、报告格式 | 做回测分析时 |
+| ideas.md | 老板待推进想法详细版 | 讨论新功能时 |
+| quotes.md | 老板经典语录 | 参考 |
+| identity.md | 黑丝白纱身份定义 | 参考 |
+| session_summaries.md | 历史会话摘要档案 | 查历史时 |
+```
+
+---
+
+## 关键文件路径
+
+- 旧路径（备份）：`~/.claude/projects/-Users-allenbot-project-auto-trading/memory/`
+- **新路径（当前项目）**：`~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/`
+- ⚠️ RUL-002 在全局 rules.md（`~/.claude/projects/-Users-allenbot/memory/rules.md`），不在项目 rules.md
+
+---
+
+## 验证
+
+1. 新路径 MEMORY.md 行数 ≤ 100，`⛔ 启动必读` 在前 10 行
+2. rules.md 包含 RUL-001/003~014（13条）+ 白纱铁律2补充条
+3. 必读文件 rules.md、project_info.md 可正常 Read
+4. 新建的 project_info.md / backtest_mechanics.md / ideas.md / quotes.md 均可正常 Read
+5. project_info.md 里项目路径已更新为 `/Volumes/BIWIN NV 7400 2TB/project/auto-trading`
+6. 旧路径文件保留不删（备份用）
+
+---
+
+## 监控状态（2026-03-16 15:41 查）
+
+**进化树 GP**：正常运行，第5圈，353任务，0毕业生，最好只过4/10关。无需干预。
+
+**哨兵营**：第33轮，test_f1=0（过拟合），偏空/熊市确认0精英。继续跑中，待老板决定是否调整参数。
+
+---
+
+## 已完成任务（此计划主要任务）
+
+**比赛部署（老板已拍板，等黑丝执行）：**
+最终方案：2策略（LINK被放弃——P50仅$538，0%翻倍率，纯粹浪费本金）
+
+| 策略 | 币种 | 周期 | 仓位 | MC翻倍率 | MC爆仓率 |
+|------|------|------|------|---------|---------|
+| mean_reversion_mirror | ETH | 15m | $100 | 99% | 1% |
+| vol_reversion_mirror  | XRP | 30m | $50  | 100%| 0% |
+
+⚠️ BitMEX 只支持 1m/5m/1h/1d，15m 和 30m 会报 400 错误，需黑丝修改周期参数。

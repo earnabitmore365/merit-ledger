@@ -1,0 +1,13 @@
+# 恢复就绪 — 等老板指示
+
+## Context
+老板回来了，恢复协议已完成。无具体任务需要规划。
+
+## 当前状态
+- 21策略并行系统 Phase 2 已部署 Vultr，首试8bug已修，等老板确认启动
+- Gateway 在跑但有问题（TICK/POS不广播、订阅过多、45 ERROR）
+- BitMEX 零持仓，余额 $2,082.86
+- 待老板：Bug 7（Mac Mini monitor_bot）、Bug 8（SSH免密）
+
+## 下一步
+等老板指示后执行。

@@ -1,0 +1,6 @@
+{
+  "name": "monitor-command",
+  "version": "1.0.0",
+  "description": "Generate macOS .command files for SSH-based remote trading monitoring",
+  "main": "index.js"
+}

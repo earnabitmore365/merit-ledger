@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""
+BTC 已知事实 Regime 时间表 — 5类 + 叠加边界
+输入: seed_v3.db (paired_trades.open_time)
+输出: seed_v3.db 新增 regime_fact_labels 表
+
+5类: 初牛 / 牛 / 盘整 / 初熊 / 熊
+叠加: 每段头尾各1个月为过渡区，标 primary + secondary
+
+性能: 纯SQL JOIN，89M行秒级完成（不用Python逐条处理）
+"""
+import sqlite3
+import os
+import sys
+import time
+
+# ── 项目根定位 ──
+_p = os.path.dirname(os.path.abspath(__file__))
+while _p != os.path.dirname(_p) and not os.path.exists(os.path.join(_p, '.wuji-root')):
+    _p = os.path.dirname(_p)
+if _p not in sys.path:
+    sys.path.insert(0, _p)
+from path_config import ROOT, DATA_DIR, REPORT_DIR, SRC_DIR  # noqa: E402
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
+DB_PATH = os.path.join(REPORT_DIR, 'seed_v3.db')
+
+# ===== BTC 已知事实时间表（21段，混沌确认 2026-03-03）=====
+# 格式: (开始年月, 结束年月, regime类型)
+
+TIMELINE = [
+    # #   开始      结束      类型     简述
+    ('2017-12', '2018-01', '初熊'),  # 1  ATH见顶暴跌
+    ('2018-02', '2018-12', '熊'),    # 2  漫长阴跌
+    ('2019-01', '2019-03', '初牛'),  # 3  底部试探
+    ('2019-04', '2019-06', '牛'),    # 4  小牛确认
+    ('2019-07', '2019-08', '初熊'),  # 5  冲高回落
+    ('2019-09', '2020-03', '熊'),    # 6  慢跌+COVID
+    ('2020-04', '2020-09', '初牛'),  # 7  V型恢复
+    ('2020-10', '2021-04', '牛'),    # 8  大牛一波
+    ('2021-05', '2021-07', '初熊'),  # 9  中国禁矿
+    ('2021-08', '2021-11', '牛'),    # 10 大牛二波
+    ('2021-12', '2022-01', '初熊'),  # 11 ATH见顶
+    ('2022-02', '2022-11', '熊'),    # 12 LUNA+FTX
+    ('2022-12', '2023-03', '初牛'),  # 13 底部恢复
+    ('2023-04', '2023-09', '盘整'),  # 14 横盘震荡
+    ('2023-10', '2024-03', '牛'),    # 15 ETF行情
+    ('2024-04', '2024-09', '盘整'),  # 16 高位整理
+    ('2024-10', '2025-01', '牛'),    # 17 Trump行情
+    ('2025-02', '2025-03', '初熊'),  # 18 回调
+    ('2025-04', '2025-10', '牛'),    # 19 新ATH
+    ('2025-11', '2025-12', '初熊'),  # 20 见顶回落
+    ('2026-01', '2026-03', '熊'),    # 21 持续下跌
+]
+
+
+def build_month_map():
+    """
+    构建月级别的 regime 映射，含叠加边界。
+
+    叠加规则：每段的第一个月和最后一个月为过渡区。
+    - 第一个月: secondary = 前一段的类型（从前一段过渡过来）
+    - 最后一个月: secondary = 后一段的类型（正在过渡到下一段）
+    - 如果段只有2个月: 第一个月 secondary=前段, 第二个月 secondary=后段
+    - 如果段只有1个月: 不设secondary（太短了没法叠加）
+
+    返回: [(year_month, primary, secondary), ...]
+    """
+    segments = []
+    for start_ym, end_ym, regime in TIMELINE:
+        segments.append({
+            'start_ym': start_ym,
+            'end_ym': end_ym,
+            'regime': regime,
+        })
+
+    result = []
+
+    for i, seg in enumerate(segments):
+        start_ym = seg['start_ym']
+        end_ym = seg['end_ym']
+        regime = seg['regime']
+
+        # 解析出所有月份
+        months = []
+        ym = start_ym
+        while ym <= end_ym:
+            months.append(ym)
+            y, m = int(ym[:4]), int(ym[5:7])
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+            ym = f'{y:04d}-{m:02d}'
+
+        prev_regime = segments[i - 1]['regime'] if i > 0 else None
+        next_regime = segments[i + 1]['regime'] if i < len(segments) - 1 else None
+
+        for j, month in enumerate(months):
+            secondary = None
+
+            if len(months) == 1:
+                pass
+            elif len(months) == 2:
+                if j == 0 and prev_regime:
+                    secondary = prev_regime
+                elif j == 1 and next_regime:
+                    secondary = next_regime
+            else:
+                if j == 0 and prev_regime:
+                    secondary = prev_regime
+                elif j == len(months) - 1 and next_regime:
+                    secondary = next_regime
+
+            result.append((month, regime, secondary))
+
+    return result
+
+
+def main():
+    print("=" * 60)
+    print("BTC 已知事实 Regime 标签 — 5类 + 叠加边界")
+    print("=" * 60)
+
+    # 构建月度 regime 映射
+    month_map = build_month_map()
+
+    print(f"\n时间表: {len(TIMELINE)} 段")
+    print(f"月度映射: {len(month_map)} 条")
+
+    # 打印叠加边界预览
+    print("\n叠加边界预览:")
+    for ym, primary, secondary in month_map:
+        if secondary:
+            print(f"  {ym}: {primary} + {secondary}")
+
+    # 连接种子库
+    print(f"\n连接种子库: {DB_PATH}")
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-2000000")  # 2GB cache
+
+    # 检查是否已存在
+    existing = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='regime_fact_labels'"
+    ).fetchone()
+    if existing:
+        count = conn.execute("SELECT COUNT(*) FROM regime_fact_labels").fetchone()[0]
+        print(f"regime_fact_labels 已存在 ({count} 条)，将重建")
+        conn.execute("DROP TABLE regime_fact_labels")
+
+    # 也清理临时表（如果上次中断残留）
+    conn.execute("DROP TABLE IF EXISTS _regime_month_map")
+
+    # Step 1: 创建月度映射临时表
+    print("\n创建月度映射表...")
+    conn.execute('''CREATE TABLE _regime_month_map (
+        year_month TEXT PRIMARY KEY,
+        regime_fact TEXT NOT NULL,
+        regime_fact_2 TEXT
+    )''')
+
+    conn.executemany(
+        "INSERT INTO _regime_month_map (year_month, regime_fact, regime_fact_2) VALUES (?,?,?)",
+        month_map
+    )
+    conn.commit()
+
+    verify_map = conn.execute("SELECT COUNT(*) FROM _regime_month_map").fetchone()[0]
+    print(f"  映射表: {verify_map} 条")
+
+    # 预览几条
+    print("\n  映射表预览:")
+    for row in conn.execute("SELECT * FROM _regime_month_map LIMIT 5").fetchall():
+        print(f"    {row[0]}: {row[1]} / {row[2]}")
+    print("    ...")
+
+    # Step 2: 获取总数
+    print("\n读取 paired_trades 总数...")
+    t0 = time.time()
+    total = conn.execute("SELECT COUNT(*) FROM paired_trades").fetchone()[0]
+    print(f"  总交易数: {total:,} (查询耗时 {time.time()-t0:.1f}s)")
+
+    # Step 3: 创建 regime_fact_labels 表（纯SQL，一条语句搞定89M行）
+    print("\n写入 regime_fact_labels (纯SQL JOIN)...")
+    t0 = time.time()
+
+    conn.execute('''CREATE TABLE regime_fact_labels AS
+        SELECT
+            pt.id AS trade_id,
+            pt.combo_id,
+            COALESCE(rm.regime_fact, 'unknown') AS regime_fact,
+            rm.regime_fact_2
+        FROM paired_trades pt
+        LEFT JOIN _regime_month_map rm
+            ON substr(pt.open_time, 1, 7) = rm.year_month
+    ''')
+
+    elapsed = time.time() - t0
+    print(f"  写入完成，耗时 {elapsed:.1f}s")
+
+    # Step 4: 创建索引
+    print("\n创建索引...")
+    t0 = time.time()
+    conn.execute("CREATE UNIQUE INDEX idx_rfl_trade ON regime_fact_labels(trade_id)")
+    conn.execute("CREATE INDEX idx_rfl_combo ON regime_fact_labels(combo_id)")
+    conn.execute("CREATE INDEX idx_rfl_regime ON regime_fact_labels(regime_fact)")
+    print(f"  索引完成，耗时 {time.time()-t0:.1f}s")
+
+    conn.commit()
+
+    # Step 5: 统计验证
+    print("\n统计验证...")
+    check = conn.execute("SELECT COUNT(*) FROM regime_fact_labels").fetchone()[0]
+    print(f"  总行数: {check:,} (应等于 {total:,})")
+    assert check == total, f"数量不匹配! {check} != {total}"
+
+    # 标签分布
+    print("\n标签分布:")
+    for row in conn.execute('''
+        SELECT regime_fact, COUNT(*) as cnt
+        FROM regime_fact_labels
+        GROUP BY regime_fact
+        ORDER BY cnt DESC
+    ''').fetchall():
+        pct = row[1] / total * 100
+        print(f"  {row[0]:>4}: {row[1]:>12,} ({pct:.1f}%)")
+
+    # 叠加标签数
+    overlap = conn.execute(
+        "SELECT COUNT(*) FROM regime_fact_labels WHERE regime_fact_2 IS NOT NULL"
+    ).fetchone()[0]
+    print(f"\n叠加标签: {overlap:,} ({overlap/total*100:.1f}%)")
+
+    # unknown 检查
+    unknown = conn.execute(
+        "SELECT COUNT(*) FROM regime_fact_labels WHERE regime_fact = 'unknown'"
+    ).fetchone()[0]
+    if unknown > 0:
+        print(f"\n⚠️ unknown: {unknown:,} ({unknown/total*100:.2f}%)")
+        # 看看 unknown 的时间范围
+        sample = conn.execute('''
+            SELECT pt.open_time
+            FROM regime_fact_labels rfl
+            JOIN paired_trades pt ON pt.id = rfl.trade_id
+            WHERE rfl.regime_fact = 'unknown'
+            LIMIT 5
+        ''').fetchall()
+        print("  示例:")
+        for s in sample:
+            print(f"    {s[0]}")
+    else:
+        print("\n✅ 零 unknown — 所有交易都在时间表覆盖范围内")
+
+    # 清理临时表
+    conn.execute("DROP TABLE _regime_month_map")
+    conn.commit()
+
+    print(f"\n✅ 验证通过！标签已写入 {DB_PATH}")
+    print(f"表: regime_fact_labels ({check:,} 行)")
+    print(f"字段: trade_id, combo_id, regime_fact, regime_fact_2")
+
+    conn.close()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>原版 vs Mirror 短周期对比 | Auto-Trading</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --cyan: #39d2c0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    line-height: 1.5;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.5rem;
+    margin-bottom: 8px;
+    color: var(--blue);
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 24px;
+  }
+  .controls {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .controls button {
+    padding: 8px 20px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+  }
+  .controls button:hover { border-color: var(--blue); }
+  .controls button.active {
+    background: var(--blue);
+    color: #000;
+    border-color: var(--blue);
+    font-weight: bold;
+  }
+  .section {
+    margin-bottom: 32px;
+    display: none;
+  }
+  .section.visible { display: block; }
+  .section-title {
+    font-size: 1.1rem;
+    color: var(--orange);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 900px) {
+    .comparison { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 10px 14px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-header.original { background: #1a2332; color: var(--blue); }
+  .panel-header.mirror { background: #2a1a2e; color: var(--purple); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  th {
+    text-align: left;
+    padding: 6px 10px;
+    color: var(--text-dim);
+    font-weight: normal;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #21262d;
+    white-space: nowrap;
+  }
+  tr:hover td { background: rgba(88,166,255,0.05); }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .highlight { color: var(--cyan); font-weight: bold; }
+  .rank { color: var(--text-dim); }
+  .strategy-name { color: var(--text); max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+  .coin { color: var(--orange); font-weight: bold; }
+
+  .summary-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+  }
+  .summary-box h3 {
+    color: var(--cyan);
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 700px) {
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .stat-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+  }
+  .stat-card .label { font-size: 0.72rem; color: var(--text-dim); }
+  .stat-card .value { font-size: 1.2rem; font-weight: bold; margin-top: 2px; }
+  .stat-card .sub { font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; }
+
+  .db-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    justify-content: center;
+  }
+  .db-tabs button {
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8rem;
+  }
+  .db-tabs button.active {
+    background: var(--orange);
+    color: #000;
+    border-color: var(--orange);
+    font-weight: bold;
+  }
+  .db-section { display: none; }
+  .db-section.visible { display: block; }
+
+  .multiplier {
+    text-align: center;
+    padding: 8px;
+    background: rgba(63,185,80,0.1);
+    border: 1px solid rgba(63,185,80,0.3);
+    border-radius: 6px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--green);
+  }
+  .note {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    text-align: center;
+    margin-top: 16px;
+    padding: 10px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<h1>原版 vs Mirror — 短周期前5名对比</h1>
+<div class="subtitle">数据来源：seed_v3.db + seed_v3_ttp.db | $1 固定注码 | 4年全量 | 排除币本位 | 2026-03-18</div>
+
+<!-- 概览 -->
+<div class="summary-box">
+  <h3>Mirror 碾压倍数（冠军 total_return 对比）</h3>
+  <div class="summary-grid">
+    <div class="stat-card">
+      <div class="label">1m 纯信号</div>
+      <div class="value pos">273x</div>
+      <div class="sub">+2373 vs +8.7</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">5m 纯信号</div>
+      <div class="value pos">66x</div>
+      <div class="sub">+969 vs +14.6</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">15m 纯信号</div>
+      <div class="value pos">74x</div>
+      <div class="sub">+611 vs +8.3</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">30m 纯信号</div>
+      <div class="value pos">16x</div>
+      <div class="sub">+964 vs +60.4</div>
+    </div>
+  </div>
+  <div style="height:8px"></div>
+  <div class="summary-grid">
+    <div class="stat-card">
+      <div class="label">1m TTP</div>
+      <div class="value pos">35x</div>
+      <div class="sub">+183 vs +5.2</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">5m TTP</div>
+      <div class="value pos">11x</div>
+      <div class="sub">+75.4 vs +6.7</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">15m TTP</div>
+      <div class="value pos">9x</div>
+      <div class="sub">+71.7 vs +7.6</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">30m TTP</div>
+      <div class="value pos">7x</div>
+      <div class="sub">+122.7 vs +17.1</div>
+    </div>
+  </div>
+</div>
+
+<!-- 周期切换 -->
+<div class="controls">
+  <button class="active" onclick="showInterval('all')">全部</button>
+  <button onclick="showInterval('1m')">1m</button>
+  <button onclick="showInterval('5m')">5m</button>
+  <button onclick="showInterval('15m')">15m</button>
+  <button onclick="showInterval('30m')">30m</button>
+</div>
+
+<!-- 数据库切换 -->
+<div class="db-tabs">
+  <button class="active" onclick="showDb('sig')">纯信号</button>
+  <button onclick="showDb('ttp')">TTP</button>
+</div>
+
+<!-- ============ 纯信号 ============ -->
+<div class="db-section visible" id="db-sig">
+
+<!-- 1m 纯信号 -->
+<div class="section visible" data-interval="1m">
+<div class="section-title">1m — 纯信号</div>
+<div class="comparison">
+  <div class="panel">
+    <div class="panel-header original">原版 TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">mean_reversion</td><td class="coin">LINK</td><td class="pos">+8.7</td><td>35</td><td>31.4%</td><td>2.85</td><td>2.74</td><td>1.4%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">atr_squeeze</td><td class="coin">XRP</td><td class="pos">+7.3</td><td>150</td><td>40.7%</td><td>0.82</td><td>1.77</td><td>2.4%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">mean_reversion</td><td class="coin">ADA</td><td class="pos">+6.6</td><td>37</td><td>45.9%</td><td>4.03</td><td>2.65</td><td>1.2%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">order_block</td><td class="coin">ETH</td><td class="pos">+6.0</td><td>72</td><td>63.9%</td><td>3.53</td><td>2.70</td><td>1.0%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">order_block</td><td class="coin">TRX</td><td class="pos">+5.8</td><td>60</td><td>46.7%</td><td>1.26</td><td>2.38</td><td>1.7%</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header mirror">Mirror TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">ETH</td><td class="highlight">+2373.8</td><td>107</td><td>28.0%</td><td>1.53</td><td>152.15</td><td>7.7%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">ETH</td><td class="highlight">+2341.0</td><td>253</td><td>66.0%</td><td>1.00</td><td>136.10</td><td>8.0%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">BTC</td><td class="highlight">+1530.4</td><td>65</td><td>33.8%</td><td>1.96</td><td>171.28</td><td>6.9%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">BTC</td><td class="highlight">+1490.9</td><td>224</td><td>77.7%</td><td>1.06</td><td>156.37</td><td>7.2%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">SOL</td><td class="highlight">+1464.7</td><td>118</td><td>39.0%</td><td>1.46</td><td>100.17</td><td>5.9%</td></tr>
+    </table>
+  </div>
+</div>
+<div class="multiplier">Mirror 冠军是原版的 <strong>273 倍</strong>（+2373.8 vs +8.7）</div>
+</div>
+
+<!-- 5m 纯信号 -->
+<div class="section visible" data-interval="5m">
+<div class="section-title">5m — 纯信号</div>
+<div class="comparison">
+  <div class="panel">
+    <div class="panel-header original">原版 TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">atr_squeeze</td><td class="coin">SOL</td><td class="pos">+14.6</td><td>25</td><td>36.0%</td><td>3.79</td><td>6.86</td><td>0.6%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">atr_squeeze</td><td class="coin">XRP</td><td class="pos">+11.5</td><td>25</td><td>44.0%</td><td>3.65</td><td>6.28</td><td>0.8%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">mean_reversion</td><td class="coin">DOT</td><td class="pos">+7.0</td><td>60</td><td>48.3%</td><td>3.96</td><td>2.05</td><td>1.1%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">mass_index</td><td class="coin">XRP</td><td class="pos">+6.9</td><td>109</td><td>48.6%</td><td>1.35</td><td>1.82</td><td>2.0%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">mass_index</td><td class="coin">AVAX</td><td class="pos">+6.7</td><td>61</td><td>37.7%</td><td>1.72</td><td>1.90</td><td>2.2%</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header mirror">Mirror TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">ETH</td><td class="highlight">+969.3</td><td>89</td><td>24.7%</td><td>1.68</td><td>71.82</td><td>6.5%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">ETH</td><td class="highlight">+964.1</td><td>155</td><td>52.9%</td><td>1.27</td><td>65.71</td><td>6.5%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">elder_ray_mirror</td><td class="coin">ETH</td><td class="highlight">+554.6</td><td>243</td><td>65.8%</td><td>1.01</td><td>38.21</td><td>6.1%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">XRP</td><td class="highlight">+526.3</td><td>49</td><td>18.4%</td><td>2.29</td><td>64.95</td><td>3.9%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">XRP</td><td class="highlight">+515.3</td><td>54</td><td>24.1%</td><td>2.18</td><td>62.17</td><td>4.0%</td></tr>
+    </table>
+  </div>
+</div>
+<div class="multiplier">Mirror 冠军是原版的 <strong>66 倍</strong>（+969.3 vs +14.6）</div>
+</div>
+
+<!-- 15m 纯信号 -->
+<div class="section visible" data-interval="15m">
+<div class="section-title">15m — 纯信号</div>
+<div class="comparison">
+  <div class="panel">
+    <div class="panel-header original">原版 TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">atr_pullback</td><td class="coin">ADA</td><td class="pos">+8.3</td><td>129</td><td>55.8%</td><td>1.89</td><td>1.78</td><td>1.3%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">atr_combo</td><td class="coin">ADA</td><td class="pos">+7.9</td><td>136</td><td>54.4%</td><td>1.74</td><td>1.72</td><td>1.3%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">proc</td><td class="coin">ADA</td><td class="pos">+5.6</td><td>285</td><td>45.3%</td><td>0.84</td><td>1.30</td><td>1.9%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">atr_combo</td><td class="coin">XRP</td><td class="pos">+5.3</td><td>131</td><td>53.4%</td><td>2.06</td><td>1.56</td><td>1.8%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">atr_pullback</td><td class="coin">XRP</td><td class="pos">+4.9</td><td>121</td><td>51.2%</td><td>2.00</td><td>1.53</td><td>1.8%</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header mirror">Mirror TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">BTC</td><td class="highlight">+611.0</td><td>51</td><td>27.5%</td><td>2.20</td><td>78.74</td><td>6.2%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">BTC</td><td class="highlight">+610.9</td><td>80</td><td>50.0%</td><td>1.76</td><td>73.06</td><td>6.2%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">ETH</td><td class="highlight">+375.2</td><td>122</td><td>50.8%</td><td>1.44</td><td>31.55</td><td>4.7%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">ETH</td><td class="highlight">+372.0</td><td>77</td><td>28.6%</td><td>1.81</td><td>34.06</td><td>4.8%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">BNB</td><td class="highlight">+223.4</td><td>43</td><td>32.6%</td><td>2.39</td><td>38.85</td><td>4.1%</td></tr>
+    </table>
+  </div>
+</div>
+<div class="multiplier">Mirror 冠军是原版的 <strong>74 倍</strong>（+611.0 vs +8.3）</div>
+</div>
+
+<!-- 30m 纯信号 -->
+<div class="section visible" data-interval="30m">
+<div class="section-title">30m — 纯信号</div>
+<div class="comparison">
+  <div class="panel">
+    <div class="panel-header original">原版 TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">atr_squeeze</td><td class="coin">BNB</td><td class="pos">+60.4</td><td>12</td><td>50.0%</td><td>4.66</td><td>46.93</td><td>0.4%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">atr_trailing_stop</td><td class="coin">ADA</td><td class="pos">+22.7</td><td>153</td><td>38.6%</td><td>2.15</td><td>2.50</td><td>1.2%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">mass_index</td><td class="coin">SOL</td><td class="pos">+20.8</td><td>22</td><td>31.8%</td><td>4.53</td><td>7.81</td><td>1.0%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">mass_index</td><td class="coin">LINK</td><td class="pos">+19.8</td><td>27</td><td>29.6%</td><td>4.51</td><td>6.18</td><td>1.6%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">atr_combo</td><td class="coin">BNB</td><td class="pos">+18.2</td><td>134</td><td>43.3%</td><td>1.25</td><td>2.33</td><td>2.3%</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header mirror">Mirror TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">DOT</td><td class="highlight">+964.6</td><td>83</td><td>38.6%</td><td>1.75</td><td>87.29</td><td>3.4%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">DOT</td><td class="highlight">+964.2</td><td>69</td><td>31.9%</td><td>1.92</td><td>93.94</td><td>3.4%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">XRP</td><td class="highlight">+532.5</td><td>48</td><td>18.8%</td><td>2.32</td><td>65.41</td><td>3.5%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">XRP</td><td class="highlight">+521.1</td><td>46</td><td>15.2%</td><td>2.36</td><td>65.50</td><td>3.7%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">ETH</td><td class="highlight">+417.6</td><td>141</td><td>27.7%</td><td>1.55</td><td>21.02</td><td>5.2%</td></tr>
+    </table>
+  </div>
+</div>
+<div class="multiplier">Mirror 冠军是原版的 <strong>16 倍</strong>（+964.6 vs +60.4）</div>
+</div>
+</div>
+
+<!-- ============ TTP ============ -->
+<div class="db-section" id="db-ttp">
+
+<!-- 1m TTP -->
+<div class="section visible" data-interval="1m">
+<div class="section-title">1m — TTP</div>
+<div class="comparison">
+  <div class="panel">
+    <div class="panel-header original">原版 TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">mean_reversion</td><td class="coin">AVAX</td><td class="pos">+5.2</td><td>61</td><td>80.3%</td><td>3.40</td><td>3.14</td><td>0.6%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">ulcer_index</td><td class="coin">LINK</td><td class="pos">+3.9</td><td>1119</td><td>61.2%</td><td>-1.24</td><td>1.22</td><td>1.1%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">volume_momentum</td><td class="coin">LINK</td><td class="pos">+3.4</td><td>1190</td><td>58.3%</td><td>-1.18</td><td>1.13</td><td>1.5%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">mean_reversion</td><td class="coin">DOT</td><td class="pos">+2.9</td><td>54</td><td>72.2%</td><td>2.19</td><td>2.00</td><td>0.6%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">mean_reversion</td><td class="coin">XRP</td><td class="pos">+2.8</td><td>80</td><td>78.8%</td><td>2.73</td><td>1.85</td><td>0.8%</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header mirror">Mirror TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">ETH</td><td class="highlight">+183.4</td><td>2010</td><td>77.9%</td><td>0.34</td><td>3.04</td><td>3.3%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">ETH</td><td class="highlight">+183.3</td><td>2137</td><td>78.9%</td><td>0.33</td><td>3.01</td><td>3.3%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">SOL</td><td class="highlight">+72.7</td><td>1750</td><td>81.0%</td><td>0.42</td><td>2.08</td><td>3.0%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">SOL</td><td class="highlight">+71.8</td><td>1909</td><td>82.3%</td><td>0.39</td><td>2.05</td><td>3.0%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">LINK</td><td class="highlight">+60.3</td><td>2204</td><td>75.5%</td><td>0.90</td><td>1.55</td><td>3.0%</td></tr>
+    </table>
+  </div>
+</div>
+<div class="multiplier">Mirror 冠军是原版的 <strong>35 倍</strong>（+183.4 vs +5.2）</div>
+</div>
+
+<!-- 5m TTP -->
+<div class="section visible" data-interval="5m">
+<div class="section-title">5m — TTP</div>
+<div class="comparison">
+  <div class="panel">
+    <div class="panel-header original">原版 TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">ulcer_index</td><td class="coin">XRP</td><td class="pos">+6.7</td><td>1717</td><td>57.8%</td><td>-1.08</td><td>1.23</td><td>2.1%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">mean_reversion</td><td class="coin">XRP</td><td class="pos">+5.9</td><td>133</td><td>79.7%</td><td>4.10</td><td>2.17</td><td>0.6%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">rsi_divergence</td><td class="coin">LINK</td><td class="pos">+4.1</td><td>2245</td><td>68.0%</td><td>-1.53</td><td>1.08</td><td>2.6%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">mean_reversion</td><td class="coin">LINK</td><td class="pos">+4.0</td><td>109</td><td>81.7%</td><td>3.24</td><td>2.05</td><td>0.4%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">rsi_divergence</td><td class="coin">XRP</td><td class="pos">+3.6</td><td>2141</td><td>65.6%</td><td>-1.75</td><td>1.09</td><td>3.1%</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header mirror">Mirror TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">ETH</td><td class="highlight">+75.4</td><td>1079</td><td>73.3%</td><td>0.56</td><td>2.30</td><td>2.9%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">ETH</td><td class="highlight">+75.0</td><td>1120</td><td>73.8%</td><td>0.54</td><td>2.26</td><td>3.0%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">LINK</td><td class="highlight">+61.8</td><td>1268</td><td>73.7%</td><td>0.98</td><td>1.92</td><td>2.2%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">LINK</td><td class="highlight">+61.0</td><td>1159</td><td>72.0%</td><td>1.03</td><td>1.94</td><td>2.3%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">XRP</td><td class="highlight">+52.6</td><td>945</td><td>70.8%</td><td>1.04</td><td>1.95</td><td>2.9%</td></tr>
+    </table>
+  </div>
+</div>
+<div class="multiplier">Mirror 冠军是原版的 <strong>11 倍</strong>（+75.4 vs +6.7）</div>
+</div>
+
+<!-- 15m TTP -->
+<div class="section visible" data-interval="15m">
+<div class="section-title">15m — TTP</div>
+<div class="comparison">
+  <div class="panel">
+    <div class="panel-header original">原版 TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">keltner</td><td class="coin">AVAX</td><td class="pos">+7.6</td><td>2127</td><td>45.5%</td><td>-0.93</td><td>1.13</td><td>1.4%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">momentum_slope</td><td class="coin">AVAX</td><td class="pos">+7.0</td><td>2597</td><td>40.8%</td><td>-1.21</td><td>1.12</td><td>2.4%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">fvg</td><td class="coin">SOL</td><td class="pos">+6.0</td><td>3341</td><td>49.3%</td><td>-1.65</td><td>1.09</td><td>3.4%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">momentum_slope</td><td class="coin">SOL</td><td class="pos">+5.7</td><td>2486</td><td>41.9%</td><td>-1.24</td><td>1.10</td><td>1.6%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">mean_reversion</td><td class="coin">XRP</td><td class="pos">+5.3</td><td>178</td><td>78.7%</td><td>2.59</td><td>1.72</td><td>1.4%</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header mirror">Mirror TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">ETH</td><td class="highlight">+71.7</td><td>743</td><td>69.3%</td><td>0.72</td><td>2.55</td><td>3.9%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">ETH</td><td class="highlight">+71.3</td><td>700</td><td>68.0%</td><td>0.75</td><td>2.57</td><td>3.9%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">LINK</td><td class="highlight">+65.3</td><td>692</td><td>69.4%</td><td>1.10</td><td>2.54</td><td>1.5%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">LINK</td><td class="highlight">+65.2</td><td>754</td><td>70.8%</td><td>1.04</td><td>2.48</td><td>1.5%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">roc_mirror</td><td class="coin">XRP</td><td class="highlight">+58.3</td><td>258</td><td>57.4%</td><td>0.96</td><td>5.34</td><td>2.5%</td></tr>
+    </table>
+  </div>
+</div>
+<div class="multiplier">Mirror 冠军是原版的 <strong>9 倍</strong>（+71.7 vs +7.6）</div>
+</div>
+
+<!-- 30m TTP -->
+<div class="section visible" data-interval="30m">
+<div class="section-title">30m — TTP</div>
+<div class="comparison">
+  <div class="panel">
+    <div class="panel-header original">原版 TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">macross_slow</td><td class="coin">ADA</td><td class="pos">+17.1</td><td>3113</td><td>42.0%</td><td>-0.59</td><td>1.22</td><td>1.8%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">matriple</td><td class="coin">XRP</td><td class="pos">+16.7</td><td>3607</td><td>37.6%</td><td>-0.66</td><td>1.18</td><td>2.3%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">matriple</td><td class="coin">AVAX</td><td class="pos">+15.9</td><td>2682</td><td>42.9%</td><td>-0.40</td><td>1.17</td><td>2.5%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">matriple</td><td class="coin">ADA</td><td class="pos">+15.3</td><td>3784</td><td>40.4%</td><td>-0.80</td><td>1.14</td><td>2.1%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">macross_slow</td><td class="coin">LINK</td><td class="pos">+14.4</td><td>2763</td><td>43.8%</td><td>-0.60</td><td>1.18</td><td>2.3%</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header mirror">Mirror TOP 5</div>
+    <table>
+      <tr><th>#</th><th>策略</th><th>币种</th><th>Return</th><th>交易</th><th>WR</th><th>Sharpe</th><th>PF</th><th>MDD</th></tr>
+      <tr><td class="rank">1</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">DOT</td><td class="highlight">+122.7</td><td>372</td><td>62.9%</td><td>0.93</td><td>5.47</td><td>1.4%</td></tr>
+      <tr><td class="rank">2</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">DOT</td><td class="highlight">+122.1</td><td>362</td><td>62.2%</td><td>0.94</td><td>5.48</td><td>1.4%</td></tr>
+      <tr><td class="rank">3</td><td class="strategy-name">aroon_mirror</td><td class="coin">DOT</td><td class="highlight">+90.5</td><td>4315</td><td>37.5%</td><td>0.15</td><td>2.42</td><td>4.3%</td></tr>
+      <tr><td class="rank">4</td><td class="strategy-name">mean_reversion_mirror</td><td class="coin">XRP</td><td class="highlight">+73.8</td><td>399</td><td>61.7%</td><td>1.10</td><td>3.43</td><td>3.0%</td></tr>
+      <tr><td class="rank">5</td><td class="strategy-name">bb_squeeze_mirror</td><td class="coin">XRP</td><td class="highlight">+72.7</td><td>401</td><td>61.3%</td><td>1.08</td><td>3.37</td><td>3.1%</td></tr>
+    </table>
+  </div>
+</div>
+<div class="multiplier">Mirror 冠军是原版的 <strong>7 倍</strong>（+122.7 vs +17.1）</div>
+</div>
+
+</div>
+
+<div class="note">
+  $1 固定注码（Van Tharp 标准化），Return 单位 = R值。排除币本位（BTC_COIN/ETH_COIN/BNB_COIN）。<br>
+  纯信号 mirror 的 PF 极高（>50）因为加密市场长期偏多，翻转后做多 = 顺势，大赢小亏。TTP 库 PF 收敛因为 TTP 止盈锁利。<br>
+  mirror = 翻转K线（OHLCV 关于 max_price 轴镜像），不翻信号。策略以为"抄底"实际是"追涨"。
+</div>
+
+<script>
+function showInterval(iv) {
+  document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  document.querySelectorAll('.db-section.visible .section').forEach(s => {
+    if (iv === 'all') {
+      s.classList.add('visible');
+    } else {
+      s.classList.toggle('visible', s.dataset.interval === iv);
+    }
+  });
+}
+
+function showDb(db) {
+  document.querySelectorAll('.db-tabs button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  document.querySelectorAll('.db-section').forEach(s => s.classList.remove('visible'));
+  document.getElementById('db-' + db).classList.add('visible');
+
+  // re-apply interval filter
+  const activeIv = document.querySelector('.controls button.active');
+  if (activeIv) {
+    const iv = activeIv.textContent.trim() === '全部' ? 'all' : activeIv.textContent.trim();
+    document.querySelectorAll('#db-' + db + ' .section').forEach(s => {
+      if (iv === 'all') {
+        s.classList.add('visible');
+      } else {
+        s.classList.toggle('visible', s.dataset.interval === iv);
+      }
+    });
+  }
+}
+</script>
+</body>
+</html>

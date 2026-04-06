@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""全量回测：mean_reversion 原版 + v2.1 mirror，全币种（含币本位），当前阈值 ±0.2%"""
+
+import sys, os, json, time
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+
+from backtest.backtest import BacktestEngine
+from core.strategy.strategy_mean_reversion import MeanReversion, MeanReversionConfig
+
+
+def mirror_v21(klines):
+    """v2.1 SMA(200) 翻转 — 跟实盘 regime_router.flip_klines 一致"""
+    if not klines:
+        return []
+    n = min(len(klines), 200)
+    sma = sum(k['close'] for k in klines[-n:]) / n
+    pivot = 2 * sma
+    flipped = []
+    for k in klines:
+        m = dict(k)
+        m['open'] = pivot - k['open']
+        m['close'] = pivot - k['close']
+        m['high'] = pivot - k['low']
+        m['low'] = pivot - k['high']
+        flipped.append(m)
+    return flipped
+
+
+# 合约 + 币本位，1m 和 5m
+combos = [
+    # 合约
+    ('ETH', '1m'), ('ETH', '5m'),
+    ('XRP', '1m'), ('XRP', '5m'),
+    ('BTC', '1m'), ('BTC', '5m'),
+    ('SOL', '1m'), ('SOL', '5m'),
+    ('BNB', '1m'), ('BNB', '5m'),
+    ('ADA', '1m'), ('ADA', '5m'),
+    ('AVAX', '1m'), ('AVAX', '5m'),
+    ('LINK', '1m'), ('LINK', '5m'),
+    ('DOT', '1m'), ('DOT', '5m'),
+    ('TRX', '1m'), ('TRX', '5m'),
+    # 币本位
+    ('BTC_COIN', '1m'), ('BTC_COIN', '5m'),
+    ('ETH_COIN', '1m'), ('ETH_COIN', '5m'),
+    ('BNB_COIN', '1m'), ('BNB_COIN', '5m'),
+]
+
+print(f'{"="*100}')
+print(f'  mean_reversion 全量回测（原版 + v2.1 mirror，阈值 ±0.2%）')
+print(f'{"="*100}')
+print(f'  {"币种":<10} {"周期":<5} {"模式":<12} {"K线数":>8} {"交易数":>6} {"胜率":>7} {"PnL":>12} {"余额":>12} {"Sharpe":>8} {"赢/亏":>8}')
+print(f'  {"─"*92}')
+
+for coin, interval in combos:
+    data_path = f'src/backtest/data/historical/{coin}/{interval}.json'
+    if not os.path.exists(data_path):
+        print(f'  {coin:<10} {interval:<5} — 数据文件不存在，跳过')
+        continue
+
+    for mode in ['原版', 'v2.1_mirror']:
+        t0 = time.time()
+        engine = BacktestEngine(
+            coin=coin,
+            interval=interval,
+            days=0,  # 全量
+            initial_capital=500,
+            enable_ttp=True,
+            stop_loss_pct=0.1,
+            leverage=10.0,
+            enable_withdraw=False,
+        )
+
+        n_klines = len(engine.candles)
+
+        if mode == 'v2.1_mirror':
+            engine.candles = mirror_v21(engine.candles)
+
+        config = MeanReversionConfig(period=20, buy_threshold=0.998, sell_threshold=1.002)
+        strategy = MeanReversion(config=config)
+
+        result = engine.run_backtest('mean_reversion', strategy=strategy)
+        elapsed = time.time() - t0
+
+        if result and result.total_trades > 0:
+            wr = result.win_rate
+            if wr > 1:
+                wr = wr / 100
+            print(f'  {coin:<10} {interval:<5} {mode:<12} {n_klines:>8} {result.total_trades:>6} {wr:>6.1%} {result.total_return:>+12.2f} ${result.final_balance:>11.2f} {result.sharpe_ratio:>+8.4f} {result.winning_trades:>3}/{result.losing_trades:<3}  ({elapsed:.1f}s)')
+        elif result:
+            print(f'  {coin:<10} {interval:<5} {mode:<12} {n_klines:>8}      0   —            0         $500.00   —         0/0    ({elapsed:.1f}s)')
+        else:
+            print(f'  {coin:<10} {interval:<5} {mode:<12} {n_klines:>8}  FAILED')
+
+        sys.stdout.flush()
+
+print(f'\n{"="*100}')

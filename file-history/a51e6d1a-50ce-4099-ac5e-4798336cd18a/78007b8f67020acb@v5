@@ -1,0 +1,308 @@
+#!/usr/bin/env python3
+"""
+TTP Manager
+
+移动止盈管理器（Trailing Take Profit）
+
+逻辑（以多头为例）：
+1. 浮盈 >= trigger_pct（默认 1%）后开始追踪
+2. 价格创新高 A
+3. 价格回调形成前低 L1
+4. 价格再创新高 B > A（确认上升趋势）→ L1 成为确认的摆动低点
+5. 设置 TTP = L1 - buffer
+6. 价格继续涨到新高 C > B → 回调低点 L2 被确认
+7. 如果 L2 > L1 → TTP 上移到 L2 - buffer（TTP 只往有利方向移动）
+8. 价格跌破 TTP → 平仓
+
+空头完全镜像。
+"""
+
+import logging
+from dataclasses import dataclass
+from typing import Dict
+
+from .base import RiskManager, RiskConfig, RiskCheckResult
+
+
+# ==================== 配置类定义 ====================
+
+@dataclass
+class TTPConfig(RiskConfig):
+    """移动止盈配置
+
+    Attributes:
+        ttp_enabled: 是否启用
+        ttp_buffer_pips: 缓冲 pips（1 pip = 0.01% 的价格）
+        ttp_trigger_pct: 浮盈达到多少百分比后启动 TTP
+    """
+    ttp_enabled: bool = True
+    ttp_buffer_pips: float = 5.0
+    ttp_trigger_pct: float = 0.01  # 1% 浮盈后启动
+
+
+# ==================== 状态类定义 ====================
+
+@dataclass
+class TTPState:
+    """TTP 状态"""
+    position_side: str = ""    # LONG / SHORT
+    entry_price: float = 0.0
+
+    # 多头追踪
+    highest: float = 0.0       # 持仓以来最高价
+    pullback_low: float = 0.0  # 当前回调中的最低点
+
+    # 空头追踪
+    lowest: float = 0.0        # 持仓以来最低价
+    pullback_high: float = 0.0 # 当前反弹中的最高点
+
+    # 共用
+    in_pullback: bool = False  # 是否正在回调/反弹中
+    swing_count: int = 0       # 确认的摆动次数（>=2 才设 TTP）
+    ttp_level: float = 0.0     # TTP 触发价位
+    active: bool = False       # TTP 是否已激活
+
+    def reset(self):
+        """重置状态"""
+        self.position_side = ""
+        self.entry_price = 0.0
+        self.highest = 0.0
+        self.pullback_low = 0.0
+        self.lowest = 0.0
+        self.pullback_high = 0.0
+        self.in_pullback = False
+        self.swing_count = 0
+        self.ttp_level = 0.0
+        self.active = False
+
+
+# ==================== 移动止盈管理器 ====================
+
+class TTPManager(RiskManager):
+    """移动止盈管理器"""
+
+    def __init__(self, config: TTPConfig = None):
+        super().__init__(config)
+        self.logger = logging.getLogger(__name__)
+        self.state = TTPState()
+
+    def check(
+        self,
+        position: Dict,
+        current_price: float,
+        entry_price: float = None,
+        position_side: str = None,
+        **kwargs
+    ) -> RiskCheckResult:
+        """检查是否触发移动止盈"""
+        if not self.config.ttp_enabled:
+            return RiskCheckResult()
+
+        if position is None and (entry_price is None or position_side is None):
+            return RiskCheckResult()
+
+        # 解析参数
+        if hasattr(position, 'coin'):
+            coin = position.coin
+            pos_side = position_side or position.side
+            open_price = entry_price or position.entry_price
+        else:
+            coin = position.get('coin', '') if position else ''
+            pos_side = position_side or (position.get('side', '') if position else '')
+            open_price = entry_price or (position.get('entry_price', 0) if position else 0)
+
+        if open_price <= 0:
+            return RiskCheckResult()
+
+        # 新仓位 → 重置状态
+        if self.state.position_side != pos_side or self.state.entry_price != open_price:
+            self.state.reset()
+            self.state.position_side = pos_side
+            self.state.entry_price = open_price
+            self._max_profit_seen = 0  # 重置利润新高追踪
+            self._min_profit_seen = 0  # 重置亏损新低追踪
+            if pos_side == "LONG":
+                self.state.highest = open_price
+                self.state.pullback_low = open_price
+            elif pos_side == "SHORT":
+                self.state.lowest = open_price
+                self.state.pullback_high = open_price
+
+        # 计算浮盈
+        if pos_side == "LONG":
+            profit_pct = (current_price - open_price) / open_price
+        elif pos_side == "SHORT":
+            profit_pct = (open_price - current_price) / open_price
+        else:
+            return RiskCheckResult()
+
+        # === TTP 探针 埋点1：基础心跳（每60秒） ===
+        self._check_count = getattr(self, '_check_count', 0) + 1
+        if self._check_count % 60 == 0 and self.state.position_side:
+            self.logger.info(
+                f"[TTP Probe] {self.state.position_side} "
+                f"entry={self.state.entry_price:.4f} curr={current_price:.4f} "
+                f"profit={profit_pct:.2%} highest={self.state.highest:.4f} "
+                f"swing={self.state.swing_count} ttp={self.state.ttp_level:.4f} "
+                f"active={self.state.active}")
+
+        # === TTP 探针 埋点2：利润里程碑（盈亏都报，每 0.5% 一次，含 PnL） ===
+        _prev_max = getattr(self, '_max_profit_seen', 0)
+        _prev_min = getattr(self, '_min_profit_seen', 0)
+        # 估算 PnL（$100保证金 × 10x杠杆 = $1000名义）
+        _est_pnl = profit_pct * 1000
+
+        # 利润新高（0.5% 里程碑）
+        if profit_pct > _prev_max:
+            self._max_profit_seen = profit_pct
+            prev_milestone = int(_prev_max * 200)
+            curr_milestone = int(profit_pct * 200)
+            if profit_pct > 0 and curr_milestone > prev_milestone:
+                self.logger.info(
+                    f"[TTP Probe] 🔥利润新高! {self.state.position_side} "
+                    f"profit={profit_pct:.2%} PnL=${_est_pnl:+.2f} curr={current_price:.4f}")
+
+        # 亏损新低（0.5% 里程碑）
+        if profit_pct < _prev_min:
+            self._min_profit_seen = profit_pct
+            prev_milestone = int(abs(_prev_min) * 200)
+            curr_milestone = int(abs(profit_pct) * 200)
+            if profit_pct < 0 and curr_milestone > prev_milestone:
+                self.logger.info(
+                    f"[TTP Probe] 🔻亏损加深! {self.state.position_side} "
+                    f"profit={profit_pct:.2%} PnL=${_est_pnl:+.2f} curr={current_price:.4f}")
+
+        # 浮盈不足，不追踪
+        if profit_pct < self.config.ttp_trigger_pct and not self.state.active:
+            return RiskCheckResult()
+
+        # 缓冲金额：buffer_pips × 0.01% × 当前价格
+        buffer = current_price * self.config.ttp_buffer_pips * 0.0001
+
+        # 更新追踪状态
+        if pos_side == "LONG":
+            self._update_long(current_price, buffer)
+        else:
+            self._update_short(current_price, buffer)
+
+        # 检查是否触发
+        return self._check_trigger(current_price, pos_side, coin)
+
+    def reset(self):
+        """重置状态"""
+        self.state.reset()
+
+    # ==================== 多头追踪 ====================
+
+    def _update_long(self, price: float, buffer: float):
+        """多头：追踪更高的高点和更高的低点"""
+
+        if price > self.state.highest:
+            # 创新高 → 之前的回调低点成为确认的摆动低点
+            if self.state.in_pullback:
+                self.state.swing_count += 1
+
+                # 第 2 次以上创新高 → 设置/上移 TTP
+                if self.state.swing_count >= 2:
+                    new_ttp = self.state.pullback_low - buffer
+                    if new_ttp > self.state.ttp_level:
+                        old_level = self.state.ttp_level
+                        was_active = self.state.active
+                        self.state.ttp_level = new_ttp
+                        self.state.active = True
+                        # === TTP 探针 埋点3：TTP 上移 ===
+                        self.logger.info(
+                            f"[TTP Probe] TTP上移 swing={self.state.swing_count} "
+                            f"ttp={old_level:.4f}→{new_ttp:.4f}")
+                        # === TTP 探针 埋点4：首次激活 ===
+                        if not was_active:
+                            self.logger.info(
+                                f"[TTP Probe] 首次激活! ttp={new_ttp:.4f}")
+
+                self.state.in_pullback = False
+
+            self.state.highest = price
+            self.state.pullback_low = price  # 重置回调低点
+
+        else:
+            # 回调中
+            self.state.in_pullback = True
+            if price < self.state.pullback_low:
+                self.state.pullback_low = price
+
+    # ==================== 空头追踪 ====================
+
+    def _update_short(self, price: float, buffer: float):
+        """空头：追踪更低的低点和更低的高点"""
+
+        if price < self.state.lowest:
+            # 创新低 → 之前的反弹高点成为确认的摆动高点
+            if self.state.in_pullback:
+                self.state.swing_count += 1
+
+                # 第 2 次以上创新低 → 设置/下移 TTP
+                if self.state.swing_count >= 2:
+                    new_ttp = self.state.pullback_high + buffer
+                    if self.state.ttp_level == 0 or new_ttp < self.state.ttp_level:
+                        old_level = self.state.ttp_level
+                        was_active = self.state.active
+                        self.state.ttp_level = new_ttp
+                        self.state.active = True
+                        # === TTP 探针 埋点3：TTP 下移 ===
+                        self.logger.info(
+                            f"[TTP Probe] TTP下移 swing={self.state.swing_count} "
+                            f"ttp={old_level:.4f}→{new_ttp:.4f}")
+                        # === TTP 探针 埋点4：首次激活 ===
+                        if not was_active:
+                            self.logger.info(
+                                f"[TTP Probe] 首次激活! ttp={new_ttp:.4f}")
+
+                self.state.in_pullback = False
+
+            self.state.lowest = price
+            self.state.pullback_high = price  # 重置反弹高点
+
+        else:
+            # 反弹中
+            self.state.in_pullback = True
+            if price > self.state.pullback_high:
+                self.state.pullback_high = price
+
+    # ==================== 触发检查 ====================
+
+    def _check_trigger(self, price: float, side: str, coin: str) -> RiskCheckResult:
+        """检查是否触发 TTP"""
+        if not self.state.active or self.state.ttp_level <= 0:
+            return RiskCheckResult()
+
+        triggered = False
+        if side == "LONG" and price <= self.state.ttp_level:
+            triggered = True
+        elif side == "SHORT" and price >= self.state.ttp_level:
+            triggered = True
+
+        if triggered:
+            triggered_level = self.state.ttp_level
+            self.logger.info(
+                f"TTP触发: {side} {coin} "
+                f"价格 ${price:.4f} {'<' if side == 'LONG' else '>'} "
+                f"TTP ${triggered_level:.4f}"
+            )
+            self.state.reset()
+            return RiskCheckResult(
+                should_close=True,
+                reason="TTP",
+                confidence=1.0,
+                ttp_level=triggered_level,
+            )
+
+        return RiskCheckResult()
+
+    def __repr__(self) -> str:
+        status = "活跃" if self.state.active else "未激活"
+        return (
+            f"<TTPManager: "
+            f"状态={status}, "
+            f"触发={self.config.ttp_trigger_pct*100:.1f}%, "
+            f"缓冲={self.config.ttp_buffer_pips:.1f}pips>"
+        )

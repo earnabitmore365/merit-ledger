@@ -1,0 +1,110 @@
+# Plan: 修 unified_trader.py Major + trade_logger.py Minor
+
+## Context
+
+遗留清单剩余两项：
+1. **Major** `unified_trader.py:100-106` — API key 无校验，空 key 下 BitMEXAdapter 正常创建，首次下单才暴露错误
+2. **Minor** `trade_logger.py:35` — SQLite 连接未开 WAL 模式，并发读写可能 `database is locked`
+
+---
+
+## 步骤
+
+### 1. 调研（已完成）
+
+- ✅ `unified_trader.py` 在 `__init__` 里 `load_dotenv` 后从 env 取 key，取到空字符串不报错
+- ✅ 无其他地方重复取 key，加 guard 在第107行前即可
+- ✅ `trade_logger.py:35` `sqlite3.connect()` 后无 PRAGMA，加 WAL 在 `_create_tables()` 前最合适
+- ✅ WAL 模式：多读单写并发下性能更好，读不阻塞写；对单进程单线程写也安全
+
+### 2. 修改
+
+**改动一 — `unified_trader.py:107`（加 key 校验 guard）**：
+```python
+# 改前（行107，直接创建 adapter）
+adapter_config = {
+    "api_key": api_key,
+    ...
+}
+self.adapter = BitMEXAdapter(adapter_config)
+
+# 改后（guard 加在 adapter_config 之前）
+if not api_key or not api_secret:
+    env_hint = "BITMEX_TESTNET_API_KEY" if use_testnet else "BITMEX_API_KEY"
+    raise RuntimeError(f"API 密钥未配置，请检查 .env 中的 {env_hint}")
+adapter_config = {
+    "api_key": api_key,
+    ...
+}
+self.adapter = BitMEXAdapter(adapter_config)
+```
+
+**改动二 — `trade_logger.py:35`（开 WAL 模式）**：
+```python
+# 改前
+self.conn = sqlite3.connect(self.db_path)
+self._create_tables()
+
+# 改后
+self.conn = sqlite3.connect(self.db_path)
+self.conn.execute("PRAGMA journal_mode=WAL")
+self._create_tables()
+```
+
+### 3. 四件套验证（wuji-verify）
+
+```bash
+python3 ~/.claude/merit/wuji-verify.py \
+  /Volumes/SSD-2TB/project/wuji-auto-trading/trading/unified_trader.py
+
+python3 ~/.claude/merit/wuji-verify.py \
+  /Volumes/SSD-2TB/project/wuji-auto-trading/trading/trade_logger.py
+```
+
+### 4. Sonnet Code Review
+
+- `unified_trader.py` guard：`RuntimeError` 在 `__init__` 里抛，`main()` 里无 try/except 包裹 `UnifiedTrader()`，会让进程退出并打印 traceback——这是期望行为（不配置不能跑）✅
+- WAL 模式：`PRAGMA journal_mode=WAL` 是幂等的，重复调用安全；已有数据库升级到 WAL 也没有数据迁移风险 ✅
+
+### 5. 更新 CHANGELOG
+
+```
+### HH:MM EDIT unified_trader.py + trade_logger.py — API key guard + SQLite WAL 模式
+```
+
+### 6. 自审（两遍）
+
+**第一遍**
+- 完整：两文件全改，wuji-verify 两个，CHANGELOG ✅
+- 真实：guard 在 load_dotenv + env.get 之后，顺序正确；WAL 在 _create_tables 前，表还没建不影响 ✅
+- 有效：各1-3行，最小改动 ✅
+- 知常：早失败比晚失败好；WAL 是 SQLite 推荐的并发模式 ✅
+- 静制动：先读行号确认改动位置，再写 plan ✅
+
+**第二遍（边界）**
+- `RuntimeError` 在 `UnifiedTrader.__init__` 内：进程退出时 `TradeLogger`（line 115）还未初始化，无需 close，无资源泄漏 ✅
+- WAL 模式 PRAGMA：如果 db 路径父目录不存在，`sqlite3.connect` 已经 `makedirs` 了（line 34），不会 FileNotFoundError ✅
+- 测试网走 `BITMEX_TESTNET_API_KEY` 分支，guard 里 `env_hint` 会提示正确的 env 变量名 ✅
+
+两遍全绿。
+
+### 7. 汇报执事
+
+---
+
+## 关键文件
+
+| 文件 | 改动 |
+|------|------|
+| `trading/unified_trader.py` | API key guard |
+| `trading/trade_logger.py` | WAL PRAGMA |
+| `/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md` | 变更日志 |
+
+---
+
+## 验证标准
+
+- wuji-verify 两文件全绿
+- Code review 无新问题
+- CHANGELOG 更新
+- 自审两遍全 ✅

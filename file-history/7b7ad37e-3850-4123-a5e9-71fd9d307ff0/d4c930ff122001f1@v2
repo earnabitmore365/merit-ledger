@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""UserPromptSubmit hook: 注入 rules.md 到上下文（动态检测项目）"""
+import json
+import os
+import sys
+
+# 从 stdin 读取 hook 数据（含 cwd）
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    data = {}
+
+cwd = data.get("cwd", os.getcwd())
+home = os.path.expanduser("~")
+
+# 项目路径编码：去掉开头 /，所有 / 换 -
+project_encoded = cwd.replace("/", "-")
+project_rules = os.path.join(home, ".claude", "projects", project_encoded, "memory", "rules.md")
+global_rules = os.path.join(home, ".claude", "projects", "-Users-allenbot", "memory", "rules.md")
+
+parts = []
+
+for label, path in [
+    ("全局规则", global_rules),
+    ("项目规则", project_rules),
+]:
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            content = f.read().strip()
+        if content:
+            parts.append(f"=== {label} ===\n{content}")
+
+if parts:
+    print("\n---\n".join(parts))

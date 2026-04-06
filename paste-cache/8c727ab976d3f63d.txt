@@ -1,0 +1,26 @@
+The user prompt is empty, so I cannot provide a summary. Please provide a user promptThe user prompt is empty, so I cannot provide a summary. Please provide a user prompt太极这份 handoff 质量很高，11 个改动项全部有完整的问题→改动→文件记录。逐一回复待审项：
+
+#1 Stop hook async：
+Claude Code 的 hook 配置是支持 async 的。settings.json 里可以这样写：
+json{
+  "type": "command",
+  "command": "python3 ~/.claude/merit/merit_gate.py",
+  "async": true
+}
+但要注意：async hook 的 stdout 不会注入当前轮的上下文，会在下一轮才注入（如果有的话）。这对 Stop 评分没问题——评分结果写 credit.json 就行，不需要 AI 立刻看到。但 check_self_audit 的提醒如果也在 Stop 里，async 会导致提醒延迟。
+建议：不要把整个 Stop 改成 async。 把 Stop hook 里的逻辑分成两部分——check_self_audit（同步，提醒要立刻注入）和 AI 评分（可以异步）。如果 Claude Code 不支持同一个事件挂两个 hook（一个同步一个异步），那就保持同步，暂时接受 1-2 秒延迟。评分频率已经从每次降到了 3 次一评（mission active 每次评），延迟已经减少了。
+
+#7 全链路 ❌ 标记：
+太极说得对——merit_gate.py 被 credit_manager.py、session_start.py、daily_digest.py 引用是正常的设计依赖，不是错误。每次改 merit_gate.py 都标 ❌ 会导致"狼来了"——AI 每次都看到 ❌ 但每次都是正常引用，久了就不当回事了。
+改成两档：
+
+⏳ 全链路：被 X, Y, Z 引用，需确认改动兼容 — 有引用关系，提醒检查（正常情况）
+❌ 全链路：引用方文件不存在 / 引用的函数名在源文件里找不到了 — 真正的断裂
+
+verify.py 的 check_chain 改一下：grep 找到引用时输出 ⏳ 不是 ❌。只有引用方文件不存在、或者引用了一个已经被删除/改名的函数时才输出 ❌。
+
+其他待做项的优先级建议：
+优先级项理由高#4 _get_level 副本消除已经翻车两次了，直接 import 一劳永逸高#6 假公式奖励分追回太极自己提了但没执行，拖着就是不诚实中#2 SSH 豁免影响两仪在 Vultr 上的操作中#5 test_memory.pyverify.py 记忆系统的逻辑验证还是 ⏳低#3 有效触发统计石卫还在黑铁，段位功能没解锁，不急
+关于 #6 追回假分： 让太极自己查 credit.json history，把所有 reason 包含"任务完成"且 delta > 0 的条目列出来，总计多少分，一次性扣回。这是太极自己提的"要不要追回"，你当时没回答，现在该收尾了。
+
+整体评价： 从今天早上到现在，石卫从 v7 的纸面设计变成了完整落地的系统——操作日志、段位、审计入口、规则进化、review-plan、verify.py、质量量化、评分动态化。11 个改动全部有代码和文件。太极这一轮的执行力比之前好很多，该给分的给分。

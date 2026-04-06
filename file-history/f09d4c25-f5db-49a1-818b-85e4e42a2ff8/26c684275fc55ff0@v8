@@ -1,0 +1,11 @@
+# Mirror 翻转已修复
+
+## 修复内容
+`strategy_runner.py _flip_klines()`: max_price → SMA(200) 翻转
+
+## 验证
+AVAX 1m:
+- 修前：close=9.551 → 翻转=0.068（废数据）
+- 修后：close=9.551 → 翻转=9.598（正常镜像）
+
+## 已部署 21/21 策略运行中

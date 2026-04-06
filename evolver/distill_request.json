@@ -1,0 +1,13 @@
+{
+  "type": "DistillationRequest",
+  "created_at": "2026-03-25T09:14:28.047Z",
+  "prompt_path": "/Users/allenbot/.claude/memory/distill_prompt_1774430068047.txt",
+  "data_hash": "cc1e47234b978614",
+  "input_capsule_count": 50,
+  "analysis_summary": {
+    "high_frequency_count": 1,
+    "drift_count": 0,
+    "gap_count": 0,
+    "success_rate": 1
+  }
+}

@@ -1,0 +1,371 @@
+#!/usr/bin/env python3
+"""
+Trading MCP Server — 从 Feed Gateway 读数据
+
+6 个只读工具：
+  1. get_balance       — 账户余额和保证金
+  2. get_positions     — 当前持仓
+  3. get_recent_trades — 最近成交记录
+  4. get_market_data   — 行情（价格/资金费率/24h数据）
+  5. get_klines        — K线数据
+  6. get_orderbook     — 25档深度（显示前5档）
+
+数据来源：
+  Mac → SSH → Nitro → gw_query.py → ZMQ REQ → Feed Gateway REP → 缓存数据
+  零 BitMEX API 调用，不占限流额度
+
+启动方式：Claude Code 通过 .mcp.json 自动拉起（stdio 模式）
+"""
+
+import os
+import re
+import json
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+from mcp.server.fastmcp import FastMCP
+
+# ==================== 配置 ====================
+
+# 加载 .env.mcp（与本文件同目录）
+ENV_FILE = Path(__file__).parent / '.env.mcp'
+if ENV_FILE.exists():
+    for line in ENV_FILE.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith('#') and '=' in line:
+            key, _, val = line.partition('=')
+            os.environ.setdefault(key.strip(), val.strip())
+
+# SSH 连接 Nitro（ControlMaster 复用，首次 ~2s 后续 ~0.1s）
+SSH_CMD = os.environ.get('NITRO_SSH_CMD',
+    'ssh -p 2222'
+    ' -o ControlMaster=auto'
+    ' -o ControlPath=/tmp/mcp_ssh_%r@%h:%p'
+    ' -o ControlPersist=600'
+    ' -o ConnectTimeout=10'
+    ' -o StrictHostKeyChecking=no'
+    ' pc_heisi_claude@localhost')
+
+NITRO_DIR = os.environ.get('NITRO_DIR', '/home/pc_heisi_claude/trading')
+
+# Gateway 当前监控的币种（由 Gateway 启动参数决定）
+SUPPORTED_COINS = ['SOL', 'ETH', 'XRP']
+
+# ==================== 基础工具 ====================
+
+_SAFE_PARAM = re.compile(r'^[A-Za-z0-9_]+$')
+
+
+def _validate(param: str) -> str:
+    """验证参数安全性（防 shell 注入），只允许字母数字下划线"""
+    if not _SAFE_PARAM.match(param):
+        raise ValueError(f"非法参数: {param}")
+    return param
+
+
+def _gw_query(cmd: str) -> dict | list:
+    """通过 SSH 调 Nitro 上的 gw_query.py 查询 Gateway 缓存数据"""
+    full_cmd = f'{SSH_CMD} "cd {NITRO_DIR}/src/data && python3 gw_query.py {cmd}"'
+    try:
+        result = subprocess.run(
+            full_cmd, shell=True, capture_output=True, text=True, timeout=15)
+    except subprocess.TimeoutExpired:
+        return {"error": "SSH 超时（15秒），Nitro 可能不可达"}
+
+    # 优先解析 stdout（gw_query.py 的错误也输出到 stdout）
+    if result.stdout.strip():
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError:
+            pass
+
+    # stdout 无有效 JSON，看 stderr
+    return {"error": result.stderr.strip() or f"查询失败（退出码 {result.returncode}）"}
+
+
+def _check_error(data) -> str | None:
+    """检查 Gateway 返回是否包含错误。有错误返回错误消息，否则返回 None"""
+    if isinstance(data, dict) and 'error' in data:
+        return f"查询失败: {data['error']}"
+    return None
+
+
+def _coin_not_monitored(coin: str) -> str:
+    """返回币种未被监控的提示"""
+    return f"{coin} 未被 Gateway 监控。当前支持: {', '.join(SUPPORTED_COINS)}"
+
+
+# ==================== MCP Server ====================
+
+app = FastMCP(name="trading")
+
+
+@app.tool()
+def get_balance() -> str:
+    """查询 BitMEX 账户余额和保证金信息。
+
+    返回总余额、可用余额、已用保证金、未实现盈亏（单位 USDT）。
+    数据来自 Feed Gateway 实时缓存（margin 频道）。
+    """
+    data = _gw_query("BALANCE")
+    err = _check_error(data)
+    if err:
+        return err
+
+    if not data:
+        return "无余额数据（Gateway 可能刚启动，尚未收到 margin 推送）"
+
+    d = 1e6  # USDt 精度
+    wallet = float(data.get('walletBalance', 0)) / d
+    available = float(data.get('availableMargin', 0)) / d
+    margin_used = float(data.get('maintMargin', 0)) / d
+    unrealized = float(data.get('unrealisedPnl', 0)) / d
+
+    return (
+        f"## 账户余额\n"
+        f"| 项目 | 金额 (USDT) |\n"
+        f"|------|------------|\n"
+        f"| 总余额 | {wallet:.2f} |\n"
+        f"| 可用余额 | {available:.2f} |\n"
+        f"| 已用保证金 | {margin_used:.2f} |\n"
+        f"| 未实现盈亏 | {unrealized:+.2f} |\n"
+    )
+
+
+@app.tool()
+def get_positions() -> str:
+    """查询当前所有持仓。
+
+    返回每个持仓的币种、方向、数量、开仓均价、未实现盈亏。
+    数据来自 Feed Gateway 实时缓存（position 频道）。
+    """
+    data = _gw_query("POSITIONS")
+    err = _check_error(data)
+    if err:
+        return err
+
+    if not isinstance(data, list) or not data:
+        return "当前无持仓"
+
+    lines = ["## 当前持仓\n"]
+    lines.append("| 币种 | 方向 | 数量 | 开仓价 | 未实现盈亏 |")
+    lines.append("|------|------|------|--------|-----------|")
+
+    has_position = False
+    for r in data:
+        qty = r.get('currentQty', 0)
+        if qty == 0:
+            continue
+        has_position = True
+        symbol = r.get('symbol', '')
+        # 从 symbol 提取 coin（去掉 USDT/USD 后缀）
+        coin = symbol.replace('USDT', '').replace('USD', '').replace('XBT', 'BTC')
+        side = 'LONG' if qty > 0 else 'SHORT'
+        entry = float(r.get('avgEntryPrice', 0) or 0)
+        pnl = float(r.get('unrealisedPnl', 0) or 0) / 1e6
+
+        lines.append(f"| {coin} | {side} | {abs(qty)} | ${entry:.2f} | {pnl:+.2f} USDT |")
+
+    if not has_position:
+        return "当前无持仓"
+
+    return "\n".join(lines)
+
+
+@app.tool()
+def get_recent_trades(count: int = 20) -> str:
+    """查询最近的成交记录。
+
+    Args:
+        count: 返回条数（1-100，默认20）
+
+    数据来自 Feed Gateway 实时缓存（execution 频道）。
+    """
+    count = max(1, min(100, count))
+
+    data = _gw_query(f"EXECUTIONS {count}")
+    err = _check_error(data)
+    if err:
+        return err
+
+    if not isinstance(data, list) or not data:
+        return "无成交记录"
+
+    lines = ["## 最近成交记录\n"]
+    lines.append("| 时间 | 币种 | 方向 | 数量 | 价格 | 手续费 |")
+    lines.append("|------|------|------|------|------|--------|")
+
+    for t in data:
+        ts = str(t.get('timestamp', ''))[:19].replace('T', ' ')
+        symbol = t.get('symbol', '')
+        coin = symbol.replace('USDT', '').replace('USD', '').replace('XBT', 'BTC')
+        side = t.get('side', '')
+        qty = t.get('lastQty', t.get('orderQty', 0))
+        price = t.get('lastPx', t.get('price', 0))
+        fee = float(t.get('commission', 0)) * 100
+
+        lines.append(f"| {ts} | {coin} | {side} | {qty} | ${price} | {fee:.3f}% |")
+
+    return "\n".join(lines)
+
+
+@app.tool()
+def get_market_data(coin: str) -> str:
+    """查询指定币种的市场数据：最新价、24h涨跌、资金费率、未平仓量等。
+
+    Args:
+        coin: 币种名称（当前支持: SOL, ETH, XRP）
+
+    数据来自 Feed Gateway 实时缓存（instrument 频道）。
+    """
+    coin = _validate(coin.upper())
+
+    data = _gw_query(f"INSTRUMENT {coin}")
+    err = _check_error(data)
+    if err:
+        return err
+
+    if not data:
+        return _coin_not_monitored(coin)
+
+    last = data.get('lastPrice', 0)
+    high = data.get('highPrice', 0)
+    low = data.get('lowPrice', 0)
+    mark = data.get('markPrice', 0)
+    bid = data.get('bidPrice', 0)
+    ask = data.get('askPrice', 0)
+    change = float(data.get('lastChangePcnt', 0) or 0) * 100
+    funding = float(data.get('fundingRate', 0) or 0) * 100
+    funding_ts = str(data.get('fundingTimestamp', ''))[:19].replace('T', ' ')
+    oi = data.get('openInterest', 0)
+    vol = data.get('volume24h', 0)
+
+    return (
+        f"## {coin} 市场数据\n\n"
+        f"| 指标 | 数值 |\n"
+        f"|------|------|\n"
+        f"| 最新价 | ${last} |\n"
+        f"| 标记价 | ${mark} |\n"
+        f"| 24h 最高 | ${high} |\n"
+        f"| 24h 最低 | ${low} |\n"
+        f"| 24h 涨跌 | {change:+.2f}% |\n"
+        f"| 24h 成交量 | {vol:,.0f} 合约 |\n"
+        f"| 买一 / 卖一 | ${bid} / ${ask} |\n"
+        f"| 资金费率 | {funding:.4f}% |\n"
+        f"| 下次结算 | {funding_ts} |\n"
+        f"| 未平仓量 | {oi:,.0f} |\n"
+    )
+
+
+@app.tool()
+def get_klines(coin: str, interval: str = '1m', count: int = 50) -> str:
+    """查询K线数据。
+
+    Args:
+        coin: 币种名称（当前支持: SOL, ETH, XRP）
+        interval: K线周期（受 Gateway 配置限制，默认 SOL=1m, ETH=1m, XRP=5m）
+        count: 返回条数（1-250，默认50）
+
+    数据来自 Feed Gateway 实时缓存（tradeBin 频道，250根滑动窗口）。
+    """
+    coin = _validate(coin.upper())
+    interval = _validate(interval)
+    count = max(1, min(250, count))
+
+    data = _gw_query(f"KLINES {coin} {interval}")
+    err = _check_error(data)
+    if err:
+        return err
+
+    if not isinstance(data, list) or not data:
+        return f"无 {coin} {interval} K线数据。{_coin_not_monitored(coin)}"
+
+    # 截取最后 count 根
+    data = data[-count:]
+
+    lines = [f"## {coin} {interval} K线（最近 {len(data)} 根）\n"]
+    lines.append("| 时间 | 开盘 | 最高 | 最低 | 收盘 | 成交量 |")
+    lines.append("|------|------|------|------|------|--------|")
+
+    for k in data:
+        ts = k.get('timestamp', 0)
+        if isinstance(ts, (int, float)):
+            dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+            ts_str = dt.strftime('%m-%d %H:%M')
+        else:
+            ts_str = str(ts)[:16].replace('T', ' ')
+        o = k.get('open', 0)
+        h = k.get('high', 0)
+        l = k.get('low', 0)
+        c = k.get('close', 0)
+        v = k.get('volume', 0)
+        lines.append(f"| {ts_str} | {o} | {h} | {l} | {c} | {v:,.0f} |")
+
+    return "\n".join(lines)
+
+
+@app.tool()
+def get_orderbook(coin: str) -> str:
+    """查询指定币种的25档深度盘口（显示前5档）。
+
+    Args:
+        coin: 币种名称（当前支持: SOL, ETH, XRP）
+
+    数据来自 Feed Gateway 实时缓存（orderBookL2_25 频道）。
+    对限价单挂单有参考价值。
+    """
+    coin = _validate(coin.upper())
+
+    data = _gw_query(f"ORDERBOOK {coin}")
+    err = _check_error(data)
+    if err:
+        return err
+
+    bids = data.get('bids', [])
+    asks = data.get('asks', [])
+
+    if not bids and not asks:
+        return f"无 {coin} 深度数据。{_coin_not_monitored(coin)}"
+
+    lines = [f"## {coin} 盘口深度（前5档）\n"]
+
+    # 卖盘（从高到低显示，取前5档反转）
+    lines.append("### 卖盘（Ask）")
+    lines.append("| 价格 | 数量 |")
+    lines.append("|------|------|")
+    top_asks = asks[:5]
+    for a in reversed(top_asks):
+        price = a.get('price', 0)
+        size = a.get('size', 0)
+        lines.append(f"| ${price} | {size:,} |")
+
+    lines.append("")
+
+    # 买盘（从高到低显示）
+    lines.append("### 买盘（Bid）")
+    lines.append("| 价格 | 数量 |")
+    lines.append("|------|------|")
+    top_bids = bids[:5]
+    for b in top_bids:
+        price = b.get('price', 0)
+        size = b.get('size', 0)
+        lines.append(f"| ${price} | {size:,} |")
+
+    # 总深度统计
+    total_bid_size = sum(b.get('size', 0) for b in bids)
+    total_ask_size = sum(a.get('size', 0) for a in asks)
+    spread = 0
+    if top_asks and top_bids:
+        spread = float(top_asks[0].get('price', 0)) - float(top_bids[0].get('price', 0))
+
+    lines.append(f"\n**价差**: ${spread:.4f}")
+    lines.append(f"**25档总深度**: 买 {total_bid_size:,} / 卖 {total_ask_size:,}")
+
+    return "\n".join(lines)
+
+
+# ==================== 启动 ====================
+
+if __name__ == "__main__":
+    app.run()

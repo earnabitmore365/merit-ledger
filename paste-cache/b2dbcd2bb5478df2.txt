@@ -1,0 +1,83 @@
+# 外部顾问收尾指令 + 明日全量回测准备
+
+> 发出人：外部顾问（Opus，claude.ai）
+> 执行人：黑丝（Opus，Claude Code）
+> 日期：2026-03-21 深夜
+> 状态：**币本位公式已最终确认，今晚收尾，明天跑全量**
+
+---
+
+## 今晚收尾（立即执行）
+
+### 1. 删除 sim_coin_margin.py
+
+inverse 模式已整合进 backtest.py 并通过 4 项验证。这个独立脚本可以安全删除了。
+
+### 2. Git commit
+
+把今天所有改动提交，commit message 建议：
+
+```
+feat: integrate inverse (coin-margin) mode into BacktestEngine
+
+- Add margin_mode parameter ("linear" | "inverse")
+- Add _calc_raw_pnl() unified method (replaces 8 scattered PnL calculations)
+- Update _calc_trading_costs() with inverse branch (USD→BNB conversion)
+- Add --inverse flag to generate_seed.py with worker pool passthrough
+- Remove sim_coin_margin.py (superseded)
+
+Formula: PnL(BNB) = position_size × diff / exit_p
+Verified: single-trade RoR match, 30-combo Mirror test, fee ratio alignment
+```
+
+### 3. 确认实盘没有被影响
+
+今天改的是 backtest.py，不是 system.py（实盘交易系统）。但保险起见，确认一下：
+- 实盘进程还在正常运行？（SOL/ETH/XRP）
+- 没有误改到 system.py 或任何实盘相关文件？
+
+回答"已确认"即可。
+
+---
+
+## 全量回测（收尾完成后立即开始跑，不要等明天）
+
+老板去睡了，趁这段时间把全量跑完。
+
+### 执行方式
+
+```bash
+python3 generate_seed.py --inverse --db seed_v3_inverse.db
+```
+
+- 输出到单独的 `seed_v3_inverse.db`，不要覆盖现有的 `seed_v3.db`
+- 参数全部跟 linear 版一致（500 本金、1 固定注码、10x、10% 止损）
+- 跑全量：94 策略 × 13 币种 × 10 周期
+- 跑完后不用等老板，直接准备好交付数据
+
+### 老板醒来后要看到的
+
+1. 跟 linear 版的冠军对比表：89 个冠军 combo 在 inverse 下的 PnL、WR、MDD
+2. inverse 下新出现的"冠军"（如果有的话）——可能有些策略在 linear 下不行但在 inverse 下行
+3. 按做多/做空分拆的统计（如果引擎输出里有方向信息的话）
+
+---
+
+## 今日总结（给老板看的）
+
+### 做了什么
+- backtest.py 整合了 inverse 模式（margin_mode 参数 + 统一 PnL 方法）
+- generate_seed.py 加了 --inverse flag
+- 经历了一次公式错误（entry×exit → 修正为 exit_p）
+- 4 项验证全部通过
+
+### 当前状态
+- 代码：✅ 已修正，已验证
+- 实盘：不受影响（改的是回测引擎，不是交易系统）
+- sim_coin_margin.py：待删除（今晚执行）
+- 全量 inverse 回测：今晚跑（老板睡觉期间）
+
+### 结论
+BNB Mirror mean_reversion 在 inverse 下微亏（跟 linear 差距很小），不是之前以为的 -80%。但策略本身在 BNB 上 edge 不够，不建议直接上币本位实盘。全量跑完后看整体数据再做最终判断。
+
+晚安。

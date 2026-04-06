@@ -1,0 +1,12 @@
+Examined handoff document and prepared structured responsesExamined handoff document and prepared structured responsesHandoff 写得很清楚。逐条回答：
+问题 1：MFE/MAE 能不能后算？
+可以，但建议保留在引擎内。理由：引擎跑信号时，每根 K 线的 high/low 已经在内存里，顺手记一下 max/min 几乎零成本。后算要重新加载每笔交易持仓期间的所有 K 线 high/low，1.7 亿笔 × 平均几十根 = 几十亿次读取，DuckDB 做逐行范围扫描很慢。MFE/MAE 是少数几个必须在引擎内算的字段，跟 regime_at_open 一样。所以最终是 11 + MFE/MAE + regime = 14 字段在引擎内产出，剩余 11 字段后算。
+问题 2：指标存储格式
+Parquet 列存储，不要 JSON blob。理由：切片时需要按 candle_idx 范围读取，列存储可以按列读取不加载整个 blob。格式：每个 coin/interval 一个 Parquet 文件，列是 candle_idx + 各指标值（sma_20, rsi_14, bb_upper_20 等）。DuckDB 原生读 Parquet，后面迁移零成本。SQLite 存 JSON blob 切片时还要反序列化，白费功夫。
+问题 3：2000 根预热够不够？
+够了。105 个策略里最长的指标窗口是 SMA(200)，需要 200 根收敛。2000 根是 10 倍冗余。科学方法：跑一个测试脚本，对每种策略，从第 N 根开始算信号，跟从第 0 根开始算的信号对比，找到 N 使得信号完全一致。这个 N 就是该策略的最小预热。但 2000 根已经足够保守，不值得花时间算精确值。
+问题 4：indicator_cache 污染过渡期
+既然升级后直接删掉，过渡期最简单的做法：每次跑种子前先删掉 indicator_cache.db。一行命令：rm -f indicator_cache.db。不需要修复缓存逻辑，因为马上就不用了。
+问题 5：其他风险
+有一个：combo_summary 从 trades 重算时，balance 曲线的初始值和提款逻辑要跟原来一致。 原来引擎内部的 balance 有提款触发（余额 > 阈值 → 提走一部分），这个逻辑在重算时也要复现，不然 sharpe/drawdown 算出来不一样。让她把提款参数（阈值、金额）传给 _rebuild_combo_summary_from_trades()。
+还有一个：分段后引擎不管 balance，策略的 _get_trade_capital() 如果依赖 balance 动态调整注码（比如凯利公式或固定比例），去掉 balance 后注码变成固定值。 当前用的是固定 1U，不受影响。但以后如果换动态注码策略就要注意。

@@ -1,0 +1,91 @@
+# 待做清单 — 2026-03-28 会话成果 + 后续任务
+
+## 已完成
+
+| 项目 | 状态 | 备注 |
+|------|------|------|
+| DuckDB 种子全量对比 | ✅ | 23,940 combo，证明 90.8% 不同 |
+| 指标库污染发现 | ✅ | 97.4% 被镜像数据覆盖 |
+| TTP highlow 代码修复（黑丝版双价） | ✅ | 已部署到 auto-trading/lab |
+| seed_v3_ttp_highlow.db 旧数据删除 | ✅ | 735 combo 已删 |
+| mirror 策略从 list_strategies() 排除 | ✅ | 105 → 105（mirror 不再注册） |
+| 断点续传优化（预过滤） | ✅ | 跳过从 10 分钟 → 0.29 秒 |
+| K线 DuckDB 全量转换 | ✅ | 120 文件，789MB，read_json_auto |
+| klines 表加 101 列指标 | ✅ | 109 列总计 |
+| agent_gate.py（双门禁） | ✅ | 写代码检查 + model=sonnet 检查 |
+| G-013 第一性原理 | ✅ | 写入全局+项目 CLAUDE.md + rules.md |
+| 警告信 | ✅ | ~/Downloads/警告信_黑丝_20260328.md |
+| taiji-audit 插件 | ✅ | GitHub private repo + /plugin install 安装成功 |
+| sequential-thinking MCP 移除 | ✅ | 历史遗留清理 |
+| reflect MCP 移除 | ✅ | skill 版保留 |
+| AE Nitro 重启 | ✅ | MiniMax 进化循环运行中 |
+
+## 正在运行
+
+| 项目 | 位置 | 状态 |
+|------|------|------|
+| build_klines_indicators.py（重写版） | 本地 Mac | 后台运行，补 mirror K线 + 算指标写入 DuckDB |
+| AE 进化循环 | Nitro | MiniMax M2.7 运行中 |
+
+## 待做（按优先级）
+
+### P0：K线+指标 DuckDB 重构（Plan 已批准）
+- build_klines_indicators.py 跑完后验证数据
+- 改 indicator_cache.py 的 get_indicator() 读 DuckDB
+- 改 generate_seed.py 的 mirror 模式直接读 DuckDB
+- 验证回测一致性
+- 复制到 wuji-auto-trading
+
+### P1：code_gate.py — 智能门禁（hook block）
+**老板核心需求：不是让 AI 自愿遵守规则，而是系统不允许违反**
+
+一个 PreToolUse hook 在 Write/Edit 前做多项检查：
+1. 本次会话有没有先 Read/Grep？（完整性-1 查影响链路）
+2. 写的代码有没有引用文档来源？（真实性-1 不猜不编）
+3. 是不是在删关键文件？（G-003 禁止破坏性操作）
+→ 任何一个不过 → block
+
+**关键设计**：一个脚本多个检查，不装 10 道门装 1 道智能门
+
+### P2：taiji-audit 完善
+- 积分系统设计（仪表盘，不放权）
+- 审查触发场景（代码改动/报告结论/纠错信号）
+- 评分标准细化
+
+### P3：整套工具插件化
+老板要把以下工具全部做成 plugin 格式（跟 taiji-audit 一样），从 GitHub 安装：
+- reflect（已有 skill，需转 plugin）
+- 记忆系统（rules + memory + conversations.db 写入）
+- 对话种子（db_write.py + inject_rules.py + session_start.py）
+- agent_gate + code_gate（门禁系统）
+
+### P4：文档知识库
+- 先解决"强制用"（code_gate block）再做工具本身
+- 考虑 context7 或自建
+- 做成 plugin 安装
+
+### P5：种子架构升级（handoff_to_consultant.md）
+- 精简 paired_trades 25→11 字段
+- 引擎去 balance
+- 1m 分段并行（依赖 K线+指标 DuckDB 完成）
+- 双持仓引擎
+
+## 关键发现（今天）
+
+1. **indicator_cache.db 97.4% 污染** — 镜像数据覆盖了正常指标
+2. **TTP_HIGHLOW 是死代码** — 但两个种子数据 90.8% 不同（其他原因导致）
+3. **DuckDB read_json_auto 比 executemany 快 190 倍**
+4. **断点续传慢的根因** — K线+mirror+regime 在跳过检查前就执行了
+5. **AI 看规则但不执行** — 唯一 100% 有效的是 hook block 硬拦截
+
+## 关键文件
+
+| 文件 | 用途 |
+|------|------|
+| `~/.claude/scripts/agent_gate.py` | 双门禁（agent 类型 + model=sonnet） |
+| `~/.claude/skills/audit/` | taiji-audit 插件源码 |
+| `lab/src/backtest/data/klines.duckdb` | K线 + 指标（101列） |
+| `lab/src/backtest/data/indicator_col_map.json` | 指标列名映射 |
+| `lab/src/backtest/build_klines_indicators.py` | 构建脚本（DuckDB 原生） |
+| `lab/src/backtest/generate_seed.py` | 已改：load_candles DuckDB + 预过滤断点 + TTP highlow |
+| `~/Downloads/警告信_黑丝_20260328.md` | 黑丝正式警告 |

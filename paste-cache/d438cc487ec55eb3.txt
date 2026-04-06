@@ -1,0 +1,36 @@
+⏺ 没有。补上。                                                                          
+                                                                                      
+  自审发现 2 个问题：                                                                   
+                                                    
+  1. import 鸡蛋问题                                                                    
+                                                                                        
+  path_config.py 放根目录 → 子目录的文件怎么 import 它？要 import 就得先把根目录加入    
+  sys.path → 加 sys.path 就得先找到根 → 找根的逻辑又需要代码...
+                                                                                        
+  解法：不是 325 处都改。分两层：                                                       
+  - 入口脚本（直接被 python3 xxx.py 运行的）：开头 5 行找根 + import path_config
+  - 库模块（被 import 的）：不需要改。入口脚本已经设好 sys.path，库模块继承             
+                                                                           
+  实际入口脚本约 30-40 个，不是 325 个。325 是 grep 行数，包含大量库模块里的            
+  os.path.dirname(__file__) 引用（这些不需要改）。                                      
+                                                                                        
+  2. 库模块里的路径引用怎么办？                                                         
+                                                               
+  例如 research/filters/volume_filter_test.py 里：                                      
+  DB_PATH = os.path.join(os.path.dirname(__file__), 'reports', 'seed_v3.db')
+                                                                                        
+  这些文件本身就是入口脚本（直接运行的测试），不是库模块。所以它们也需要改。            
+                                                                                        
+  重新分类：                                                                            
+  - 入口脚本（含测试脚本）：~50 个 → 加找根代码 + from path_config import ROOT, DATA_DIR
+  - 纯库模块（被 import）：~220 个 → 不改                                               
+                                                               
+  修正后的方案：                                                                        
+                                                    
+  1. 创建 .wuji-root（空文件）+ path_config.py（根目录）                                
+  2. path_config.py 定义 ROOT/DATA_DIR/REPORT_DIR/RESULT_DIR                            
+  3. ~50 个入口脚本：统一替换路径定义为 import path_config                              
+  4. 纯库模块：不改（继承入口的 sys.path）                                              
+  5. 验证：每套系统跑一个入口脚本确认路径正确                                           
+                                                                                        
+  老板确认后开始。     

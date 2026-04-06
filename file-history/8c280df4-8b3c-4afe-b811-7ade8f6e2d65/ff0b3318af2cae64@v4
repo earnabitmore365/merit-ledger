@@ -1,0 +1,155 @@
+{
+  "env": {
+    "BASH_MAX_TIMEOUT_MS": "7200000",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(ls -t ~/.claude/projects/*/*.jsonl*)",
+      "Bash(ls -t ~/.claude/projects/**/*.jsonl*)",
+      "Bash(python3 ~/.claude/scripts/convert_conversation.py*)",
+      "Bash(python3 ~/.claude/scripts/db_write.py*)",
+      "Bash(wc -l /tmp/current_session.md)",
+      "Bash(grep -q*)",
+      "Bash(while true*)",
+      "Bash(for coin in*)"
+    ],
+    "defaultMode": "bypassPermissions"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/inject_rules.py"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/pre_compact_save.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/reflect_hook.py"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/session_start.py"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/reflect_hook.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/haiku_gate.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/scripts/post_tool_validate.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash -c 'plugin_dir=$(ls -d \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}\"/plugins/cache/claude-hud/claude-hud/*/ 2>/dev/null | awk -F/ '\"'\"'{ print $(NF-1) \"\\t\" $(0) }'\"'\"' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1 | cut -f2-); exec \"/opt/homebrew/bin/node\" \"${plugin_dir}dist/index.js\"'"
+  },
+  "enabledPlugins": {
+    "memsearch@memsearch-plugins": true,
+    "claude-hud@claude-hud": true,
+    "taiji-audit@taiji-audit": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-code-workflows": {
+      "source": {
+        "source": "github",
+        "repo": "wshobson/agents"
+      }
+    },
+    "memsearch-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "zilliztech/memsearch"
+      }
+    },
+    "claude-hud": {
+      "source": {
+        "source": "github",
+        "repo": "jarrodwatts/claude-hud"
+      }
+    },
+    "taiji-audit": {
+      "source": {
+        "source": "github",
+        "repo": "earnabitmore365/taiji-audit"
+      }
+    }
+  },
+  "language": "中文",
+  "effortLevel": "high",
+  "voiceEnabled": true,
+  "skipDangerousModePermissionPrompt": true,
+  "mcpServers": {
+  }
+}

@@ -1,0 +1,66 @@
+---
+name: pending_decisions
+description: 老板已拍板但尚未执行的待办事项，恢复协议时检查
+type: project
+---
+
+# 已定未做的待办
+
+> 每次恢复协议时检查此文件，任务开始前确认是否有相关待办。
+> 完成后从此列表移除并记录到 CHECKPOINT.md 任务历程。
+
+## 待执行
+
+### 哨兵营 v3 改进（老板已确认方向，三方共识）
+- ① 用 L2 摆动追踪生成分钟级 regime 标签（替换月级）
+- ② 分币种独立训练（先 BTC+ETH）
+- ③ 加多时间框架输入（1h/4h）
+- **Why:** Grok+Gemini+白纱三方共识，老板已确认方向
+- **How to apply:** 哨兵营相关任务时优先推进
+
+### 删除旧 Gate 脚本（验证通过后）
+- 待删：`lab/run_gate_v41.py` + `lab/run_gate_v41_ttp.py`
+- 替代者：`lab/gate_runner.py`（统一入口，修了旧脚本 5 个变量名 bug）
+- **触发条件**：`--matrix` 首次跑完 + Gate 输出冠军数量跟旧 report 对得上
+- **Why:** gate_runner.py 已覆盖所有功能，旧脚本有 bug（patch_db_paths 变量名全错），留着只是退路
+- **How to apply:** 矩阵跑完验证后，`rm` 两个旧文件 + 从 CHECKPOINT 任务历程记录
+
+### 种子精简字段（老板已确认方向，2026-03-27 讨论）
+- **触发条件**：矩阵跑完 + Gate 取到结果后再做，不在跑种子期间改
+- **现在**：paired_trades 25 个字段，种子 DB 约 50GB
+- **改为**：只记 11 个字段（8 基础 + MFE/MAE + regime_at_open），其余 14 个用 DuckDB 后算
+- 保留字段：combo_id, open_candle_idx, close_candle_idx, open_time, close_time, direction, entry_price, exit_price, close_type, mfe, mae, regime_at_open
+- 后算字段（DuckDB 纯算术，几分钟）：pnl, r_value, balance_after, capital, position_size, holding_bars, fee, slippage_cost, funding_cost, funding_count, open_atr_pct, open_volume, funding_count
+- **好处**：DB 体积减半（50GB→~22GB），查询更快，结构更干净
+- **速度影响**：种子跑的速度提升 1-2%（瓶颈是策略信号计算不是写入），但 DB 更小后续操作全面加速
+- **Why:** 种子只管记事实，计算逻辑全在 DuckDB 层。老板准则：简单→稳定→免维护
+- **How to apply:** 等矩阵+Gate 全部完成取到结果后，改 backtest.py 写入逻辑 + 写 DuckDB 后算脚本
+
+### 1m 时间段拆分并行（老板已确认方向，2026-03-27 讨论）
+- 单 combo 210 万根 K 线拆成 4 段，4 worker 并行跑，跑完合并
+- 每段 ~52.5 万根，后 3 段前加 500 根预热
+- 合并前用重叠区吻合验证：通过→合并，不通过→扩大预热重试，再不通过→退回完整跑
+- 内存估算 475~700MB/worker，4 个总量 < 12GB
+- **Why:** 1m 周期是矩阵最大瓶颈，当前串行跑 1 个 worker，速度提升 3-4 倍
+- **How to apply:** 这轮矩阵跑完后实施，改回测引擎支持 K 线范围 + 预热 + 合并逻辑
+
+### GP v1.0 岛屿模型+CMA-ES 部署
+- 代码完成（6文件改动），待部署 Nitro 测试
+- **Why:** 进化效率提升
+- **How to apply:** 有 Nitro 空闲时部署
+
+### Paper Trade 实测
+- 代码完成，待实测
+- **Why:** 验证策略实盘表现
+- **How to apply:** 老板指示时启动
+
+### DuckDB 迁移（性能升级）
+- 背景：当前 SQLite 架构在两处已成瓶颈：
+  - **indicator_cache.db**：GP进化 + 哨兵营 + 回测引擎三方同时并发读，SQLite WAL 锁竞争严重
+  - **seed_v3_ttp.db（40GB）**：Gate/哨兵查报告时做聚合 SELECT，26,288 combos 扫全表慢
+- 执行顺序（按优先级）：
+  1. **指标库先动**：indicator_cache → DuckDB（无锁并发读，多进程同时读不卡）
+  2. **种子库后动**：seed_v3_ttp.db → DuckDB Parquet 格式（聚合查询快 10-100x，找报告不再天昏地暗）
+  3. 零成本试水：DuckDB 可 `ATTACH` 直读 SQLite 文件，不需要先迁移数据就能测速度
+- **Why:** 回测跑纯信号+TTP+Mirror三遍 + 多进程并发读指标 + 26K combos找报告 → 读密集场景，SQLite已是设计外
+- **How to apply:** 比赛结束 / Nitro 有空闲时推进，不影响实盘不紧急

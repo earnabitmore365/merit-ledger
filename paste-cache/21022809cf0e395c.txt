@@ -1,0 +1,41 @@
+那有没有什么方法可以在⏺ Updated plan的时候调出石卫完成介入？00:12探讨了计划更新的钩子触发机制和拦截方案。探讨了计划更新的钩子触发机制和拦截方案。从第一性原理想：Updated plan 这个操作在 Claude Code 内部走的是什么机制？
+Plan 文件写入 ~/.claude/plans/ 目录。但从对话记录看，plan 更新没有触发 PreToolUse——说明 plan 更新是 Claude Code 的内部机制，不走正常的 Write 工具管道，所以 hook 拦不到。
+但 Stop hook 一定会在 plan 更新后触发。 因为 AI 每次回复完都触发 Stop，而"Updated plan"就是一次回复。
+所以思路是：Stop hook 里检测 plan 文件有没有变化。
+python# Stop hook 里加一段
+def check_plan_update():
+    plans_dir = os.path.expanduser("~/.claude/plans/")
+    if not os.path.exists(plans_dir):
+        return
+    
+    # 找最新的 plan 文件
+    plans = sorted(Path(plans_dir).glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not plans:
+        return
+    
+    latest_plan = plans[0]
+    plan_mtime = latest_plan.stat().st_mtime
+    
+    # 这个 plan 是最近 30 秒内更新的吗？（说明刚刚有 Updated plan）
+    if time.time() - plan_mtime < 30:
+        content = latest_plan.read_text()
+        # 石卫介入：评估 plan 内容
+        # 1. plan 里有没有涉及受保护路径？
+        # 2. plan 的改动范围合不合理？
+        # 3. 有没有附【自审】？
+```
+
+这样流程就是：
+```
+AI 更新 plan → Updated plan（内部机制，hook 拦不到）
+    ↓
+AI 回复完 → Stop hook 触发
+    ↓
+Stop hook 检测 plans/ 目录最新文件的修改时间
+    ↓
+最近 30 秒有更新 → 读 plan 内容 → 石卫评估
+    ↓
+plan 涉及受保护文件？→ 注入提醒"plan 涉及 /data/ 路径，执行时会被拦"
+plan 没附自审？→ 注入提醒"方案递交缺【自审】"
+plan 改动范围太大？→ 注入提醒"建议拆分 mission"
+石卫不是拦住 plan 更新（做不到），而是在 plan 更新后立刻审查 plan 内容。效果一样——AI 出了一个有问题的 plan，还没等退出 plan mode 执行，石卫就已经告诉它"你的 plan 有问题"。

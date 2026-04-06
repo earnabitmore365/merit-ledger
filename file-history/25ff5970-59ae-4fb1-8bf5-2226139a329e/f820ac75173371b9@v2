@@ -1,0 +1,21 @@
+---
+name: precompact_minimax_plan
+description: PreCompact hook 结构化摘要 — Haiku 已弃用，改用 MiniMax（2026-04-02）
+type: project
+---
+
+## PreCompact 摘要方案 — Haiku 弃用，MiniMax 接手
+
+**变更日期**：2026-04-02
+
+**变更内容**：
+- Haiku 彻底弃用，所有 AI 调用只用 MiniMax（MiniMax-M2.7-highspeed）
+- `pre_compact_save.py`：`generate_haiku_summary` → `generate_minimax_summary`，从 merit_gate.py 导入 ai_call
+- MiniMax 失败时摘要跳过（best-effort），不影响原始对话保存
+- merit_gate.py / credit_manager.py：ai_call 删除 Haiku fallback，MiniMax 失败存 pending_ai_tasks.jsonl
+- session_start.py：新增 inject_pending_ai_tasks()，检测队列注入提醒
+
+**当前管线**：
+PreCompact 保存（MiniMax 摘要 + 原始对话）→ Compact 截断 → SessionStart 注入（摘要 + daily md + rules + pending AI tasks）
+
+**Why**：老板决定 Haiku 弃用。MiniMax 更快更便宜，失败时存队列等太极处理比 fallback 到另一个 API 更干净。

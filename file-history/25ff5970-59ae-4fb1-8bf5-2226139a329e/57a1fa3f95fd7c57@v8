@@ -1,0 +1,26 @@
+{
+  "mission": "plan: velvety-munching-raccoon.md",
+  "agent": "太极",
+  "started": "2026-04-02T10:14:02",
+  "status": "completed",
+  "estimated_reward": 5,
+  "held_points": 2,
+  "items": [
+    {
+      "type": "modify",
+      "file": "~/.claude/scripts/daily_digest.py",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/merit_gate.py",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/projects/-Users-allenbot/memory/credit_system_design.md",
+      "done": true
+    }
+  ],
+  "completed": "2026-04-02T10:25:54"
+}

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${PLUGIN_DIR}/scripts/haiku_gate.py"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+#!/bin/bash
+# 清理旧版假毕业生，保留修正版（21:35后）的真毕业生
+GRAD_DIR=~/trading/gp_engine/graduates
+
+echo "=== 备份修正版真毕业生 ==="
+mkdir -p /tmp/real_grads
+for d in $GRAD_DIR/*/; do
+    name=$(basename $d)
+    for f in $(find $d -name '*20260403_21*' -o -name '*20260403_22*' -o -name '*20260403_23*' 2>/dev/null); do
+        mkdir -p /tmp/real_grads/$name
+        cp $f /tmp/real_grads/$name/
+        echo "  保留: $name/$(basename $f)"
+    done
+done
+
+echo ""
+echo "=== 清空所有毕业生目录 ==="
+rm -rf $GRAD_DIR/*
+echo "  已清空"
+
+echo ""
+echo "=== 恢复真毕业生 ==="
+for d in /tmp/real_grads/*/; do
+    name=$(basename $d)
+    mkdir -p $GRAD_DIR/$name
+    cp $d/*.json $GRAD_DIR/$name/
+    count=$(ls $GRAD_DIR/$name/*.json | wc -l)
+    echo "  恢复: $name ($count 个)"
+done
+
+echo ""
+echo "=== 最终状态 ==="
+for d in $GRAD_DIR/*/; do
+    name=$(basename $d)
+    count=$(ls $d/*.json 2>/dev/null | wc -l)
+    echo "  $name: $count 个"
+done
+total=$(find $GRAD_DIR -name '*.json' | wc -l)
+echo "  总计: $total 个真毕业生"

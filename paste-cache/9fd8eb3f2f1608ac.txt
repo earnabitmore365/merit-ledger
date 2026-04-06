@@ -1,0 +1,68 @@
+❯ ARCHITECTURE.md seed_v3 清零还在等 mission 执行（plan                                 
+  已提交待批准）。                                                                      
+这是什么东西？还有你到目前为止做了那么多事情，为什么没有更新过changelog？               
+
+⏺ 两个问题：
+
+  1. Mission 已经提交成功了，plan 也批准了，我应该直接执行，不是说"待批准"。搞混了状态。
+  2. 做了 wuji-verify REGISTRY 更新但没更新 CHANGELOG。又犯了文档不实时更新的老毛病。
+
+  现在执行 ARCHITECTURE.md 修改 + 补 CHANGELOG。
+
+⏺ Update(/Volumes/SSD-2TB/project/wuji-auto-trading/ARCHITECTURE.md)
+  ⎿  Error editing file
+
+⏺ 之前已经替换过了。确认零残留：
+
+  Searched for 1 pattern (ctrl+o to expand)  
+
+⏺ 已经清零了。是在第一个 mission 里做的（edit 成功了，只是 mission complete
+  时石卫拦了因为当时没 active mission）。第二个 mission 实际不需要再改。直接 complete。
+                                                                                        
+⏺ Bash(python3 ~/.claude/merit/credit_manager.py mission complete)
+  ⎿  任务已结束。                                                                       
+                                                                                        
+⏺ 现在补 CHANGELOG：                                            
+                                                                                        
+  Read 1 file (ctrl+o to expand)                                                        
+                                                                
+⏺ Update(CHANGELOG.md)                                                                  
+  ⎿  PreToolUse:Edit hook returned blocking   ⎿  [两仪 Lv.3 金丹] 没有 active 
+     error                                       mission，不能直接改代码。先出 plan →   
+                                                 review-plan 提交任务。                 
+                                                 ⚠️  绕过将触发双倍扣分 + 24小时积分清零 
+                                                 。请按准则（完整性·真实性·有效性）+    
+                                                 第一性原理重新思考。                   
+  ⎿  Error: [两仪 Lv.3 金丹] 没有 active mission，不能直接改代码。先出 plan → 
+     review-plan 提交任务。                                     
+     ⚠️  绕过将触发双倍扣分 + 24小时积分清零。请按准则（完整性·真实性·有效性）+ 
+     第一性原理重新思考。
+
+⏺ CHANGELOG 也需要 mission 才能改。但每次更新 CHANGELOG 都要走 plan → mission
+  流程，这太重了。
+                                                                                        
+  执事，CHANGELOG 更新是每个任务的收尾动作，不是独立任务。现在的流程导致做完活→mission  
+  complete→想更新 CHANGELOG→没 mission 了→又要走一遍 plan→mission→改→complete。         
+                                                                                        
+  这个问题我如实汇报，怎么处理请执事定。                                                
+                                                                
+✻ Cogitated for 58s                                                                     
+                                                    
+❯ changelog还需要走plan mode？刚才也没事，为什么现在有事？等级掉了的问题？              
+                                                                           
+⏺ 不是等级的问题。是 mission 状态的问题——之前改 CHANGELOG 都是在 active mission         
+  期间改的。现在 mission 已经 complete 了，没有 active mission，所以被拦。
+                                                                                        
+  根因是我的流程错误：应该在 mission complete 之前就把 CHANGELOG 改完，不是 complete    
+  之后再补。CHANGELOG 是任务的一部分，不是收尾后的附加动作。                            
+                                                                                        
+  以后每个 mission 的执行顺序：改代码 → 验证 → 更新 CHANGELOG → 更新 backlog → mission  
+  complete。不颠倒。                                         
+                                                                                        
+  【自审】                                          
+                                                             
+  完整性：❌ 之前多个 mission 都是 complete 后才想起补 CHANGELOG                        
+  第一性原理：✅ 找到根因是流程顺序问题，不是等级或石卫的问题
+                                                                                        
+  【遗留清单】：CHANGELOG 欠两条更新（wuji-verify REGISTRY 维护 + 世界观确认），需要下个
+   mission 时一起补上。

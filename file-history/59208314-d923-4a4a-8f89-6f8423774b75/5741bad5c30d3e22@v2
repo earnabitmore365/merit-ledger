@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# 数据（44GB K线 + historical JSON）
+data/
+
+# 运行时生成（种子库/报告/日志）
+reports/
+results/
+logs/
+
+# DuckDB / SQLite 数据库
+*.duckdb
+*.db
+*.db-wal
+*.db-shm

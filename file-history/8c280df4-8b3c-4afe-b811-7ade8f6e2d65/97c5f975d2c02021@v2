@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""evaluator.py: fitness 里加指标数量惩罚"""
+
+EVAL_PATH = '/home/pc_heisi_claude/trading/gp_engine/evaluator.py'
+with open(EVAL_PATH) as f:
+    content = f.read()
+
+if 'MIN_INDICATORS' in content:
+    print("MIN_INDICATORS 惩罚已存在，跳过")
+else:
+    # 1. 在 import 区添加 MIN_INDICATORS
+    content = content.replace(
+        "from config import (LEVERAGE, FEE_RATE, SLIPPAGE_RATE, MIN_TRADES,\n"
+        "                    PARSIMONY_COEFF, WF_TRAIN_WINDOWS)",
+        "from config import (LEVERAGE, FEE_RATE, SLIPPAGE_RATE, MIN_TRADES,\n"
+        "                    PARSIMONY_COEFF, WF_TRAIN_WINDOWS, MIN_INDICATORS)"
+    )
+
+    # 2. 在 fitness 函数开头（score 计算前）加指标数量检查
+    # 找到 "# 取最低 t-stat" 那行，在 score = 之前插入检查
+    old_score_block = (
+        "    # 取最低 t-stat（最差时段的表现）\n"
+        "    min_t = float(min(t_stats))\n"
+        "    tree_size = tree_mod.size(root)\n"
+        "    # v0.8: 多样性惩罚已删除，只保留简洁性惩罚\n"
+        "    score = min_t - PARSIMONY_COEFF * tree_size"
+    )
+    new_score_block = (
+        "    # 取最低 t-stat（最差时段的表现）\n"
+        "    min_t = float(min(t_stats))\n"
+        "    tree_size = tree_mod.size(root)\n"
+        "    # v0.8: 多样性惩罚已删除，只保留简洁性惩罚\n"
+        "    score = min_t - PARSIMONY_COEFF * tree_size\n"
+        "\n"
+        "    # v1.1: 指标数量惩罚 — 不足 MIN_INDICATORS 个指标的个体大幅扣分\n"
+        "    from gp_evolve import extract_indicators\n"
+        "    n_indicators = len(extract_indicators(root))\n"
+        "    if n_indicators < MIN_INDICATORS:\n"
+        "        score -= 5.0 * (MIN_INDICATORS - n_indicators)  # 每缺一个指标扣5分"
+    )
+    content = content.replace(old_score_block, new_score_block)
+
+    with open(EVAL_PATH, 'w') as f:
+        f.write(content)
+    print("✅ evaluator.py: 已添加指标数量惩罚（缺1个扣5分）")

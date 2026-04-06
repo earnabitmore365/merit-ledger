@@ -1,0 +1,144 @@
+<DOCUMENT filename="handoff_to_heisi_ultimate_live_deployment.md">
+Handoff → 黑丝：实盘终极上线版 —— 纯净架构 + 防限速错峰启动（老板最终拍板）
+2026-03-18 混沌（团队共识）
+
+目的：网络已恢复！跳过 Paper，直接真金白银满血上线。同时修复多进程并发导致的 BitMEX API 限速（429/502）问题。
+
+老板最终判决：
+
+彻底废除 RegimeRouter，直接用原生 --mirror 启动。
+
+实盘对齐回测：在 mirror.py 中只翻转K线，绝对不翻转信号。
+
+动态阈值：ETH ±0.5%、XRP ±1.0%、SOL ±0.7%。
+
+资金分配：SOL $100 / ETH $100 / XRP $80（留出 $118 缓冲防踩踏）。
+
+防限速：TTP 轮询降频至 5 秒，且三个进程错峰 15 秒启动。
+
+黑丝立即执行（按顺序修改 4 个文件，然后启动）
+
+第一步：重写 mirror.py 核心引擎（对齐回测，解决漂移）
+打开 src/core/strategy/mirror.py，删掉 _flip_signal 方法，并替换为以下完整类代码：
+
+Python
+from typing import Dict, List
+from core.strategy.base import Strategy, Signal, TradingSignal
+
+class MirrorStrategy(Strategy):
+    def __init__(self, inner_strategy: Strategy, interval: str = '1m'):
+        super().__init__(inner_strategy.name + '_mirror')
+        self._inner = inner_strategy
+        self._interval = interval
+
+    @property
+    def name(self) -> str:
+        return self._inner.name + '_mirror'
+
+    @name.setter
+    def name(self, value):
+        pass
+
+    def _mirror_klines(self, klines: List[Dict]) -> List[Dict]:
+        """v2.1 终极翻转逻辑：2 × SMA(200) - price"""
+        if not klines:
+            return []
+        n = min(len(klines), 200)
+        sma = sum(k['close'] for k in klines[-n:]) / n
+        pivot = 2 * sma
+
+        mirrored = []
+        for k in klines:
+            m = dict(k)
+            m['open'] = pivot - k['open']
+            m['close'] = pivot - k['close']
+            m['high'] = pivot - k['low']
+            m['low'] = pivot - k['high']
+            mirrored.append(m)
+        return mirrored
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None):
+        if not klines:
+            return TradingSignal(signal=Signal.HOLD, coin=coin)
+
+        # 1. 翻转K线
+        flipped = self._mirror_klines(klines)
+
+        # 2. 强制内存缓存，不污染DB
+        try:
+            from core.indicator_cache import init_cache
+            init_cache(coin, self._interval, flipped, db_path=':memory:')
+        except Exception:
+            pass
+
+        # 3. 跑策略，直接返回原信号（绝对不反转信号！）
+        self._inner.current_idx = len(flipped) - 1
+        return self._inner.generate_signal(coin, flipped)
+第二步：解除封杀 & 动态阈值配置
+打开 bitmex_race.py：
+
+删除开头关于 --mirror 的 [GROK + GEMINI 封杀令] 退出逻辑。
+
+修改 MirrorStrategy 的实例化代码（约第 508 行），补上 interval 参数：
+
+Python
+    if args.mirror:
+        from core.strategy.mirror import MirrorStrategy
+        strategy = MirrorStrategy(strategy, interval=args.interval)
+在加载策略处（约第 292 行 strategy = get_strategy(args.strategy)），下方加上动态阈值：
+
+Python
+    try:
+        strategy = get_strategy(args.strategy)
+        # 动态分配回测最优阈值
+        if hasattr(strategy, 'config'):
+            if args.coin == 'ETH':
+                strategy.config.buy_threshold = 0.995   # ±0.5%
+                strategy.config.sell_threshold = 1.005
+            elif args.coin == 'XRP':
+                strategy.config.buy_threshold = 0.990   # ±1.0%
+                strategy.config.sell_threshold = 1.010
+            elif args.coin == 'SOL':
+                strategy.config.buy_threshold = 0.993   # ±0.7%
+                strategy.config.sell_threshold = 1.007
+第三步：防限速降频 & 架构清理
+打开 src/trading/system.py：
+
+删除 TradingSystem.__init__ 里的 [GROK + GEMINI 封杀令]（否则 mean_reversion_mirror 启动会报错）。
+
+防限速核心：找到 _ttp_loop 方法的最后一行 time.sleep(1)，改成 time.sleep(5)。这能确保 WebSocket 断开时，REST 轮询不会刷爆 API。
+
+清理掉之前在 _generate_signal 里乱加的 :memory: 补丁。
+
+打开 src/core/strategy/strategy_mean_reversion.py：
+
+将默认配置恢复为合理的 ±0.5%（防其他地方调用死机），改成：
+
+Python
+    buy_threshold: float = 0.995
+    sell_threshold: float = 1.005
+第四步：错峰启动实盘（复制整段执行）
+不要同时并发启动！直接在终端复制以下整段带 sleep 15 的命令，让它们错开建连高峰：
+
+Bash
+pkill -f bitmex_race
+
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin SOL --interval 1m --min-bet 100 >> logs/sol_1m_live.log 2>&1 &
+
+sleep 15
+
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin ETH --interval 1m --min-bet 100 >> logs/eth_1m_live.log 2>&1 &
+
+sleep 15
+
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin XRP --interval 5m --min-bet 80 >> logs/xrp_5m_live.log 2>&1 &
+通过标准：
+
+错峰启动后，不再出现 502/429 报错。
+
+确认 3 个日志均显示“WebSocket 已连接”。
+
+确认 10 分钟内看到真实开单的 BUY/SELL 信号（信号未反转）。
+
+黑丝，网络已恢复，弹药已装填。收到后立刻按这 4 步执行！执行完贴首批实盘开单日志！
+</DOCUMENT>

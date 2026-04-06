@@ -1,0 +1,9 @@
+{
+  "id": "35",
+  "subject": "阶段0a：mirror.py namespace修复",
+  "description": "mirror.py 第78行 init_cache 加 namespace='flipped'",
+  "activeForm": "修mirror",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""全员并行选人 — 顾问指令
+
+选人标准：
+1. 基本盘不亏（全程PnL ≥ 0）
+2. 有爆发力（单笔或单月PnL进TOP20%）
+3. 加分：跟已选策略低相关
+
+范围：USDT本位9币种，全周期(1m/5m/15m/30m/1h)，排除TRX和币本位
+
+用法: cd auto-trading && python3 lab/team_selection.py
+"""
+
+import os
+import sys
+import time
+import sqlite3
+from collections import defaultdict
+from datetime import datetime, timezone
+
+SEED_DB = os.path.join(os.path.dirname(__file__), 'reports', 'seed_v3_ttp.db')
+COINS = ['BTC', 'ETH', 'XRP', 'BNB', 'SOL', 'ADA', 'AVAX', 'LINK', 'DOT']
+INTERVALS = ['1m', '5m', '15m', '30m', '1h']
+
+
+def run():
+    print("=" * 80)
+    print("全员并行选人")
+    print("=" * 80)
+
+    conn = sqlite3.connect(SEED_DB)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA cache_size=-500000")
+
+    # ========== 第一步：基础筛选 ==========
+    print("\n### 第一步：基础筛选\n")
+    t0 = time.time()
+
+    # 拉全combo基础数据
+    combos = conn.execute("""
+        SELECT id, strategy, coin, interval, total_return, total_trades,
+               win_rate, max_drawdown, max_win, max_loss
+        FROM combo_summary
+        WHERE coin IN ({}) AND interval IN ({})
+          AND coin NOT LIKE '%_COIN%'
+    """.format(
+        ','.join(f"'{c}'" for c in COINS),
+        ','.join(f"'{i}'" for i in INTERVALS)
+    )).fetchall()
+    print(f"总combo: {len(combos):,}")
+
+    # 算每个combo的最大单笔PnL和全程PnL
+    combo_stats = {}
+    for cid, strat, coin, iv, total_return, total_trades, win_rate, mdd, max_win, max_loss in combos:
+        pnl = total_return  # total_return 就是 sum(r_value) = 全程PnL
+        combo_stats[cid] = {
+            'strategy': strat, 'coin': coin, 'interval': iv,
+            'pnl': pnl, 'trades': total_trades, 'win_rate': win_rate,
+            'mdd': mdd, 'max_single': max_win,
+        }
+
+    # 算每币种的单笔PnL TOP20%阈值
+    by_coin = defaultdict(list)
+    for cid, s in combo_stats.items():
+        by_coin[s['coin']].append(s['max_single'])
+
+    top20_thresholds = {}
+    for coin, vals in by_coin.items():
+        vals.sort(reverse=True)
+        idx = max(1, int(len(vals) * 0.2))
+        top20_thresholds[coin] = vals[idx - 1] if vals else 0
+
+    # 判定合格
+    qualified = {}
+    for cid, s in combo_stats.items():
+        coin = s['coin']
+        is_profitable = s['pnl'] >= 0
+        has_explosive = s['max_single'] >= top20_thresholds.get(coin, 999)
+        s['qualified'] = is_profitable and has_explosive
+        s['reason'] = []
+        if not is_profitable:
+            s['reason'].append('亏损')
+        if not has_explosive:
+            s['reason'].append('无爆发')
+        if s['qualified']:
+            qualified[cid] = s
+
+    elapsed = time.time() - t0
+    print(f"筛选耗时: {elapsed:.1f}s")
+
+    # 统计
+    qual_by_coin = defaultdict(int)
+    total_by_coin = defaultdict(int)
+    for s in combo_stats.values():
+        total_by_coin[s['coin']] += 1
+        if s['qualified']:
+            qual_by_coin[s['coin']] += 1
+
+    print(f"\n{'币种':<6} {'合格':>6} {'总数':>6} {'通过率':>8}")
+    print('-' * 30)
+    for coin in COINS:
+        q = qual_by_coin[coin]
+        t = total_by_coin[coin]
+        pct = q / t * 100 if t > 0 else 0
+        print(f"{coin:<6} {q:>6} {t:>6} {pct:>7.1f}%")
+    print(f"{'合计':<6} {sum(qual_by_coin.values()):>6} {sum(total_by_coin.values()):>6}")
+
+    # ========== 第二步：合格策略详情 ==========
+    print(f"\n\n### 第二步：合格策略详情\n")
+
+    # 按币种分组，PnL降序
+    by_coin_qual = defaultdict(list)
+    for cid, s in qualified.items():
+        by_coin_qual[s['coin']].append((cid, s))
+
+    for coin in COINS:
+        entries = by_coin_qual.get(coin, [])
+        entries.sort(key=lambda x: -x[1]['pnl'])
+        if not entries:
+            continue
+
+        print(f"\n--- {coin} ({len(entries)} 合格) ---")
+        print(f"{'策略':<28} {'周期':<5} {'PnL':>8} {'笔数':>6} {'胜率':>6} {'MDD':>6} {'最大单笔':>8}")
+        print('-' * 75)
+        for cid, s in entries[:20]:  # 只显示TOP20
+            print(f"{s['strategy']:<28} {s['interval']:<5} {s['pnl']:>+8.1f} {s['trades']:>6} "
+                  f"{s['win_rate']:>5.1f}% {s['mdd']:>6.2f} {s['max_single']:>+8.1f}")
+
+    # ========== 第三步：TOP15相关性矩阵 ==========
+    print(f"\n\n### 第三步：TOP15 相关性矩阵\n")
+
+    for coin in COINS:
+        entries = by_coin_qual.get(coin, [])
+        entries.sort(key=lambda x: -x[1]['pnl'])
+        top15 = entries[:15]
+        if len(top15) < 2:
+            continue
+
+        top15_ids = [cid for cid, _ in top15]
+        top15_names = [f"{s['strategy']}_{s['interval']}" for _, s in top15]
+
+        # 拉这些combo的交易时间+方向
+        placeholders = ','.join('?' * len(top15_ids))
+        trades_data = conn.execute(f"""
+            SELECT combo_id, open_candle_idx, direction
+            FROM paired_trades
+            WHERE combo_id IN ({placeholders})
+        """, top15_ids).fetchall()
+
+        # 建索引：{combo_id: {candle_idx: direction}}
+        trade_idx = defaultdict(dict)
+        for combo_id, candle_idx, direction in trades_data:
+            trade_idx[combo_id][candle_idx] = direction
+
+        # 算两两重合度
+        print(f"--- {coin} TOP15 信号重合度 ---")
+        print(f"{'':>3}", end='')
+        for i in range(min(len(top15), 15)):
+            print(f" {i+1:>4}", end='')
+        print()
+
+        for i, (cid_i, s_i) in enumerate(top15[:15]):
+            name_short = s_i['strategy'][:12] + '_' + s_i['interval']
+            print(f"{i+1:>2} {name_short:<18}", end='')
+            for j, (cid_j, s_j) in enumerate(top15[:15]):
+                if j <= i:
+                    print(f"    -", end='')
+                    continue
+                # 算重合
+                idx_i = trade_idx[cid_i]
+                idx_j = trade_idx[cid_j]
+                common_bars = set(idx_i.keys()) & set(idx_j.keys())
+                if not common_bars:
+                    print(f"   0%", end='')
+                    continue
+                same_dir = sum(1 for b in common_bars if idx_i[b] == idx_j[b])
+                overlap = same_dir / len(common_bars) * 100
+                print(f" {overlap:>3.0f}%", end='')
+            print()
+        print()
+
+    # ========== 第四步：推荐组合 ==========
+    print(f"\n\n### 第四步：推荐组合\n")
+
+    for coin in COINS:
+        entries = by_coin_qual.get(coin, [])
+        entries.sort(key=lambda x: -x[1]['pnl'])
+        if len(entries) < 3:
+            print(f"{coin}: 合格策略不足3个，跳过")
+            continue
+
+        # 贪心选择：从TOP1开始，逐个加入低相关的
+        selected = [entries[0]]
+        for cid, s in entries[1:]:
+            # 检查跟已选的重合度
+            is_low_corr = True
+            idx_new = trade_idx.get(cid, {})
+            for sel_cid, sel_s in selected:
+                idx_sel = trade_idx.get(sel_cid, {})
+                common = set(idx_new.keys()) & set(idx_sel.keys())
+                if common:
+                    same = sum(1 for b in common if idx_new.get(b) == idx_sel.get(b))
+                    overlap = same / len(common)
+                    if overlap > 0.5:
+                        is_low_corr = False
+                        break
+            if is_low_corr:
+                selected.append((cid, s))
+            if len(selected) >= 5:
+                break
+
+        print(f"\n--- {coin} 推荐组合 (相关性约束 ≤ 50%, {len(selected)} 策略) ---")
+        for i, (cid, s) in enumerate(selected):
+            # 算跟已选的重合度
+            overlaps = []
+            idx_cur = trade_idx.get(cid, {})
+            for j, (sel_cid, sel_s) in enumerate(selected[:i]):
+                idx_sel = trade_idx.get(sel_cid, {})
+                common = set(idx_cur.keys()) & set(idx_sel.keys())
+                if common:
+                    same = sum(1 for b in common if idx_cur.get(b) == idx_sel.get(b))
+                    ov = same / len(common) * 100
+                    overlaps.append(f"#{j+1}:{ov:.0f}%")
+            ov_str = f" ← 重合: {', '.join(overlaps)}" if overlaps else ""
+            print(f"  {i+1}. {s['strategy']:<28} {s['interval']:<5} PnL={s['pnl']:>+8.1f} "
+                  f"笔={s['trades']:>5} 胜率={s['win_rate']:>5.1f}% 最大单笔={s['max_single']:>+.1f}{ov_str}")
+
+    conn.close()
+    print(f"\n{'=' * 80}")
+    print("选人完成")
+    print(f"{'=' * 80}")
+
+
+if __name__ == '__main__':
+    run()

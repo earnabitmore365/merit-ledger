@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""
+Reflect Hook — SessionEnd 自动扫描
+轻量版：只统计上次 reflect 后新增的纠错/提升信号数量。
+不做写入（那是 Claude 用 /reflect 或 MCP 做的事），只写标记文件。
+
+下次会话 SessionStart 时，太极/黑丝/白纱看到标记就知道该跑 reflect 了。
+"""
+
+import json
+import os
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+
+HOME = str(Path.home())
+DB_PATH = os.path.join(HOME, ".claude", "conversations.db")
+FLAG_PATH = os.path.join(HOME, ".claude", "learnings", "pending_signals.json")
+
+
+def main():
+    # 读取上次标记时间
+    last_check = "2000-01-01 00:00:00"
+    if os.path.exists(FLAG_PATH):
+        try:
+            with open(FLAG_PATH) as f:
+                data = json.load(f)
+                last_check = data.get("last_check", last_check)
+        except Exception:
+            pass
+
+    # 查询新的纠错/提升信号
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    row = conn.execute(
+        "SELECT COUNT(*) FROM messages "
+        "WHERE (tags LIKE '%纠错%' OR tags LIKE '%提升%') AND time > ?",
+        (last_check,),
+    ).fetchone()
+    new_count = row[0] if row else 0
+    conn.close()
+
+    # 更新标记
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    os.makedirs(os.path.dirname(FLAG_PATH), exist_ok=True)
+    with open(FLAG_PATH, "w") as f:
+        json.dump(
+            {
+                "last_check": now,
+                "new_signals": new_count,
+                "message": f"{new_count} 条新的纠错/提升信号" if new_count > 0 else "无新信号",
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    if new_count > 0:
+        print(f"[reflect_hook] {new_count} 条新纠错/提升信号待处理")
+
+
+if __name__ == "__main__":
+    main()

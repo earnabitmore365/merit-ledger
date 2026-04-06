@@ -1,0 +1,110 @@
+# Plan: 回测代码+文档全面清理 — seed_v3 清零 + 路径参数化
+
+## Context
+
+之前做的回测工作（generate_seed.py 分段回测 + build_seed_report.py DuckDB 报告层）代码已改完，但关联文档和上下游代码有残留问题：
+1. `data/README_KLINES_SEED.md` 有 8 处 seed_v3 残留
+2. `build_seed_report.py` 路径写死（无 CLI 参数）
+3. `backtest/gate/` 28 处 seed_v3 写死（Gate 跑不起来）
+4. `backtest/engine/incremental_backtest.py` 和 `src/backtest/incremental_backtest.py` 各 2 处 seed_v3
+
+执事原则：能用相对路径不用绝对路径，能参数化不写死。
+
+## 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `data/README_KLINES_SEED.md` | 8 处 seed_v3 → 新种子名称 |
+| `backtest/build_seed_report.py` | 加 argparse 支持 `--report-dir` |
+| `backtest/gate/*.py`（12 个文件） | 28 处 seed_v3.db → seed_signal.db |
+| `backtest/engine/incremental_backtest.py` | seed_v3.db → seed_signal.db, seed_v3_ttp.db → seed_ttp_close.db |
+| `src/backtest/incremental_backtest.py` | 同上 |
+| `backtest/regime/regime_fact_timeline.py` | seed_v3.db → seed_signal.db |
+| `backtest/regime/sub_phase_labels.py` | seed_v3.db → seed_signal.db |
+| `backtest/pipeline/refresh_summary.py` | 检查是否有 seed_v3 |
+| `backtest/dashboard/seed_dashboard.py` | seed_v3.db → seed_signal.db, seed_v3_ttp.db → seed_ttp_close.db |
+
+注意：`research/` 目录不属于当前回测范围，不在本次清理中。
+
+## 具体改动
+
+### 1. data/README_KLINES_SEED.md（8 处）
+
+replace_all：
+- `seed_v3.db` → `seed_signal.db`
+- `seed_v3_ttp.db` → `seed_ttp_close.db`
+- `seed_v3_ttp_highlow.db` → `seed_ttp_hl.db`
+- `seed_v3_inverse.db` → `seed_inverse.db`（如果还在用）
+- `seed_v3*.db` → `seed_*.db`
+
+### 2. build_seed_report.py — CLI 参数化
+
+加 argparse：
+```python
+parser = argparse.ArgumentParser(description='种子报告生成器')
+parser.add_argument('--report-dir', default=REPORT_DIR, help='种子目录（默认 reports/）')
+parser.add_argument('--output', default=None, help='输出 DuckDB 路径（默认 reports/seed_report.duckdb）')
+```
+
+SEED_TYPES 和 REPORT_DB 改为从参数构建，不写死。
+
+### 3. backtest/gate/*.py — 12 个文件 28 处
+
+所有 `DB_PATH = os.path.join(REPORT_DIR, 'seed_v3.db')` → `seed_signal.db`。
+
+gate_runner.py 已经通过参数传入覆盖默认值，所以默认值只影响独立运行。改默认值确保独立运行也指向正确文件。
+
+同时注释和 docstring 里的 seed_v3 引用也改。
+
+文件列表：
+- gate1_threshold.py
+- gate2_scorecard_v4.py
+- gate2v41_scorecard.py
+- gate3v41_team.py（检查）
+- gate4_wf_v4.py
+- gate5_mc_v4.py
+- gate6_oos_v4.py
+- gate_mcv41.py
+- gate_mirror_v5.py
+- gate_runner.py
+- regime_wf_v41.py
+- regime_wf_v41_paired.py
+- run_gate_v41.py
+- run_gate_v41_coin.py
+- run_gate_coin_margin.py
+
+### 4. backtest/engine/ + src/backtest/ incremental_backtest.py
+
+`seed_v3.db` → `seed_signal.db`
+`seed_v3_ttp.db` → `seed_ttp_close.db`
+
+### 5. backtest/regime/ 2 个文件
+
+`seed_v3.db` → `seed_signal.db`
+
+### 6. backtest/dashboard/seed_dashboard.py
+
+`seed_v3.db` → `seed_signal.db`
+`seed_v3_ttp.db` → `seed_ttp_close.db`
+
+## 验证方案
+
+### wuji-verify 四件套
+对改过的核心文件跑 wuji-verify。
+
+### grep 零残留
+```bash
+grep -rn "seed_v3" backtest/ src/backtest/ data/README_KLINES_SEED.md | grep -v __pycache__
+```
+预期 0 结果。
+
+### Gate 可运行性
+`gate_runner.py --seed reports/seed_signal.db --report-dir results/gate_test` 干跑确认不报 FileNotFoundError。
+
+## 自审
+
+- **完整性**：✅ 扫了全项目 96 处，本次覆盖回测相关的 ~60 处（gate 28 + data 8 + engine 4 + regime 2 + dashboard 2 + build_seed_report 参数化）。research 34 处不属于当前范围
+- **真实性**：✅ 文件列表和行数来自 grep
+- **有效性**：✅ replace_all 批量替换 + argparse 参数化
+- **第一性原理**：✅ 根因是旧版 v3 命名残留，统一改成新版 seed4 命名
+- **遗留**：research/ 目录 34 处 seed_v3 不在本次范围

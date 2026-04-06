@@ -1,0 +1,71 @@
+<DOCUMENT filename="handoff_to_heisi_feed_handler_architecture.md">
+
+Handoff → 黑丝：“通讯部”总机架构重构方案（老板立项）
+2026-03-19 混沌（团队共识）
+
+项目背景：
+目前的三驾马车虽然通过“降频+熔断”稳住了，但 3 个独立进程各自直连交易所，不仅架构臃肿，且严重浪费 API 额度。老板正式下达“通讯部”重构指令：要求打造一个独立的单点数据网关（Feed Handler），统一接收数据后向下分发，彻底根除 429 限速隐患，并为未来的新交易项目奠定基建。
+
+技术选型：Python ZeroMQ (pyzmq) 进程间通信。轻量、无代理服务器、微秒级延迟。
+
+🏛️ 架构蓝图设计
+整个系统将拆分为两大层：
+
+1. 通讯部总机（Feed Gateway 独立进程）
+职责：全权负责与 BitMEX 建立唯一一条 WebSocket 连接。
+
+行为：
+
+订阅全市场行情（SOL, ETH, XRP 的实时 Tick / 1m K线）以及账户实时的 Position（持仓）变化。
+
+在本地开启一个 ZeroMQ PUB（发布者）端口（例如 tcp://127.0.0.1:5555）。
+
+将收到的 BitMEX 数据，按主题（Topic）源源不断地广播出去（例如主题为 TICK_ETH, POS_UPDATE）。
+
+2. 业务部门（三驾马车：各个策略进程）
+职责：专注跑策略和下订单。
+
+行为：
+
+启动时，不再连接 BitMEX 的 WebSocket，也不再高频轮询 REST API 获取价格和持仓。
+
+开启一个 ZeroMQ SUB（订阅者）客户端，连接到本地的 5555 端口。
+
+ETH 进程只订阅 TICK_ETH，SOL 只订阅 TICK_SOL。
+
+一旦收到总机推送的数据，立刻触发策略计算。
+
+注意：只有在真正产生 BUY/SELL 信号需要开平仓时，才通过 REST API 向 BitMEX 发送极低频的交易指令。
+
+🛠️ 黑丝的执行步骤（Phase 1 规划）
+黑丝，这是一个中等规模的重构，我们分步走。第一阶段目标：先把行情和 TTP 监控接入通讯部总机，订单发送暂保不变。
+
+步骤 1：安装依赖
+
+Bash
+pip install pyzmq
+步骤 2：新建通讯部总机脚本 src/data/feed_gateway.py
+
+编写一个独立的 Python 脚本，使用 websocket-client 维持与 BitMEX 的连接。
+
+引入 zmq，创建一个 zmq.PUB socket，绑定到 tcp://127.0.0.1:5555。
+
+将 WebSocket 收到的消息解析后，通过 socket.send_string(f"{coin} {json_data}") 广播出去。
+
+步骤 3：改造 src/trading/system.py
+
+剥离旧轮询：彻底废弃 _ttp_loop 里的 get_price 轮询逻辑。
+
+接入新专线：在 TradingSystem 初始化时，建立一个 zmq.SUB socket，连接到 tcp://127.0.0.1:5555，并设置过滤词 setsockopt_string(zmq.SUBSCRIBE, self.coin)。
+
+事件驱动：用一个后台线程持续监听 ZMQ。一旦收到本币种的最新价格，立刻更新给 TTP 引擎；一旦收到最新的 K 线闭合消息，立刻触发 run_once() 跑策略。
+
+步骤 4：本地双进程测试
+
+本地先启动 feed_gateway.py。
+
+再启动一个跑 ETH 的 bitmex_race.py 测试脚本，验证它能否不连外网，只从本地 5555 端口顺利拿到行情数据并触发策略。
+
+输出要求：
+黑丝，请先仔细评估这个重构方案。如果逻辑无误，请输出 feed_gateway.py 的核心代码框架以及 system.py 监听 ZMQ 的代码草稿，我们 Review 后再实操。执行！
+</DOCUMENT>

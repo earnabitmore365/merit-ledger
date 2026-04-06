@@ -1,0 +1,74 @@
+---
+name: hardware_comparison
+description: 专用机选型对比 — UM890 Pro vs MS-A2，量化交易系统用途，顾问推荐 AMD 全大核
+type: project
+---
+
+## 专用机选型对比（2026-03-27）
+
+> 用途：PVE 虚拟化跑量化交易系统（实盘 + GP 进化 + 回测 + 哨兵营）
+> 顾问核心建议：**必须选 AMD 全大核**，Intel 大小核在 Python multiprocessing 下有调度灾难
+
+### 对比表
+
+| | **Minisforum UM890 Pro** | **Minisforum MS-A2** |
+|---|:---:|:---:|
+| **CPU** | Ryzen 9 8945HS（8核16线程，Zen4） | Ryzen 9 9955HX（16核32线程，Zen5） |
+| **架构** | ✅ 全大核 | ✅ 全大核 |
+| **主频** | 最高 5.2GHz | 最高 5.1GHz |
+| **多进程回测** | ✅ 稳定，8 worker | ✅ 稳定，16 worker |
+| **最大 RAM** | 96GB DDR5-5600 | 128GB DDR5（实测通过） |
+| **RAM 插槽** | 2 × SODIMM | 2 × SODIMM |
+| **M.2 槽** | 2 × PCIe 4.0 | 多槽 + PCIe 4.0 |
+| **PCIe 扩展** | 无 | ✅ PCIe x16（以后可加显卡） |
+| **网口** | 2 × 2.5G | 2 × 10G SFP+ + 2 × 2.5G（共 4 口） |
+| **PVE 适合度** | ✅ 双网口够用 | ✅✅ 4 网口完美隔离 |
+| **裸机 (USD)** | $440 | $799（9955HX） |
+| **32GB+1TB (USD)** | $824 | $1,219（9955HX） |
+| **澳洲价 (AUD)** | ~A$1,399（32GB+1TB） | ~A$2,000+（估） |
+
+### MS-A2 可选 CPU 配置
+
+| CPU | 裸机 (USD) | 32GB+1TB (USD) |
+|-----|-----------|---------------|
+| Ryzen 7 7745HX | $439 | $919 |
+| Ryzen 9 7945HX | $559 | $919 |
+| Ryzen 9 8945HX | $599 | $1,119 |
+| Ryzen 9 9955HX | $799 | $1,219 |
+| 9955HX + 96GB+2TB | — | $2,079 |
+
+### 为什么必须 AMD 全大核
+
+顾问（Gemini）原话摘要：
+> Python multiprocessing 多进程回测在 Intel 大小核架构上存在致命的调度灾难。AMD 的全大核同构设计能保证"进化树"基因算法回测时，所有核心火力全开。
+
+白话（就是说用白话翻译一下意思）：Intel 新 CPU 有大核和小核两种，系统可能把回测任务分到小核上跑，速度暴跌。AMD 全部是大核，不存在这个问题。
+
+### 怎么选
+
+| 选择 | 适合场景 | 价格 |
+|------|---------|------|
+| **UM890 Pro** | 性价比首选。8 核够跑 4 worker + 交易 + GP。顾问原始推荐 | ~A$1,400 |
+| **MS-A2 9955HX** | 性能怪兽。16 核跑 8 worker，128GB RAM，PCIe x16，4 网口 | ~A$2,000+ |
+
+价格差 A$600，核心数翻倍。
+
+### PVE 蓝图（Gemini 设计）
+
+```
+宿主机（UM890 Pro 或 MS-A2）
+  ├── VM 1 — 通讯部总机（Feed Gateway ZMQ）
+  ├── VM 2 — 实盘交易（三驾马车）
+  ├── VM 3 — 数据/回测/Gate
+  └── VM 4 — 进化树（GP + 哨兵营）
+```
+
+双盘策略：系统盘（Samsung 990 Pro）+ 数据盘（WD SN850X）
+
+### 购买链接
+
+- UM890 Pro 官方：https://www.minisforum.com/products/minisforum-um890-pro
+- UM890 Pro 澳洲：https://au.minisforum.com/products/minisforum-um890pro
+- UM890 Pro 澳洲零售：https://megatechstore.com.au/product/um890-pro/
+- MS-A2 官方：https://store.minisforum.com/products/minisforum-ms-a2-workstation
+- MS-A2 评测：https://www.servethehome.com/minisforum-ms-a2-review-an-almost-perfect-amd-ryzen-intel-10gbe-homelab-system/

@@ -1,0 +1,9 @@
+{
+  "id": "29",
+  "subject": "紧急：REGIME_MAP filter 全改 None + 部署",
+  "description": "改bitmex_race.py REGIME_MAP所有filter=None，部署Nitro重启",
+  "activeForm": "紧急修复",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

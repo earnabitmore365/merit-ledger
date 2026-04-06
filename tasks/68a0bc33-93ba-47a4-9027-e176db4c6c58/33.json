@@ -1,0 +1,9 @@
+{
+  "id": "33",
+  "subject": "补充筛选：日均开仓+连亏+HOLD占比",
+  "description": "对v4推荐的45个策略补充日均开仓/最大连亏/HOLD占比，标记A型/B型",
+  "activeForm": "补充筛选",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,389 @@
+"""
+毕业考 — v2.0 同Regime跨源验证
+
+v2.0 核心改动（老板设计）：
+  旧版: 5窗原始 + 5窗随机镜像 = 10关过9关
+  新版: 正常段WF验证 + 翻转对应段WF验证 = 两边都过半才毕业
+
+设计原理:
+  牛市策略在正常K线牛市段(A)进化，用翻转K线牛市段(E')验证。
+  E' = 原始熊市段 → SMA(200)翻转 → 变成牛市走势。
+  两段不同来源的同regime数据都赚 = 真信号，不是拟合。
+
+函数清单:
+  walk_forward_validate    — 单数据源WF验证（不变）
+  regime_cross_validate    — v2.0 同regime跨源验证（新）
+  walk_forward_with_mirror — 旧版10关9过（保留兼容）
+  graduation_report        — 打印毕业考报告
+"""
+import numpy as np
+from evaluator import compute_signals, signals_to_pnl
+from config import (MIN_TRADES, WF_WINDOWS, TRAIN_RATIO, MIRROR_WF,
+                    MIRROR_PASS_REQUIRED, MIN_VALID_WINDOWS,
+                    ABSTENTION_EXCELLENCE_THRESHOLD)
+import tree as tree_mod
+
+
+def split_data(data, close_raw, train_ratio=TRAIN_RATIO):
+    """将数据分为训练集和测试集"""
+    n = len(close_raw)
+    split_idx = int(n * train_ratio)
+    train_data = {k: v[:split_idx] for k, v in data.items()}
+    test_data = {k: v[split_idx:] for k, v in data.items()}
+    train_close = close_raw[:split_idx]
+    test_close = close_raw[split_idx:]
+    return train_data, train_close, test_data, test_close, split_idx
+
+
+def walk_forward_validate(root, direction, data, close_raw,
+                          train_ratio=TRAIN_RATIO, n_windows=WF_WINDOWS):
+    """
+    Walk-Forward 验证（单数据源）。
+
+    前 train_ratio 数据 = 训练场
+    后 1-train_ratio 数据 = 考场，切成 n_windows 个窗口逐个考试
+    """
+    n = len(close_raw)
+    train_end = int(n * train_ratio)
+    test_len = n - train_end
+    window_size = test_len // n_windows
+
+    window_results = []
+    for i in range(n_windows):
+        start = train_end + i * window_size
+        end = start + window_size if i < n_windows - 1 else n
+
+        w_data = {k: v[start:end] for k, v in data.items()}
+        w_close = close_raw[start:end]
+
+        signals = compute_signals(root, w_data, direction)
+        result = signals_to_pnl(signals, w_close)
+        window_results.append(result)
+
+    profitable_windows = sum(1 for r in window_results if r['total_return'] > 0)
+    window_returns = [r['total_return'] for r in window_results]
+    avg_return = float(np.mean(window_returns))
+    total_trades = sum(r['n_trades'] for r in window_results)
+
+    # 训练集评估
+    train_data = {k: v[:train_end] for k, v in data.items()}
+    train_close = close_raw[:train_end]
+    train_signals = compute_signals(root, train_data, direction)
+    train_result = signals_to_pnl(train_signals, train_close)
+
+    majority = (n_windows + 1) // 2
+    passed = (
+        profitable_windows >= majority and
+        avg_return > 0 and
+        total_trades >= MIN_TRADES
+    )
+
+    if train_result['total_return'] > 0:
+        degradation = avg_return / train_result['total_return']
+    else:
+        degradation = 0.0
+
+    if train_result['total_return'] > 0 and avg_return <= 0:
+        overfit_score = 1.0
+    elif train_result['total_return'] > 0:
+        overfit_score = max(0.0, 1.0 - degradation)
+    else:
+        overfit_score = 0.0
+
+    return {
+        'passed': passed,
+        'direction': direction,
+        'train_return': train_result['total_return'],
+        'train_trades': train_result['n_trades'],
+        'train_winrate': train_result['win_rate'],
+        'train_sharpe': train_result['sharpe'],
+        'profitable_windows': profitable_windows,
+        'total_windows': n_windows,
+        'window_returns': window_returns,
+        'window_trades': [r['n_trades'] for r in window_results],
+        'avg_test_return': avg_return,
+        'total_test_trades': total_trades,
+        'degradation': degradation,
+        'overfit_score': overfit_score,
+    }
+
+
+def regime_cross_validate(root, direction, normal_data, normal_close,
+                          mirror_data, mirror_close,
+                          train_ratio=TRAIN_RATIO, n_windows=WF_WINDOWS):
+    """
+    v2.0 同Regime跨源验证。
+
+    正常段WF + 翻转对应段WF = 两边都过半才毕业。
+
+    参数:
+        normal_data/normal_close: 正常K线同regime段（归一化后）
+        mirror_data/mirror_close: 翻转K线同regime段（对应regime翻转后）
+
+    毕业标准:
+        1. 正常段：WF N窗口，过半数盈利
+        2. 翻转段：WF M窗口，过半数盈利
+        3. 两边都过 + 总交易≥MIN_TRADES = 毕业
+    """
+    # 正常段 WF
+    normal_result = walk_forward_validate(root, direction, normal_data, normal_close,
+                                          train_ratio, n_windows)
+
+    # 翻转段 WF（翻转段不再做 train/test 分割，全部当测试数据）
+    # 因为翻转段是独立的验证源，不是进化训练的一部分
+    mirror_n = len(mirror_close)
+    if mirror_n < 200:
+        # 翻转段数据太少，跳过翻转验证
+        mirror_result = {
+            'passed': False,
+            'profitable_windows': 0,
+            'total_windows': 0,
+            'window_returns': [],
+            'window_trades': [],
+            'avg_test_return': 0.0,
+            'total_test_trades': 0,
+        }
+        mirror_passed = False
+    else:
+        # 翻转段全量做 WF（不分训练/测试，因为进化没见过这段数据）
+        mirror_window_size = mirror_n // n_windows
+        mirror_window_results = []
+        for i in range(n_windows):
+            start = i * mirror_window_size
+            end = start + mirror_window_size if i < n_windows - 1 else mirror_n
+
+            w_data = {k: v[start:end] for k, v in mirror_data.items()}
+            w_close = mirror_close[start:end]
+
+            signals = compute_signals(root, w_data, direction)
+            result = signals_to_pnl(signals, w_close)
+            mirror_window_results.append(result)
+
+        mirror_profitable = sum(1 for r in mirror_window_results if r['total_return'] > 0)
+        mirror_returns = [r['total_return'] for r in mirror_window_results]
+        mirror_trades_list = [r['n_trades'] for r in mirror_window_results]
+        mirror_majority = (n_windows + 1) // 2
+
+        mirror_passed = (
+            mirror_profitable >= mirror_majority and
+            float(np.mean(mirror_returns)) > 0
+        )
+
+        mirror_result = {
+            'passed': mirror_passed,
+            'profitable_windows': mirror_profitable,
+            'total_windows': n_windows,
+            'window_returns': mirror_returns,
+            'window_trades': mirror_trades_list,
+            'avg_test_return': float(np.mean(mirror_returns)),
+            'total_test_trades': sum(r['n_trades'] for r in mirror_window_results),
+        }
+
+    # 综合判定：两边都过 + 总交易量够
+    total_trades = normal_result['total_test_trades'] + mirror_result['total_test_trades']
+    both_passed = normal_result['passed'] and mirror_passed and total_trades >= MIN_TRADES
+
+    # 合计统计
+    all_returns = normal_result['window_returns'] + mirror_result['window_returns']
+    total_profitable = normal_result['profitable_windows'] + mirror_result['profitable_windows']
+    total_windows = normal_result['total_windows'] + mirror_result['total_windows']
+
+    return {
+        'passed': both_passed,
+        'pass_reason': 'regime跨源验证' if both_passed else (
+            '正常段未过' if not normal_result['passed'] else
+            '翻转段未过' if not mirror_passed else
+            f'交易不足({total_trades}<{MIN_TRADES})'
+        ),
+        'abstain_count': 0,
+        'valid_windows': total_windows,
+        'direction': direction,
+        # 训练集（正常段的）
+        'train_return': normal_result['train_return'],
+        'train_trades': normal_result['train_trades'],
+        'train_winrate': normal_result['train_winrate'],
+        'train_sharpe': normal_result['train_sharpe'],
+        # 正常段 WF
+        'normal_profitable': normal_result['profitable_windows'],
+        'normal_windows': normal_result['total_windows'],
+        'normal_returns': normal_result['window_returns'],
+        'normal_avg_return': normal_result['avg_test_return'],
+        'normal_trades': normal_result['window_trades'],
+        'normal_passed': normal_result['passed'],
+        # 翻转段 WF
+        'mirror_profitable': mirror_result['profitable_windows'],
+        'mirror_windows': mirror_result['total_windows'],
+        'mirror_returns': mirror_result.get('window_returns', []),
+        'mirror_avg_return': mirror_result['avg_test_return'],
+        'mirror_trades': mirror_result.get('window_trades', []),
+        'mirror_passed': mirror_passed,
+        # 合计
+        'profitable_windows': total_profitable,
+        'total_windows': total_windows,
+        'window_returns': all_returns,
+        'avg_test_return': normal_result['avg_test_return'],
+        'total_test_trades': total_trades,
+        'degradation': normal_result['degradation'],
+        'overfit_score': normal_result['overfit_score'],
+    }
+
+
+def walk_forward_with_mirror(root, direction, data, close_raw,
+                              mirror_data, mirror_close_raw,
+                              train_ratio=TRAIN_RATIO, n_windows=WF_WINDOWS,
+                              pass_required=MIRROR_PASS_REQUIRED):
+    """
+    旧版：10关9过。保留兼容，非regime模式仍可使用。
+    v2.0 regime模式请用 regime_cross_validate()。
+    """
+    normal_result = walk_forward_validate(root, direction, data, close_raw,
+                                           train_ratio, n_windows)
+    mirror_result = walk_forward_validate(root, direction, mirror_data,
+                                           mirror_close_raw,
+                                           train_ratio, n_windows)
+
+    all_returns = normal_result['window_returns'] + mirror_result['window_returns']
+    all_trades = normal_result['window_trades'] + mirror_result['window_trades']
+    total_windows = len(all_returns)
+
+    valid_returns = [r for r, t in zip(all_returns, all_trades) if t > 0]
+    abstain_count = sum(1 for t in all_trades if t == 0)
+    valid_count = len(valid_returns)
+    pass_count = sum(1 for r in valid_returns if r > 0)
+
+    total_profitable = (normal_result['profitable_windows'] +
+                        mirror_result['profitable_windows'])
+    total_trades = (normal_result['total_test_trades'] +
+                    mirror_result['total_test_trades'])
+
+    if valid_count < MIN_VALID_WINDOWS:
+        passed = False
+        pass_reason = f"有效窗口不足({valid_count}<{MIN_VALID_WINDOWS})"
+    elif abstain_count == 0:
+        passed = (
+            total_profitable >= pass_required and
+            normal_result['avg_test_return'] > 0 and
+            total_trades >= MIN_TRADES
+        )
+        pass_reason = "全出战模式"
+    else:
+        avg_valid = float(np.mean(valid_returns)) if valid_returns else 0.0
+        passed = (
+            pass_count == valid_count and
+            avg_valid > ABSTENTION_EXCELLENCE_THRESHOLD
+        )
+        pass_reason = (f"弃权补偿({abstain_count}弃权,"
+                       f"{pass_count}/{valid_count}通过)")
+
+    return {
+        'passed': passed,
+        'pass_reason': pass_reason,
+        'abstain_count': abstain_count,
+        'valid_windows': valid_count,
+        'direction': direction,
+        'train_return': normal_result['train_return'],
+        'train_trades': normal_result['train_trades'],
+        'train_winrate': normal_result['train_winrate'],
+        'train_sharpe': normal_result['train_sharpe'],
+        'normal_profitable': normal_result['profitable_windows'],
+        'normal_windows': normal_result['total_windows'],
+        'normal_returns': normal_result['window_returns'],
+        'normal_avg_return': normal_result['avg_test_return'],
+        'normal_trades': normal_result['window_trades'],
+        'mirror_profitable': mirror_result['profitable_windows'],
+        'mirror_windows': mirror_result['total_windows'],
+        'mirror_returns': mirror_result['window_returns'],
+        'mirror_avg_return': mirror_result['avg_test_return'],
+        'mirror_trades': mirror_result['window_trades'],
+        'profitable_windows': total_profitable,
+        'total_windows': total_windows,
+        'window_returns': all_returns,
+        'avg_test_return': normal_result['avg_test_return'],
+        'total_test_trades': total_trades,
+        'degradation': normal_result['degradation'],
+        'overfit_score': normal_result['overfit_score'],
+    }
+
+
+def graduation_report(root, direction, data, close_raw,
+                      train_ratio=TRAIN_RATIO, n_windows=WF_WINDOWS,
+                      mirror_data=None, mirror_close_raw=None,
+                      regime_mode=False):
+    """打印毕业考报告（支持 regime 跨源验证模式）"""
+
+    if regime_mode and mirror_data is not None:
+        result = regime_cross_validate(root, direction, data, close_raw,
+                                        mirror_data, mirror_close_raw,
+                                        train_ratio, n_windows)
+        has_mirror = True
+    elif mirror_data is not None and mirror_close_raw is not None:
+        result = walk_forward_with_mirror(root, direction, data, close_raw,
+                                           mirror_data, mirror_close_raw,
+                                           train_ratio, n_windows)
+        has_mirror = True
+    else:
+        result = walk_forward_validate(root, direction, data, close_raw,
+                                       train_ratio, n_windows)
+        has_mirror = False
+
+    status = '✅ 毕业' if result['passed'] else '❌ 不合格'
+    dir_label = '做多' if direction == 'long' else '做空'
+
+    print(f"\n{'='*60}")
+    print(f"  毕业考报告 — {status}")
+    if regime_mode:
+        print(f"  模式: 同Regime跨源验证（v2.0）")
+    print(f"{'='*60}")
+    print(f"\n  规则: {tree_mod.to_formula(root)}")
+    print(f"  方向: {dir_label}")
+    print(f"  节点数: {tree_mod.size(root)}")
+
+    print(f"\n  训练集:")
+    print(f"    收益: {result['train_return']:+.4f}")
+    print(f"    交易: {result['train_trades']} 笔")
+    print(f"    胜率: {result['train_winrate']:.1%}")
+    print(f"    Sharpe: {result['train_sharpe']:.4f}")
+
+    if has_mirror:
+        def _window_mark(ret, trades):
+            if trades == 0:
+                return '⚪弃权'
+            return '✅' if ret > 0 else '❌'
+
+        normal_trades = result.get('normal_trades', [0] * len(result['normal_returns']))
+        mirror_trades = result.get('mirror_trades', [0] * len(result.get('mirror_returns', [])))
+
+        label_normal = "正常段" if regime_mode else "原始数据"
+        label_mirror = "翻转段" if regime_mode else "镜像数据"
+
+        print(f"\n  {label_normal} WF ({result['normal_windows']} 窗口):")
+        for i, (ret, trades) in enumerate(zip(result['normal_returns'], normal_trades)):
+            mark = _window_mark(ret, trades)
+            print(f"    窗口 {i+1}: {ret:+.4f} ({trades}笔) {mark}")
+        n_pass = result.get('normal_passed', result['normal_profitable'] >= (result['normal_windows'] + 1) // 2)
+        print(f"  小计: {result['normal_profitable']}/{result['normal_windows']} {'✅' if n_pass else '❌'}")
+
+        if result.get('mirror_returns'):
+            print(f"\n  {label_mirror} WF ({result['mirror_windows']} 窗口):")
+            for i, (ret, trades) in enumerate(zip(result['mirror_returns'], mirror_trades)):
+                mark = _window_mark(ret, trades)
+                print(f"    窗口 {i+1}: {ret:+.4f} ({trades}笔) {mark}")
+            m_pass = result.get('mirror_passed', result['mirror_profitable'] >= (result['mirror_windows'] + 1) // 2)
+            print(f"  小计: {result['mirror_profitable']}/{result['mirror_windows']} {'✅' if m_pass else '❌'}")
+
+        reason = result.get('pass_reason', '')
+        print(f"\n  判定: {reason}")
+    else:
+        print(f"\n  Walk-Forward 测试 ({result['total_windows']} 窗口):")
+        for i, ret in enumerate(result['window_returns']):
+            mark = '✅' if ret > 0 else '❌'
+            print(f"    窗口 {i+1}: {ret:+.4f} {mark}")
+        print(f"\n  盈利窗口: {result['profitable_windows']}/{result['total_windows']}")
+
+    print(f"  平均收益: {result['avg_test_return']:+.4f}")
+    print(f"  测试交易: {result['total_test_trades']} 笔")
+    print(f"  衰减比: {result['degradation']:.2f}x")
+    print(f"  过拟合: {result['overfit_score']:.2f}")
+    print(f"\n  结论: {status}")
+
+    return result

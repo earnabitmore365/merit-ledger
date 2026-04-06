@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""在 config.py 的 MIN_TRADES 行后面插入 MIN_INDICATORS"""
+import re
+
+CONFIG_PATH = '/home/pc_heisi_claude/trading/gp_engine/config.py'
+with open(CONFIG_PATH) as f:
+    content = f.read()
+
+if 'MIN_INDICATORS' in content:
+    print("MIN_INDICATORS 已存在，跳过")
+else:
+    content = content.replace(
+        "MIN_TRADES = 30             # 最少交易次数（低于此 = 无效）",
+        "MIN_TRADES = 30             # 最少交易次数（低于此 = 无效）\n"
+        "MIN_INDICATORS = 3          # 最少指标种类数（低于此 = 不准毕业+适应度惩罚）"
+    )
+    with open(CONFIG_PATH, 'w') as f:
+        f.write(content)
+    print("✅ config.py: 已添加 MIN_INDICATORS = 3")

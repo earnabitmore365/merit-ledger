@@ -1,0 +1,26 @@
+{
+  "name": "wujitang-memsearch",
+  "owner": {
+    "name": "earnabitmore365"
+  },
+  "metadata": {
+    "description": "Wujitang fork of memsearch — uses SDK AI call instead of Haiku subprocess",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "memsearch",
+      "description": "Semantic memory for Claude Code — forked to use MiniMax/SDK instead of Haiku",
+      "version": "1.0.0",
+      "source": "./plugins/memsearch",
+      "category": "productivity",
+      "author": {
+        "name": "earnabitmore365"
+      },
+      "homepage": "https://github.com/earnabitmore365/wujitang-memsearch",
+      "repository": "https://github.com/earnabitmore365/wujitang-memsearch",
+      "license": "MIT",
+      "keywords": ["memory", "semantic-search", "memsearch", "no-haiku"]
+    }
+  ]
+}

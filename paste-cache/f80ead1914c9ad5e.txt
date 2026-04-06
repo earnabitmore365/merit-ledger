@@ -1,0 +1,89 @@
+你的这个 MirrorStrategy 整体思路是对的，而且也抓住了最核心的点：必须先翻转K线数据 → 再完整跑一遍原策略逻辑 → 最后才反转信号而不是只在信号层面做 BUY  SELL 翻转。目前代码已经基本实现了这个思路，但仍有一些细节/潜在问题值得注意和改进。下面按重要性排序给你列出来：目前比较明显的问题 / 风险点max_price 取值范围太窄（只看当前这批 klines）python
+
+max_price = max(k['high'] for k in klines)
+
+这在实时递增更新的场景下几乎一定会出问题。举例：第一批 100 根 → max_high = 1000
+下一批进来，价格涨到 1200 → max_high = 1200
+再下一批跌回 900 → max_high 又变成 900……
+
+→ 导致历史K线的翻转基准一直在漂移，指标全部失真。推荐做法（至少两种选一种）：使用一个固定锚点价格（常见做法）策略开始时的第一根K线的 high × 1.1～1.5
+或整个历史数据已知的最大值（回测容易，实盘难）
+或某个整数关口（如 100000、50000）
+
+或者每次都用全局历史最高价（需要持久化记录 max_high）
+
+最简单粗暴可接受的写法（实盘）：python
+
+# 类属性或外部传入
+self.anchor_price = 100000.0   # 或者从配置文件读、或第一次运行时确定
+
+然后改成：python
+
+m['open']  = self.anchor_price - k['open']
+m['close'] = self.anchor_price - k['close']
+m['high']  = self.anchor_price - k['low']
+m['low']   = self.anchor_price - k['high']
+
+indicator_cache 初始化不安全、不完整你现在的写法：python
+
+try:
+    from core.indicator_cache import init_cache
+    interval = getattr(self._inner, 'interval', getattr(self, 'interval', '5m'))
+    init_cache(coin, interval, mirrored)
+except Exception:
+    pass
+
+问题：大部分策略根本不依赖 init_cache 这个全局单例
+很多策略是自己内部维护 ta-lib / pandas-ta / 自定义状态
+except Exception: pass 隐藏了所有问题
+每次 generate_signal 都重新 init_cache，很可能把别的币/别的策略的缓存冲掉
+
+建议：如果你的系统里大部分策略真的都依赖同一个全局 indicator_cache → 应该把 mirror 的缓存独立出来（加个后缀 _mirror）
+如果大部分策略是自维护状态 → 可以直接删掉这部分 init_cache 逻辑
+至少改成：python
+
+if hasattr(self._inner, 'use_global_cache') and self._inner.use_global_cache:
+    # 才去做 init_cache
+    # 并且 key 要带 _mirror 后缀，避免污染
+
+current_idx 的赋值方式有隐患python
+
+self._inner.current_idx = len(mirrored) - 1
+
+如果原策略在多线程 / 异步 / 多个币共用同一个实例的情况下，会被互相覆盖。更好的做法是：不要直接改 inner 的状态（尤其 current_idx 这种）
+而是希望 inner 支持传入 current_idx 参数（最干净）
+或在 mirror 层自己记住状态（但复杂）
+
+目前大多数项目里 current_idx 都是单线程单币用的，所以暂时能跑，但不是健壮写法。
+name 属性处理不优雅python
+
+@name.setter
+def name(self, value):
+    pass  # 忽略外部设置
+
+这会导致：如果有人误写了 strategy.name = "xxx"，完全没效果，很隐蔽的bug
+调试时 log 出来名字是对的，但其实没改
+
+建议直接：python
+
+@property
+def name(self) -> str:
+    return f"{self._inner.name}_mirror"
+
+删除 setter，或者让 setter 抛出警告。
+
+总结：当前版本大概打几分？思路：★★★★★（5/5）
+健壮性：★★☆☆☆（2/5） ← 主要是第1、2点很致命
+可维护性：★★★☆☆（3/5）
+
+推荐修改优先级（由高到低）把 max_price 改成固定锚点（最重要！）
+去掉或隔离 indicator_cache 初始化（避免互相污染）
+不要直接修改 inner.current_idx（能改成传参最好）
+完善 _flip_signal 对 None / 其他类型的处理
+考虑 volume 是否也要做对称翻转（少数策略会用到）
+
+你现在是用在回测还是实盘？回测的话：可以用历史真实 max_high，问题会小很多
+实盘的话：强烈建议用固定锚点（或动态但单调递增的锚点）
+
+有需要的话可以贴出你最常用来 mirror 的那几个底层策略，我可以更针对性地告诉你哪些要注意。
+

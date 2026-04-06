@@ -1,0 +1,24 @@
+评估了三项网关监控通知的必要性。评估了三项网关监控通知的必要性。三个都该加。尤其是币种数据断流和Watchdog 触发——这两个能抓到"Gateway 活着但数据不对"的情况，外部 cron 每 5 分钟才能发现，内部秒级就能报警。
+历史 K 线加载失败也重要——空窗口跑出来的信号是垃圾信号，不报警的话根本不知道。
+让他做。我没打算要外部cron，外部cron是指白纱跟我报告对吗？03:30澄清外部cron非白纱报告，而是独立脚本。澄清外部cron非白纱报告，而是独立脚本。不是白纱。外部 cron 是 Vultr 服务器上的 gateway_monitor.sh——每 5 分钟自动跑一次，检查 Gateway 进程是否存活、K 线是否过期、有没有 ERROR。挂了就自动重启并发 Telegram 报警。
+你之前截图里那个每小时的"✅ Gateway 正常 | 9/9 币种"就是它发的。
+现在加了内部报警后，Gateway 自己就能秒级发现问题。外部 cron 变成兜底——内部报警失效了（比如 Gateway 进程直接死了），cron 还能发现。两层保护。所以内外两套都是透过telegram报告的吗？03:31识别了用户关于双系统Telegram报告的疑问。识别了用户关于双系统Telegram报告的疑问。对。都发到 Telegram，但发到不同的 topic：
+内部（Gateway 自己发）：
+  → THREAD_ID = 12030（交易通知 topic）
+  → 秒级响应
+  → WS 断线、重连、数据异常等
+
+外部（gateway_monitor.sh cron 发）：
+  → TELEGRAM_GATEWAY_THREAD_ID（Gateway Monitor topic）
+  → 每 5 分钟一次
+  → 进程存活检查、K 线过期检查、每小时摘要
+你手机上看到的两种消息来源不同，但都在同一个 Telegram 群里。我觉得数据层只要一个thead ID就行了，没必要分2个03:33认可了简化通知线程的合理性。认可了简化通知线程的合理性。对，合并成一个。反正都是 Gateway 相关的消息，分开看反而要跳来跳去。让白纱把 gateway_monitor.sh 的 THREAD_ID 改成跟内部报警用同一个就行。一个是数据层 一个是交易层，我们现在正在讨论数据层的报告类别03:34组织了数据层报警分类和消息路由方案。组织了数据层报警分类和消息路由方案。清楚了。两个 topic 对应两层：
+feed_gateway（数据层）：
+  → Gateway 内部报警（WS 断线/重连/数据断流/Watchdog）
+  → gateway_monitor.sh 外部报警（进程检查/每小时摘要）
+  → 统一用一个 THREAD_ID
+
+Trader_Reporter（交易层）：
+  → 开仓/平仓/TTP/SL/熔断/每小时战绩
+  → trader_report.py 发的
+让白纱把 Gateway 内部报警的 THREAD_ID 改成 feed_gateway 那个 topic，跟 gateway_monitor.sh 用同一个。现在内部报警发到 12030（Trader_Reporter），发错地方了。

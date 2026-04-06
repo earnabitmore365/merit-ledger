@@ -1,0 +1,49 @@
+---
+name: 项目全貌与当前状态
+description: auto-trading 项目架构、投资战略、里程碑阶段、当前主线支线——新会话快速恢复上下文
+type: project
+---
+
+## 基本信息
+
+- **项目**：加密货币自动交易系统
+- **路径**：`/Volumes/SSD-2TB/project/auto-trading`
+- **语言**：Python 3.11+
+- **AI Sandbox**：`lab/`（实验区，完成后老板决定是否覆盖 src/）
+- **GitHub**：`earnabitmore365/auto-trading`（private）
+
+## 投资核心战略
+
+老板原话："快狠准：500本金，以最快且最稳的方式达到翻倍。资金翻倍后取出本金，再开下一个策略。"
+
+## 核心架构
+
+- **DuckDB 数据层**（41GB）：`/Volumes/SSD-2TB/project/wuji-auto-trading/duckdb/` — K线+指标
+- **种子系统**：seed_v3.db（11,656组/9500万笔）+ seed_v3_ttp.db（26,288组/1.86亿笔→Parquet 9.2GB）
+- **GP 进化树 v2.0**：`lab/gp_engine/` — 表达式树自进化，regime-based
+- **Nitro 服务器**：`100.88.115.98`（GP调度器+实盘部署）
+- **Vultr Tokyo**：`45.76.199.244`（云服务器）
+- **BitMEX**：实盘交易所，余额约$2,082（截至 2026-03-23）
+- **K线数据**：13币种×4周期=52组，全部到位
+
+## 里程碑阶段（111项，压缩）
+
+1. **基建期**：系统v1.4→UI v1.5→全矩阵回测→Regime检测→指标库→种子v2
+2. **数据期**：13币种×4周期全量下载→1m扩充4年→衍生品数据
+3. **策略选拔期**：Gate v3→v4.1（89冠军）→币本位9冠军→装备配置→注码模拟→Regime组队
+4. **进化期**：GP v0.1→v0.9→v1.0（岛屿模型+CMA-ES+参数化+分池+骨架去重+调度器v1.2）
+5. **哨兵期**：L2摆动regime→哨兵扫描→哨兵v2→CMF窗口化
+6. **实盘期**：BitMEX适配→比赛→三驾马车v2.1→429修复→Circuit Breaker→Feed Gateway→WS修复
+7. **部署期**：21策略并行Phase 1→Nitro部署→增量回测+每日cron
+
+## 当前状态（截至 2026-04-03）
+
+**主线**：21策略并行系统 Phase 2 部署中，8bug已修，等执事确认启动实盘
+
+**支线**：
+- GP v2.0 regime-based Nitro 运行中
+- 种子生成 v4 还差 1m×10 币种
+- MiniMax 审查毕业生（零 Anthropic 配额）
+- 27 个 MiniMax 评估任务积压
+
+**注意**：项目暂停 11 天（制度重建期），CHECKPOINT 数据可能过时，恢复工作前需验证实际状态。

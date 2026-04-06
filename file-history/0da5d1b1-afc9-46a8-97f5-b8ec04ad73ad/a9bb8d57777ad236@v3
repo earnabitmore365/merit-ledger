@@ -1,0 +1,41 @@
+#!/bin/bash
+# 自动进化 hook — PreCompact / SessionEnd 触发
+# 覆盖所有项目：太极 + auto-trading
+# 加锁防止并发（共享同一个 evolver workspace）
+
+LOCKFILE="/tmp/evolve_hook.lock"
+
+# 从 stdin 读取 hook JSON，提取 cwd
+STDIN_DATA=$(cat)
+CWD=$(echo "$STDIN_DATA" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('cwd',''))" 2>/dev/null)
+
+# 确定项目
+PROJECT=""
+case "$CWD" in
+  "$HOME/.claude"|"$HOME")
+    PROJECT="taiji"
+    ;;
+  *auto-trading*)
+    PROJECT="auto-trading"
+    ;;
+esac
+
+[ -z "$PROJECT" ] && exit 0
+
+# 检查锁：如果另一个 evolver 在跑，跳过
+if [ -f "$LOCKFILE" ]; then
+  LOCK_PID=$(cat "$LOCKFILE" 2>/dev/null)
+  if kill -0 "$LOCK_PID" 2>/dev/null; then
+    echo "⏭️ evolver 已在运行（PID $LOCK_PID），跳过本次"
+    exit 0
+  fi
+  rm -f "$LOCKFILE"
+fi
+
+LOG="/tmp/evolve_hook_${PROJECT}.log"
+nohup bash -c "
+  echo \$\$ > '$LOCKFILE'
+  bash '$HOME/.claude/evolve.sh' '$PROJECT'
+  rm -f '$LOCKFILE'
+" > "$LOG" 2>&1 &
+echo "🧬 evolver 已在后台启动（${PROJECT}），日志：$LOG"

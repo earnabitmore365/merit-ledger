@@ -1,0 +1,145 @@
+# Handoff → Gemini：BNB 币本位回测结果审查 + 反向合约公式验证
+
+> 黑丝（Opus）写于 2026-03-20
+> 老板要用 BNB 币本位跑实盘，回测结果异常，请审查
+
+---
+
+## 背景
+
+老板想用现有的 mean_reversion + Mirror 策略跑 Binance BNB 币本位合约。
+
+**关键错误**：黑丝一开始用简化脚本跑回测（违反 RUL-028），结果全是假数据。被老板骂后改用正式引擎（generate_seed.py）跑了 30 组种子，再用 sim_coin_margin.py 的反向合约公式算真实 PnL。
+
+**结果出现严重反转**：USDT 公式显示 Mirror 暴赚 +282%，反向合约公式显示全部巨亏 -20% ~ -96%。
+
+---
+
+## 核心问题：同一组交易，两种公式结果天壤之别
+
+| 策略 | 周期 | USDT 公式 | 反向合约公式 |
+|------|------|----------|------------|
+| mirror ±0.5% | 1m | +281.8% | **-79.5%** |
+| mirror ±0.5% | 1h | +193.0% | **-20.3%** |
+| mirror ±0.7% | 1h | +193.2% | **-69.7%** |
+| mirror ±1.0% | 1h | +193.7% | **-24.6%** |
+
+---
+
+## 反向合约公式（完整代码）
+
+```python
+# sim_coin_margin.py
+
+INITIAL_USD = 500.0   # 等值美元，按首笔交易价格换算成币
+LEVERAGE = 10
+BET_PCT = 0.10        # 10% 余额
+MIN_BET_USD = 100.0   # 最低开仓等值 $100
+
+def simulate_coin_margin(trades, use_2yr=False):
+    first_price = trades[0][0]
+    initial_coins = INITIAL_USD / first_price  # $500 → 币
+    balance = initial_coins
+    peak = balance
+    max_dd = 0.0
+
+    for entry_p, exit_p, direction, fee_usd, fund_usd, slip_usd, open_time in trades:
+        # 下注：余额的 10%，不低于 $100 等值的币
+        min_bet_coins = MIN_BET_USD / entry_p
+        bet = max(balance * BET_PCT, min_bet_coins)
+
+        if bet > balance:
+            return {'busted': True, ...}
+
+        # ===== 反向合约 PnL（分母 = exit） =====
+        if direction == 'long':
+            raw_pnl = bet * LEVERAGE * (exit_p - entry_p) / exit_p
+        else:
+            raw_pnl = bet * LEVERAGE * (entry_p - exit_p) / exit_p
+
+        # ===== 费用缩放 =====
+        # 种子里的费用基于 $1 × 10x = $10 名义价值
+        # 缩放到实际仓位
+        scale = bet * entry_p
+        cost_usd = (fee_usd + fund_usd + slip_usd) * scale
+        cost_coins = cost_usd / exit_p  # 按 exit_price 结算为币
+
+        pnl = raw_pnl - cost_coins
+
+        # 逐仓爆仓 = 最多亏保证金
+        if pnl < -bet:
+            pnl = -bet
+
+        balance += pnl
+        if balance <= 0:
+            return {'busted': True, ...}
+
+        if balance > peak:
+            peak = balance
+        dd = (peak - balance) / peak * 100
+        if dd > max_dd:
+            max_dd = dd
+```
+
+---
+
+## 完整回测数据（反向合约公式）
+
+```
+BNB_COIN Mirror — 15 组，全部亏钱
+
+策略                          IV    笔数    WR     PnL(币)   PnL(USD)    MDD
+mean_reversion_mirror       1m    80  67.5%    -79.5%    -$426   90.1%
+mean_reversion_mirror       5m    53  58.5%    -95.6%    -$484   97.2%
+mean_reversion_mirror      15m    44  59.1%    -75.9%    -$413   85.7%
+mean_reversion_mirror      30m    45  64.4%    -81.5%    -$434   94.0%
+mean_reversion_mirror       1h    35  65.7%    -20.3%    -$292   79.9%
+
+mean_reversion_07_mirror    1m    63  61.9%    -78.6%    -$423   89.7%
+mean_reversion_07_mirror    5m    51  58.8%    -77.4%    -$418   86.5%
+mean_reversion_07_mirror   15m    42  57.1%    -74.0%    -$407   84.7%
+mean_reversion_07_mirror   30m    41  61.0%    -85.2%    -$447   95.1%
+mean_reversion_07_mirror    1h    36  63.9%    -69.7%    -$421   93.0%
+
+mean_reversion_10_mirror    1m    55  61.8%    -49.2%    -$317   78.6%
+mean_reversion_10_mirror    5m    42  54.8%    -62.7%    -$365   78.4%
+mean_reversion_10_mirror   15m    40  55.0%    -86.5%    -$452   92.2%
+mean_reversion_10_mirror   30m    36  58.3%    -42.6%    -$294   80.0%
+mean_reversion_10_mirror    1h    28  60.7%    -24.6%    -$303   80.8%
+
+BNB_COIN Normal — 也全部亏（USDT 公式下已亏）
+±0.5%: -1.6% ~ -9.5%
+±0.7%: -1.2% ~ -7.0%
+±1.0%: -0.9% ~ -5.4%
+```
+
+---
+
+## 请 Gemini 审查
+
+1. **反向合约公式验证**：
+   - 做多：`pnl = margin × leverage × (exit - entry) / exit`
+   - 做空：`pnl = margin × leverage × (entry - exit) / exit`
+   - 这个公式是否标准？Binance 币本位合约的官方公式是什么？
+
+2. **为什么差距这么大？**
+   - 同一组交易序列，USDT 公式 +282%，反向公式 -80%
+   - 直觉上分母从 `entry` 换 `exit` 不应该造成这么大差异
+   - **是否费用缩放逻辑有 bug？**
+   - `scale = bet × entry_p` → `cost_coins = cost_usd / exit_p` 这个换算链是否正确？
+
+3. **Mirror 在币本位的致命问题**：
+   - 胜率 58-67% 但全亏 → 赢小亏大
+   - 反向合约做多时，如果 exit > entry（赚钱），分母变大 → PnL 变小（赚的更少）
+   - 反向合约做多时，如果 exit < entry（亏钱），分母变小 → PnL 绝对值变大（亏的更多）
+   - **反向合约天然"赢缩亏放"？** 这是否意味着币本位不适合趋势跟踪（Mirror）？
+
+4. **种子数据的费用参数**：
+   - 当前费率 = HyperLiquid 的 0.035% taker
+   - Binance 币本位实际 = 0.05% taker
+   - 费率差异是否显著影响结论？
+
+5. **MRI Phase 1 的后续**：
+   - Gemini 之前指出回测"温室化"
+   - 现在币本位结果用了正式引擎 + 反向公式
+   - 还有什么需要修正的？

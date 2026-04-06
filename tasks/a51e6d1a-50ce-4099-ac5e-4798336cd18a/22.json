@@ -1,0 +1,9 @@
+{
+  "id": "22",
+  "subject": "全量 inverse 回测（老板睡觉期间）",
+  "description": "python3 generate_seed.py --inverse --db seed_v3_inverse.db 全量跑 94策略×13币种×10周期",
+  "activeForm": "跑全量 inverse 回测",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

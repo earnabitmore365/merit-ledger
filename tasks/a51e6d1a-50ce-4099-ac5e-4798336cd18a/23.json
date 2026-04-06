@@ -1,0 +1,9 @@
+{
+  "id": "23",
+  "subject": "BNB_COIN 全策略 inverse 回测",
+  "description": "当前 linear 回测完成后，跑 BNB_COIN × 94策略 × 10周期 × inverse。命令：python3 generate_seed.py --coins BNB_COIN --inverse --db seed_v3_inverse.db",
+  "activeForm": "等待启动",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

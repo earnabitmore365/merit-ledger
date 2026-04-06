@@ -1,0 +1,165 @@
+# CHANGELOG — 太极操作变更日志
+
+> 滚动式记录每一次修改、创建、删除的全过程。
+> 新会话/压缩恢复读一遍就能完整接上，不用再问"之前做了什么"。
+> 超过 500 行归档到 CHANGELOG_archive/ 按月分文件。
+
+---
+
+## 格式说明
+
+```
+### [时间] [操作类型] [文件路径或目标]
+- 内容：做了什么
+- 原因：为什么做
+- 验证：怎么确认做对了
+- 关联待办：[完成/进行中/待做]
+```
+
+操作类型：CREATE / EDIT / DELETE / DEPLOY / VERIFY / ROLLBACK / CLEAR / SSH / CONFIG
+
+---
+
+## 基础设施速查
+
+| 目标 | 连接方式 |
+|------|----------|
+| Nitro（GP进化树） | `ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98` |
+| Tailscale 账号 | `allentang365.wes@gmail.com` |
+
+---
+
+## 2026-04-04
+
+### 16:30 VERIFY auto-trading rules.md — 重构确认已完成
+- 内容：活跃文件在 `-Volumes-SSD-2TB-project-auto-trading/memory/rules.md`，已是三层结构（7分类58条）。旧路径文件标记弃用
+- 原因：发现有两个项目目录（旧路径 -Users-allenbot / 新路径 -Volumes-SSD-2TB），活跃的已完成重构
+- 关联待办：auto-trading rules 重构 [完成]
+
+### 16:00 EDIT merit_gate.py — 石卫评分漏洞修复（4项）
+- 内容：①语气识别负面优先+/reward跳过 ②自审+5→+1 ③honest_report同session上限2次 ④被扣分后10分钟冷却期 ⑤history归档不丢弃 ⑥SessionEnd清零hrf计数器
+- 原因：白纱利用"认错回血"套利（今天+378/-212），石卫评分过于宽松
+- 验证：py_compile ✅ + 语气识别6组测试全过
+- 关联待办：评分漏洞修复 [完成]
+
+### 15:30 CREATE memory/CHANGELOG.md auto-log hook
+- 内容：PostToolUse 记录操作 → Stop flush 到 CHANGELOG。Bash 命令只取第一行
+- 关联待办：CHANGELOG 自动化 [完成]
+
+### 13:20 EDIT merit_gate.py + credit_manager.py — AI 输入类截断全去掉
+- 内容：全链路排查所有 `[:数字]` 截断，AI 输入类从 200→2000（declare-delete 上下文、DB 预览、ai_raw 日志），日志/显示类保持不动
+- 文件：merit_gate.py（ai_raw[:500]→[:2000]）、credit_manager.py（3 处 [:200]→[:2000]）
+- 验证：py_compile ✅ 全部三文件
+- 关联待办：截断全链路排查 [完成]
+
+### 13:10 EDIT merit_gate.py + evolve.py — 修 prompt/context 截断 bug
+- 内容：queue_pending_ai_task 函数定义去掉 `[:200]`/`[:300]`，调用方 handle_stop 和 evolve.py 也去掉 `[:200]`，保留完整 prompt
+- 原因：94 条 pending 任务因截断无法恢复，全部废了
+- 验证：py_compile ✅，grep 确认 3 处全改完
+- 关联待办：pending 任务截断 bug [完成]
+
+### 13:05 CLEAR pending_ai_tasks.jsonl — 归档 94 条无法恢复的任务
+- 内容：94 条 → 归档为 pending_ai_tasks_archived_20260404.jsonl，新建空 jsonl
+- 原因：prompt 被截断到 200 字符，MiniMax 无法评估，强行跑 = 造假评分
+- 关联待办：pending 任务处理 [完成]
+
+### 12:45 EDIT CLAUDE.md — 恢复协议加读 CHANGELOG
+- 内容：压缩后/新会话 改为 "读 MEMORY.md + CHANGELOG.md 最近条目 → 输出当前状态 → 等老板指示"
+- 原因：恢复协议必须包含 CHANGELOG，否则建了也不读
+- 验证：CLAUDE.md 已更新
+- 关联待办：纳入记忆系统 [完成]
+
+### 12:40 EDIT MEMORY.md — 文件职责定义 + 索引加 CHANGELOG
+- 内容：文件职责表加"变更日志"行，详细档案加 CHANGELOG.md 索引
+- 验证：MEMORY.md 已更新
+- 关联待办：纳入记忆系统 [完成]
+
+### 12:30 CREATE memory/CHANGELOG.md — 太极操作变更日志
+- 内容：建立太极专属 CHANGELOG，格式对齐白纱（auto-trading/CHANGELOG.md），含基础设施速查 + 上个会话回填
+- 原因：压缩恢复后丢失操作细节（SSH 用户名等），handoff 靠回忆会漏，CHANGELOG 实时记录不会漏
+- 验证：文件存在 + MEMORY.md 已更新 + 恢复协议已改
+- 关联待办：纳入记忆系统 [完成]
+
+### 12:00 VERIFY Nitro GP 进化树 — 实时状态查询
+- 内容：PID 17014 运行中，`--workers 4 --rounds 50 --regime`，毕业生 9 个（ADA 初熊/熊/盘整 + AVAX 初熊/熊/牛 + BNB 初熊/初牛/盘整）
+- 连接：`ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98`
+- 关联待办：GP 进化树监控 [进行中]
+
+### 11:45 以前（上个会话回填）
+
+#### GP 进化树 v2.0（Nitro）
+- DEPLOY：`--workers 4 --rounds 50 --regime` 模式启动
+- CONFIG：MIN_INDICATORS=3（指标不足 3 个不准毕业）
+- CONFIG：WORKER_MEM_LIMIT_MB=5500（resource.setrlimit 硬限制）
+- EDIT：BTC 21 段事实时间表（5 类：牛/初牛/盘整/初熊/熊）替代 ADX 3 类
+- EDIT：SMA(200) 滚动轴翻转替代 max+min 固定轴
+- EDIT：indicator_cache flipped namespace（真翻转指标，不再 -norm 取反）
+- EDIT：训练数据合并 D+B'（正常段+翻转段），数据量翻倍
+- EDIT：毕业考 regime_cross_validate（同 regime 跨源验证）
+- CLEAR：239 个假毕业生清掉，保留 4 个真的
+- 文件：config.py / indicators.py / gp_evolve.py / graduation.py / gp_scheduler.py / README.md
+
+#### 石卫系统
+- EDIT merit_gate.py：自审预扣制（缺自审→预扣-8，补上取消，session 结束实扣，主动自审+5）
+- EDIT merit_gate.py：没有 mission 拦 Write/Edit（项目级必须走 plan→review-plan→mission）
+- EDIT merit_gate.py：EnterPlanMode 提醒 + plan 文件写入提醒
+- EDIT merit_gate.py：scp/rsync .py 检测 + kill 进程审批
+- EDIT merit_gate.py：ai_call 默认 max_tokens 4096（MiniMax thinking 不再截断）
+- EDIT merit_gate.py：evolve.py 每 5 分钟 Stop hook 触发 _try_evolve
+- EDIT credit_manager.py：删除 ai_call 副本，改为 from merit_gate import
+- EDIT evolve.py：子类→父类精化 + MiniMax prompt 修复（"答案："后缀 + max_tokens 16384）
+
+#### 世界观 / 体系
+- EDIT zhishi.md：执事 = 跨 AI Agent + 桥梁 + 跨世界权限
+- DELETE：天机从全局 CLAUDE.md 删除（防两仪读到）
+- EDIT origin.md / wuji_identity.md：幼苗🌱融合
+- CREATE identity_miao.md：幼苗存在本质
+- CREATE ~/projects/miao/CLAUDE.md：幼苗项目宗规
+- CREATE ~/.claude/commands/reward.md：/reward 执事直接奖惩指令
+
+#### 规则进化
+- EDIT rules.md：新增子目标继承、渐进验证、有效性-4（融合不重写）、完整性-7（监控查过程）
+- EDIT rules.md：纪律-4 精化 "高效≠糊弄，做了≠做好"
+- CREATE feedback_think_complete.md：做事主动闭环
+- EDIT feedback_shared_fate.md：加 "做的东西不是玩具是武器"
+
+### 15:33 AUTO-LOG (2026-04-04)
+- BASH `rm -rf /tmp/carbonyl-mac /tmp/carbonyl-mac.zip 2>/dev/null && echo "临时文件清理完成"`
+- EDIT `/Users/allenbot/.claude/projects/-Users-allenbot/memory/CHANGELOG.md`
+- EDIT `/Users/allenbot/.claude/merit/merit_gate.py`
+
+### 15:38 AUTO-LOG (2026-04-04)
+- EDIT `/Users/allenbot/.claude/projects/-Volumes-SSD-2TB-project-auto-trading/memory/shiwei_operating_guide.md`
+- BASH `rm -f /Volumes/SSD-2TB/project/wuji-auto-trading/lab/seed_fix/test_seeds/bnb_seed_*.db* 2>/dev/null; echo "清理完成"`
+
+### 16:19 AUTO-LOG (2026-04-04)
+- EDIT `/Users/allenbot/.claude/merit/merit_gate.py`
+
+### 17:02 AUTO-LOG (2026-04-04)
+- EDIT `/Users/allenbot/.claude/merit/merit_gate.py`
+
+### 17:07 AUTO-LOG (2026-04-04)
+- CREATE/EDIT `/Users/allenbot/.claude/projects/-Users-allenbot-project-auto-trading/memory/rules.md`
+- EDIT `/Users/allenbot/.claude/projects/-Users-allenbot/memory/MEMORY.md`
+- EDIT `/Users/allenbot/.claude/projects/-Users-allenbot/memory/CHANGELOG.md`
+
+### 17:11 AUTO-LOG (2026-04-04)
+- BASH `ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98 "ps aux | grep gp_scheduler | grep -v grep; echo '===GRADUATES==='; ls ~/trading/gp_engine/graduates/ 2>/dev/null; echo '===COUNT==='; ls ~/tradi...`
+- BASH `ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98 "tail -50 ~/trading/gp_engine/scheduler_output.log 2>/dev/null" 2>&1`
+
+### 17:28 AUTO-LOG (2026-04-04)
+- BASH `ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98 "pip install cma 2>&1 | tail -5" 2>&1`
+- BASH `ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98 "pip install --user cma 2>&1 | tail -5" 2>&1`
+- BASH `ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98 "pip install --break-system-packages cma 2>&1 | tail -5" 2>&1`
+- BASH `ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98 "python3 -c 'import cma; print(f\"cma {cma.__version__} OK\")'" 2>&1`
+
+### 17:35 AUTO-LOG (2026-04-04)
+- BASH `sleep 1800 && ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98 "echo '=== TIME ==='; date; echo '=== PROCESS ==='; ps aux | grep gp_scheduler | grep -v grep; echo '=== GRADUATES ==='; ls ~/tradi...`
+
+### 17:58 AUTO-LOG (2026-04-04)
+- CREATE/EDIT `/Users/allenbot/.claude/plans/shimmying-foraging-treehouse.md`
+- BASH `cp /Volumes/SSD-2TB/project/wuji-auto-trading/src/backtest/generate_seed.py /Volumes/SSD-2TB/project/wuji-auto-trading/lab/seed_fix/generate_seed_lab.py`
+- EDIT `/Volumes/SSD-2TB/project/wuji-auto-trading/lab/seed_fix/generate_seed_lab.py`
+
+### 18:06 AUTO-LOG (2026-04-04)
+- BASH `sleep 3600 && ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98 "echo '=== TIME ==='; date; echo '=== GRADUATES ==='; ls ~/trading/gp_engine/graduates/ 2>/dev/null; echo '=== COUNT ==='; ls ~/tra...`

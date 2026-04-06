@@ -1,0 +1,17 @@
+# Hotfix：Feed Gateway 两处紧急修复
+
+## Context
+Gemini 审阅后发现两个 bug（黑丝自己在 handoff 里也指出了第一个）。
+
+## Hotfix 1：Position 广播完整快照（防爆仓）
+`feed_gateway.py` `_on_ws_table` position 分支：合并后广播 `snapshot = self._positions.get(c)` 而不是增量 `r`。
+
+## Hotfix 2：`_load_history` 加锁（防漏 K 线）
+`feed_gateway.py` `_load_history`：先创建 `new_window = deque(klines, maxlen=250)`，再 `with self._lock: self._kline_windows[key] = new_window`。
+
+## 文件
+- `lab/src/data/feed_gateway.py` — 两处改动（~10行）
+
+## 验证
+- 重启 Gateway（nohup），策略进程不动
+- 检查 Gateway 日志正常 + 策略信号正常

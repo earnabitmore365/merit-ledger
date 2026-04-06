@@ -1,0 +1,56 @@
+<DOCUMENT filename="handoff_to_heisi_emergency_hotfix.md">
+
+Handoff → 黑丝：通讯部总机 紧急 Hotfix（Gemini 紧急拦截）
+2026-03-19 混沌（团队最高优指令）
+
+🚨 黑丝，立刻暂停 PM2 的部署！系统存在致命隐患！
+
+你的直觉极其敏锐，你的第 3 个问题（Position 增量覆盖）和第 1 个问题（线程安全）都是真实的致命 Bug！Grok 的审查有误，Gemini 已紧急介入。
+
+请立刻在 Nitro 5 上对 feed_gateway.py 执行这两处生死攸关的 Hotfix：
+
+Hotfix 1：修复 Position 致命 Bug（防爆仓）
+修改 feed_gateway.py 的 _on_ws_table 仓位处理分支，必须广播完整快照，绝不能广播 r：
+
+Python
+        elif table == 'position':
+            for r in rows:
+                c = symbol_to_coin(r.get('symbol',''))
+                if c:
+                    with self._lock:
+                        if action in ('partial','insert'): self._positions[c] = r
+                        elif action=='update': self._positions.setdefault(c,{}).update(r)
+                        elif action=='delete': self._positions.pop(c,None)
+                        
+                        # 【必须在这里拿出合并后的完整快照！】
+                        snapshot = self._positions.get(c)
+                    
+                    # 广播完整字典 snapshot，而不是 r
+                    if snapshot:
+                        self._pub.send_string(f"POS.{c} {json.dumps(snapshot)}")
+Hotfix 2：补齐 _load_history 的线程锁（防漏 K 线）
+修改 feed_gateway.py 的 _load_history 方法：
+
+Python
+    def _load_history(self, api_key, api_secret, testnet):
+        adapter = BitMEXAdapter({'api_key':api_key,'api_secret':api_secret,'testnet':testnet})
+        adapter._ws = None; adapter._connected = True
+        for c in self.coins:
+            iv = self.intervals[c]; key = f"{c}_{iv}"
+            klines = adapter.get_klines(c, iv, limit=250)
+            if klines:
+                new_window = deque(klines, maxlen=250)
+                # 【必须加锁】防止与 _on_ws_table 的 append 发生微秒级冲撞
+                with self._lock:
+                    self._kline_windows[key] = new_window
+                logger.info(f"  {key}: 加载 {len(klines)} 根 K 线")
+执行要求：
+
+立刻在服务器上修改这两处，然后 kill 掉现在的 Gateway 进程，重新用 nohup 拉起（nohup python3 src/data/feed_gateway.py ... &）。
+
+策略进程不需要动，Gateway 重启后它们会自动重连。
+
+PM2 的部署推迟到明天！ 今晚先用 nohup 确保逻辑 100% 正确。
+
+火速执行！完成热更新后贴几行 Gateway 和策略的最新日志报平安！
+</DOCUMENT>

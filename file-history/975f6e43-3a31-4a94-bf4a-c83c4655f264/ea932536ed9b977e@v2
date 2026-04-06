@@ -1,0 +1,103 @@
+# 计划：三驾马车实盘上线（v2.1 mirror + TTP）
+
+## Context
+
+交易系统 4 小时零交易，根因是 mean_reversion ±5% 阈值在 1m 上不可能触发。经全量回测验证，v2.1 SMA(200) mirror + TTP 全币种几乎全赚（Sharpe 0.3-1.2，MDD 1.4-14.8%）。老板+Grok+Gemini 联合拍板：废除 RegimeRouter，全程 mirror，直接实盘。
+
+Gemini 修正版方案已确认不翻转信号（对齐回测，黑丝立功抓出 Bug）。
+
+## 实盘配置
+
+| 币种 | 周期 | 阈值 | 保证金 |
+|------|------|------|--------|
+| SOL | 1m | ±0.7% | $140 |
+| ETH | 1m | ±0.5% | $150 |
+| XRP | 5m | ±1.0% | $108 |
+
+## 执行步骤
+
+### 步骤 1：重写 mirror.py（lab/src/core/strategy/mirror.py）
+
+- 删除 `_flip_signal` 方法
+- 将 `_mirror_klines` 改为 v2.1 SMA(200) 翻转
+- `generate_signal` 内部：翻转K线 → init_cache(:memory:) → 跑策略 → **直接返回原信号，不翻转**
+- 删除 `generate_signal` 里的 RuntimeError 封杀令
+- 构造函数加 `interval` 参数（init_cache 需要）
+
+### 步骤 2：解除 bitmex_race.py 封杀 + 加动态阈值（lab/bitmex_race.py）
+
+- 删除 `if args.mirror:` 的退出逻辑（约第 436-438 行）
+- 在策略加载后（约第 500 行），根据 coin 设置动态阈值：
+  - ETH: 0.995/1.005
+  - XRP: 0.990/1.010
+  - SOL: 0.993/1.007
+- `--mirror` 模式下传 `interval` 给 MirrorStrategy：`MirrorStrategy(strategy, interval=args.interval)`（原来没传 interval，新版构造函数需要）
+
+### 步骤 3：解除 system.py 封杀（lab/src/trading/system.py）
+
+**Gemini 方案漏了这一点！** `TradingSystem.__init__` 里有封杀检查：
+```python
+if 'mirror' in strategy_name or 'flip' in strategy_name:
+    raise RuntimeError(...)
+```
+strategy name = 'mean_reversion_mirror' 会触发。必须删掉。
+
+### 步骤 4：清理之前的补丁
+
+- **bitmex_race.py**：主循环里的 `:memory:` 补丁恢复原样（mirror 内部自己处理缓存）
+- **system.py**：`_generate_signal` 里的 `:memory:` 补丁恢复原样
+- **strategy_mean_reversion.py**：默认阈值改为 ±0.5%（0.995/1.005），不能恢复 ±5%（否则非 mirror 模式零信号）。实盘动态阈值在 bitmex_race.py 里按 coin 覆盖
+
+### 步骤 5：py_compile 验证
+
+```bash
+python3 -m py_compile lab/src/core/strategy/mirror.py
+python3 -m py_compile lab/bitmex_race.py
+python3 -m py_compile lab/src/trading/system.py
+python3 -m py_compile lab/src/core/strategy/strategy_mean_reversion.py
+```
+
+### 步骤 6：部署到 Nitro
+
+```bash
+scp -P 2222 lab/src/core/strategy/mirror.py pc_heisi_claude@localhost:/home/pc_heisi_claude/trading/src/core/strategy/mirror.py
+scp -P 2222 lab/bitmex_race.py pc_heisi_claude@localhost:/home/pc_heisi_claude/trading/bitmex_race.py
+scp -P 2222 lab/src/trading/system.py pc_heisi_claude@localhost:/home/pc_heisi_claude/trading/src/trading/system.py
+scp -P 2222 lab/src/core/strategy/strategy_mean_reversion.py pc_heisi_claude@localhost:/home/pc_heisi_claude/trading/src/core/strategy/strategy_mean_reversion.py
+```
+
+### 步骤 7：启动实盘
+
+```bash
+ssh -p 2222 pc_heisi_claude@localhost "cd /home/pc_heisi_claude/trading && \
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin SOL --interval 1m --min-bet 140 >> logs/sol_1m_live.log 2>&1 & \
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin ETH --interval 1m --min-bet 150 >> logs/eth_1m_live.log 2>&1 & \
+nohup python3 bitmex_race.py --mirror --strategy mean_reversion --coin XRP --interval 5m --min-bet 108 >> logs/xrp_5m_live.log 2>&1 &"
+```
+
+### 步骤 8：验证
+
+- 确认 3 个进程都在跑
+- 等 5-10 分钟查日志，确认出现 BUY/SELL 信号（不再全是 HOLD）
+- 确认信号**没有被翻转**（mirror K 线下 BUY = 真实 BUY）
+- 确认 TTP 监控正常挂起
+
+### 步骤 9：更新 CHECKPOINT.md + lab/README.md
+
+## 自审发现（已纳入计划）
+
+1. ✅ **strategy_mean_reversion.py 默认阈值**：不能恢复 ±5%（回到零信号），改为 ±0.5% 作通用默认
+2. ✅ **MirrorStrategy 构造函数**：新版加了 interval 参数，bitmex_race.py 创建时必须传
+3. ✅ **system.py 封杀**：Gemini 方案漏了，必须删掉
+4. ⚠️ **Nitro SSH 隧道**：可能断了，部署前需要老板确认隧道通
+5. ⚠️ **SOL ±0.7% 未单独回测验证**：Gemini 定的，全量回测只用 ±0.5% 跑过。但 mirror 对阈值不敏感（差异 <5%），风险可控
+6. ⚠️ **三进程共享余额**：同时开仓 140+150+108=398 刚好用完。极端情况下第三个进程可能余额不足，但概率低
+
+## 关键文件
+
+| 文件 | 改动 |
+|------|------|
+| `lab/src/core/strategy/mirror.py` | 重写：v2.1 翻转 + 不翻信号 + 去封杀 |
+| `lab/bitmex_race.py` | 解除 --mirror 封杀 + 动态阈值 + 清理 :memory: |
+| `lab/src/trading/system.py` | 解除 mirror 封杀 + 清理 :memory: |
+| `lab/src/core/strategy/strategy_mean_reversion.py` | 阈值恢复默认（动态阈值在启动脚本设） |

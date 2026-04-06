@@ -1,0 +1,9 @@
+{
+  "id": "36",
+  "subject": "阶段0b：TRX数据清除（先报数量）",
+  "description": "统计TRX在各库的数据量，报老板确认后删除",
+  "activeForm": "统计TRX数据",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

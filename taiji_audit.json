@@ -1,0 +1,22 @@
+[
+  {
+    "ts": "2026-03-30T11:02:54",
+    "file": "/Users/allenbot/.claude/scripts/merit_gate.py",
+    "action": "modified"
+  },
+  {
+    "ts": "2026-03-30T11:42:52",
+    "file": "/Users/allenbot/.claude/scripts/merit_gate.py",
+    "action": "modified"
+  },
+  {
+    "ts": "2026-03-30T11:49:20",
+    "file": "/Users/allenbot/.claude/scripts/credit_manager.py",
+    "action": "modified"
+  },
+  {
+    "ts": "2026-03-30T11:49:36",
+    "file": "/Users/allenbot/.claude/scripts/merit_gate.py",
+    "action": "modified"
+  }
+]

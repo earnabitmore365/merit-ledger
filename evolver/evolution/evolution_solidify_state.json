@@ -3,7 +3,7 @@
     "run_id": "run_1774533007000",
     "created_at": "2026-03-26T13:50:07.298Z",
     "parent_event_id": "evt_1774430091341",
-    "selected_gene_id": "gene_auto_53538cc4",
+    "selected_gene_id": "gene_innovate_hook_health",
     "selected_capsule_id": "capsule_1773580650215",
     "selector": {
       "selected": "gene_auto_53538cc4",
@@ -18,7 +18,8 @@
     },
     "signals": [
       "evolution_stagnation_detected",
-      "stable_success_plateau"
+      "stable_success_plateau",
+      "force_innovation_after_repair_loop"
     ],
     "mutation": {
       "type": "Mutation",
@@ -5520,12 +5521,12 @@
   },
   "last_solidify": {
     "run_id": "run_1774533007000",
-    "at": "2026-03-26T13:58:28.524Z",
-    "event_id": "evt_1774533508524",
-    "capsule_id": "capsule_1773580650215",
+    "at": "2026-03-27T10:19:06.320Z",
+    "event_id": "evt_1774606746320",
+    "capsule_id": null,
     "outcome": {
-      "status": "success",
-      "score": 0.85
+      "status": "failed",
+      "score": 0.2
     }
   },
   "solidify_count": 1

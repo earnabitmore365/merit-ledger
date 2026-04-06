@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""
+初考（门槛）— 刷掉交易次数不足的组合
+输入: seed_signal.db
+输出: gate_v3_report.db (gate1_summary + gate1_{interval} 表)
+"""
+import sqlite3
+import os, sys
+_p = os.path.dirname(os.path.abspath(__file__))
+while _p != os.path.dirname(_p) and not os.path.exists(os.path.join(_p, '.wuji-root')):
+    _p = os.path.dirname(_p)
+if _p not in sys.path:
+    sys.path.insert(0, _p)
+from path_config import ROOT, DATA_DIR, REPORT_DIR, RESULT_DIR, SRC_DIR  # noqa: E402
+
+DB_PATH = os.path.join(REPORT_DIR, 'seed_signal.db')
+REPORT_PATH = os.path.join(RESULT_DIR, 'gate_v3', 'gate_v3_report.db')
+
+X_MAP = {
+    '1m': 500, '5m': 500, '15m': 500, '30m': 500,
+    '1h': 350, '2h': 350, '4h': 350,
+    '8h': 200, '12h': 200, '1d': 200,
+}
+
+INTERVALS = ['1m', '5m', '15m', '30m', '1h', '2h', '4h', '8h', '12h', '1d']
+
+
+def main():
+    seed = sqlite3.connect(DB_PATH)
+    seed.row_factory = sqlite3.Row
+
+    os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
+    rpt = sqlite3.connect(REPORT_PATH)
+
+    # 建汇总表
+    rpt.execute('''CREATE TABLE IF NOT EXISTS gate1_summary (
+        interval TEXT PRIMARY KEY,
+        total INTEGER, passed INTEGER, failed INTEGER,
+        pass_rate REAL, threshold_min INTEGER, threshold_max INTEGER, x_value INTEGER
+    )''')
+
+    # 建各周期明细表
+    for iv in INTERVALS:
+        rpt.execute(f'''CREATE TABLE IF NOT EXISTS gate1_{iv.replace('m','m').replace('h','h').replace('d','d')} (
+            combo_id INTEGER PRIMARY KEY,
+            strategy TEXT, coin TEXT, interval TEXT,
+            total_trades INTEGER, klines INTEGER, threshold INTEGER,
+            passed INTEGER, reason TEXT
+        )''')
+
+    # 查K线数
+    kline_counts = {}
+    rows = seed.execute('''
+        SELECT coin, interval, COUNT(*) as cnt
+        FROM regime_timeline
+        WHERE coin NOT LIKE '%_COIN%'
+        GROUP BY coin, interval
+    ''').fetchall()
+    for r in rows:
+        kline_counts[(r['coin'], r['interval'])] = r['cnt']
+
+    # 查所有合约combo
+    combos = seed.execute('''
+        SELECT id, strategy, coin, interval, total_trades
+        FROM combo_summary
+        WHERE coin NOT LIKE '%_COIN%'
+        ORDER BY interval, strategy, coin
+    ''').fetchall()
+
+    by_interval = {iv: {'total': 0, 'passed': 0, 'failed': 0, 'thresholds': [], 'records': []} for iv in INTERVALS}
+
+    for c in combos:
+        interval = c['interval']
+        if interval not in X_MAP:
+            continue
+
+        coin = c['coin']
+        trades = c['total_trades']
+        klines = kline_counts.get((coin, interval), 0)
+        x = X_MAP[interval]
+        threshold = klines // x
+        is_pass = trades >= threshold
+
+        if is_pass:
+            reason = f"通过: {trades}笔 >= 门槛{threshold}"
+        else:
+            reason = f"不通过: {trades}笔 < 门槛{threshold} (K线{klines}/X{x}={threshold})"
+
+        record = (c['id'], c['strategy'], coin, interval, trades, klines, threshold,
+                  1 if is_pass else 0, reason)
+        by_interval[interval]['records'].append(record)
+        by_interval[interval]['total'] += 1
+        by_interval[interval]['thresholds'].append(threshold)
+        if is_pass:
+            by_interval[interval]['passed'] += 1
+        else:
+            by_interval[interval]['failed'] += 1
+
+    # 写入各周期表 + 汇总表
+    total_all = 0
+    passed_all = 0
+
+    for iv in INTERVALS:
+        info = by_interval[iv]
+        table_name = f"gate1_{iv}"
+        rpt.execute(f"DELETE FROM {table_name}")
+        rpt.executemany(f'''INSERT INTO {table_name}
+            (combo_id, strategy, coin, interval, total_trades, klines, threshold, passed, reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', info['records'])
+
+        total_all += info['total']
+        passed_all += info['passed']
+        thresholds = info['thresholds']
+        pass_rate = round(info['passed'] / info['total'] * 100, 1) if info['total'] else 0
+
+        rpt.execute("INSERT OR REPLACE INTO gate1_summary VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (iv, info['total'], info['passed'], info['failed'], pass_rate,
+                     min(thresholds) if thresholds else 0,
+                     max(thresholds) if thresholds else 0,
+                     X_MAP[iv]))
+
+    rpt.commit()
+
+    # 打印汇总
+    print(f"初考（门槛）完成: {passed_all}/{total_all} 通过 ({round(passed_all/total_all*100, 1)}%)")
+    print()
+    print(f"{'周期':>4s}  {'总数':>4s}  {'通过':>4s}  {'淘汰':>4s}  {'通过率':>6s}  X值")
+    print("-" * 50)
+    for iv in INTERVALS:
+        info = by_interval[iv]
+        pr = round(info['passed'] / info['total'] * 100, 1) if info['total'] else 0
+        print(f"{iv:>4s}  {info['total']:>4d}  {info['passed']:>4d}  {info['failed']:>4d}  {pr:>5.1f}%  {X_MAP[iv]}")
+
+    seed.close()
+    rpt.close()
+    print(f"\n输出: {REPORT_PATH}")
+    return passed_all, total_all
+
+
+if __name__ == '__main__':
+    main()

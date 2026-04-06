@@ -1,0 +1,1 @@
+/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/seo-analysis-monitoring/agents/seo-cannibalization-detector.md

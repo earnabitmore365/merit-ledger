@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""
+Gate v4.1 照妖镜 MC — 对组考入选的候选跑 Monte Carlo 模拟
+输入: seed_v3.db + gate_v41_report.db (gate3)
+输出: gate_v41_report.db (mc_results + champions + gate_index)
+"""
+import sqlite3
+import os, sys
+import random
+_p = os.path.dirname(os.path.abspath(__file__))
+while _p != os.path.dirname(_p) and not os.path.exists(os.path.join(_p, '.wuji-root')):
+    _p = os.path.dirname(_p)
+if _p not in sys.path:
+    sys.path.insert(0, _p)
+from path_config import ROOT, DATA_DIR, REPORT_DIR, RESULT_DIR, SRC_DIR  # noqa: E402
+
+DB_PATH = os.path.join(REPORT_DIR, 'seed_v3.db')
+REPORT_PATH = os.path.join(RESULT_DIR, 'gate_v41', 'gate_v41_report.db')
+
+TEAMS = ['short', 'mid', 'long']
+INTERVALS = ['1m', '5m', '15m', '30m', '1h', '2h', '4h', '8h', '12h', '1d']
+SUB_PHASES = ['sprint', 'rest', 'dip', 'bounce', 'up', 'flat', 'down']
+
+BARS_PER_DAY = {
+    '1m': 1440, '5m': 288, '15m': 96, '30m': 48,
+    '1h': 24, '2h': 12, '4h': 6, '8h': 3, '12h': 2, '1d': 1,
+}
+
+MC_RUNS = 100
+MC_INITIAL = 500.0
+MC_FRACTION = 0.02
+MC_DOUBLE_TARGET = 1000.0
+MC_CHAMPION_THRESHOLD = 50.0
+
+
+def monte_carlo(seed_conn, combo_id, interval):
+    trades = seed_conn.execute('''
+        SELECT r_value, holding_bars FROM paired_trades
+        WHERE combo_id = ?
+    ''', (combo_id,)).fetchall()
+
+    trade_list = [(t['r_value'], t['holding_bars']) for t in trades]
+    bpd = BARS_PER_DAY.get(interval, 24)
+
+    results = []
+    for _ in range(MC_RUNS):
+        random.shuffle(trade_list)
+        balance = MC_INITIAL
+        peak = MC_INITIAL
+        max_dd = 0.0
+        cumulative_days = 0.0
+        days_to_double = None
+        busted = False
+
+        for r_value, holding_bars in trade_list:
+            pnl = r_value * (balance * MC_FRACTION)
+            balance += pnl
+            cumulative_days += holding_bars / bpd
+
+            if balance <= 0:
+                busted = True
+                break
+
+            peak = max(peak, balance)
+            dd = (peak - balance) / peak
+            max_dd = max(max_dd, dd)
+
+            if days_to_double is None and balance >= MC_DOUBLE_TARGET:
+                days_to_double = cumulative_days
+
+        results.append({
+            'final_balance': balance,
+            'days_to_double': days_to_double,
+            'max_dd': max_dd * 100,
+            'busted': busted,
+        })
+
+    doubled = [r for r in results if r['days_to_double'] is not None]
+    busted_count = sum(1 for r in results if r['busted'])
+    d2d_list = sorted([r['days_to_double'] for r in doubled])
+    dd_list = sorted([r['max_dd'] for r in results if not r['busted']])
+    bal_list = sorted([r['final_balance'] for r in results if not r['busted']])
+
+    def percentile(lst, p):
+        if not lst:
+            return None
+        idx = min(int(len(lst) * p / 100), len(lst) - 1)
+        return round(lst[idx], 2)
+
+    double_rate = round(len(doubled) / MC_RUNS * 100, 1)
+    return {
+        'double_rate': double_rate,
+        'bust_rate': round(busted_count / MC_RUNS * 100, 1),
+        'd2d_p5': percentile(d2d_list, 5),
+        'd2d_p50': percentile(d2d_list, 50),
+        'd2d_p95': percentile(d2d_list, 95),
+        'max_dd_p5': percentile(dd_list, 5),
+        'max_dd_p50': percentile(dd_list, 50),
+        'max_dd_p95': percentile(dd_list, 95),
+        'balance_p50': percentile(bal_list, 50),
+        'is_champion': double_rate >= MC_CHAMPION_THRESHOLD,
+        'reason': f"通过: 翻倍率{double_rate}% >= {MC_CHAMPION_THRESHOLD}%"
+                  if double_rate >= MC_CHAMPION_THRESHOLD
+                  else f"不通过: 翻倍率{double_rate}% < {MC_CHAMPION_THRESHOLD}%",
+    }
+
+
+def main():
+    random.seed(42)
+
+    seed = sqlite3.connect(DB_PATH)
+    seed.row_factory = sqlite3.Row
+    rpt = sqlite3.connect(REPORT_PATH)
+    rpt.row_factory = sqlite3.Row
+
+    rpt.execute("DROP TABLE IF EXISTS mc_results")
+    rpt.execute('''CREATE TABLE mc_results (
+        combo_id INTEGER PRIMARY KEY,
+        strategy TEXT, coin TEXT, interval TEXT,
+        team TEXT, all_pnl REAL,
+        double_rate REAL, bust_rate REAL,
+        d2d_p5 REAL, d2d_p50 REAL, d2d_p95 REAL,
+        max_dd_p5 REAL, max_dd_p50 REAL, max_dd_p95 REAL,
+        balance_p50 REAL, is_champion INTEGER, reason TEXT
+    )''')
+
+    rpt.execute("DROP TABLE IF EXISTS champions")
+    rpt.execute('''CREATE TABLE champions (
+        combo_id INTEGER PRIMARY KEY,
+        strategy TEXT, coin TEXT, interval TEXT,
+        team TEXT, all_pnl REAL,
+        double_rate REAL, bust_rate REAL,
+        d2d_p50 REAL, max_dd_p95 REAL, balance_p50 REAL
+    )''')
+
+    total_candidates = 0
+    total_champions = 0
+
+    for team in TEAMS:
+        rows = rpt.execute(f'''
+            SELECT combo_id, strategy, coin, interval, all_pnl
+            FROM gate3_{team}
+            WHERE selected = 1
+        ''').fetchall()
+
+        if not rows:
+            print(f"MC {team}队: 0 个候选，跳过")
+            continue
+
+        print(f"\nMC {team}队: {len(rows)} 个候选")
+        team_champions = 0
+
+        for r in rows:
+            cid = r['combo_id']
+            iv = r['interval']
+            print(f"  {r['strategy']}/{r['coin']}/{iv}...", end=' ', flush=True)
+
+            mc = monte_carlo(seed, cid, iv)
+
+            rpt.execute('''INSERT INTO mc_results VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', (
+                cid, r['strategy'], r['coin'], iv,
+                team, r['all_pnl'],
+                mc['double_rate'], mc['bust_rate'],
+                mc['d2d_p5'], mc['d2d_p50'], mc['d2d_p95'],
+                mc['max_dd_p5'], mc['max_dd_p50'], mc['max_dd_p95'],
+                mc['balance_p50'], 1 if mc['is_champion'] else 0, mc['reason'],
+            ))
+
+            if mc['is_champion']:
+                rpt.execute('''INSERT INTO champions VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (
+                    cid, r['strategy'], r['coin'], iv,
+                    team, r['all_pnl'],
+                    mc['double_rate'], mc['bust_rate'],
+                    mc['d2d_p50'], mc['max_dd_p95'], mc['balance_p50'],
+                ))
+                team_champions += 1
+                print(f"翻倍率={mc['double_rate']}% d2d_p50={mc['d2d_p50']} ✅")
+            else:
+                print(f"翻倍率={mc['double_rate']}% ❌")
+
+        rpt.commit()
+        total_candidates += len(rows)
+        total_champions += team_champions
+        print(f"  {team}队冠军: {team_champions}/{len(rows)}")
+
+    # gate_index
+    rpt.execute("DROP TABLE IF EXISTS gate_index")
+    rpt.execute('''CREATE TABLE gate_index (
+        table_name TEXT PRIMARY KEY,
+        description TEXT, record_count INTEGER
+    )''')
+
+    index_entries = [
+        ('gate1_summary', '初考（门槛）汇总', 10),
+    ]
+    for iv in INTERVALS:
+        cnt = rpt.execute(f"SELECT COUNT(*) FROM gate1_{iv}").fetchone()[0]
+        index_entries.append((f'gate1_{iv}', f'初考明细 {iv}', cnt))
+    for iv in INTERVALS:
+        cnt = rpt.execute(f"SELECT COUNT(*) FROM gate2_{iv}").fetchone()[0]
+        index_entries.append((f'gate2_{iv}', f'专考成绩单 {iv} — 13维度(6regime+7sub_phase)', cnt))
+
+    for team in TEAMS:
+        cnt = rpt.execute(f"SELECT COUNT(*) FROM gate3_{team}").fetchone()[0]
+        index_entries.append((f'gate3_{team}', f'组考{team}队', cnt))
+
+    mc_cnt = rpt.execute("SELECT COUNT(*) FROM mc_results").fetchone()[0]
+    index_entries.append(('mc_results', '照妖镜MC', mc_cnt))
+
+    champ_cnt = rpt.execute("SELECT COUNT(*) FROM champions").fetchone()[0]
+    index_entries.append(('champions', '最终冠军队 — MC翻倍率≥50%', champ_cnt))
+
+    rpt.executemany("INSERT INTO gate_index VALUES (?, ?, ?)", index_entries)
+    rpt.commit()
+
+    seed.close()
+    rpt.close()
+
+    print(f"\n照妖镜MC完成: {total_champions}/{total_candidates} 冠军")
+    print(f"目录(gate_index)已生成，共 {len(index_entries)} 张表")
+    print(f"输出: {REPORT_PATH}")
+
+
+if __name__ == '__main__':
+    main()

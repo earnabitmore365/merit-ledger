@@ -1,0 +1,212 @@
+---
+name: pending_decisions
+description: 老板已拍板但尚未执行的待办事项，恢复协议时检查
+type: project
+---
+
+# 已定未做的待办
+
+> 每次恢复协议时检查此文件，任务开始前确认是否有相关待办。
+> 完成后从此列表移除并记录到 CHECKPOINT.md 任务历程。
+
+## 回测五步走（按执行顺序，不可颠倒）
+
+> 补数据 → K线入DuckDB加速种子 → 改引擎 → 跑双持仓种子 → 4种子集成DuckDB跑Gate
+> 2026-03-27 老板确认完整流程
+
+### Step 1｜K线数据补齐（先做，种子跑完后立即执行）
+- 全币种（12币：ADA/AVAX/BNB/BNB_COIN/BTC/BTC_COIN/DOT/ETH/ETH_COIN/LINK/SOL/XRP）全周期统一补齐至 2022-01-01 起始，并更新到最新数据
+- 当前缺口：
+  - 12h/1d 普通9币：结束于 2026-03-01，少 16 天
+  - COIN类 8h/12h/1d：只有 2025-08-14 起的数据，缺 3 年+
+  - 所有币 1m/5m/15m/30m：从 2022-03-19 才开始，比目标起始 2022-01-01 晚了约 79 天
+- **Why:** 老板要求统一基准，全币种从 2022-01-01 → 最新，数据一致。先补齐再导 DuckDB，只导一次
+- **How to apply:** 找到下载脚本（download_1m_data.py / check_data.py），补全缺口，验证每个文件起止日期符合要求
+
+### Step 2｜K线数据存入 DuckDB（加速种子生成）
+- **背景**：1m K线（210万根/币）每次从CSV加载慢，文本解析是瓶颈
+- **做法**：补齐后的 K线 CSV 全量导入 DuckDB，种子生成时从 DuckDB 读取
+- **好处**：① K线加载快 5-10 倍 ② 分段加速时可直接 SELECT 切片 ③ 12币×8周期统一管理
+- **注意**：这一步只装 K线，种子交易数据等 Step 5 再导
+- **Why:** 老板 2026-03-27 提出，1m加载等太久。数据补齐后一次性导入，不用来回导
+- **How to apply:** 写导入脚本，补齐后的 CSV K线全量导入 DuckDB；改种子生成的 K线加载逻辑从 CSV → DuckDB
+
+### Step 3｜种子架构升级：引擎去balance + 精简字段 + 指标全走缓存 + 1m分段加速
+> 老板+顾问+黑丝三方确认，2026-03-27 验证完成
+> **触发条件**：矩阵跑完 + Gate 取到结果后再做，不在跑种子期间改
+
+#### 2026-03-27 验证数据（3 策略 × ADA 1m TTP Close）
+
+| 策略 | return | 基准trades | 分段trades | 匹配 | 边界验证 |
+|------|--------|-----------|-----------|------|---------|
+| keltner | -81.59% | 37,072 | 37,072 | **完全吻合** | 3/3 matched |
+| ichimoku | -100% | 44,728 | 94,566 | 差49,838 | 3/3 matched |
+| kama | -100% | 41,007 | 173,921 | 差132,914 | 3/3 fallback |
+
+**已确认的 3 个根本问题**：
+1. **balance 重置**：爆仓策略（return=-100%）分段后每段重新 initial_capital=500 → trades 翻倍。不爆仓策略完全吻合
+2. **策略不走 indicator_cache**：47 个注册指标中，实测 3 策略只有 3 条指标走缓存（kama, ema, atr）。ichimoku 等策略内部直接计算指标，不通过 get_indicator → 预算指标无效
+3. **进程间数据传输开销**：210万 K 线 pickle 序列化传给 4 worker → 分段 108s 反而比串行 33s 慢 3 倍
+
+**预算指标 POC 结论**：
+- 对走缓存的策略有效：bb_squeeze（单策略）预算 3.7s vs 不预算 6.2s = 1.6x
+- 对不走缓存的策略无效：ichimoku 预算 vs 不预算 = 1.0x
+- 108s vs 108s = 完全无加速（指标缓存不是瓶颈，进程开销才是）
+
+#### 升级方案（四件事，顺序天然对）
+
+**① 引擎去 balance 管理（解决 balance 重置问题）**
+- 核心：回测只管开关仓，balance/PnL/爆仓全部后算
+- 引擎不看 balance → 不会因为"没钱了"停止产生交易 → 分段对所有策略都吻合
+- 老板原话："回测只管开关仓，过后用计算来知道这个策略是否爆仓"
+- 顾问确认：MFE/MAE 保留在引擎内算（后算太贵），其余后算
+
+**② 精简字段（25 → 11）**
+- 保留（引擎产出）：combo_id, open_candle_idx, close_candle_idx, open_time, close_time, direction, entry_price, exit_price, close_type, mfe, mae, regime_at_open
+- 后算（DuckDB 纯算术）：pnl, r_value, balance_after, capital, position_size, holding_bars, fee, slippage_cost, funding_cost, funding_count, open_atr_pct, open_volume
+- DB 体积减半（50GB→~22GB）
+
+**③ 指标全部走 indicator_cache + 存进种子 SQLite**
+- 当前问题：很多策略内部直接算指标，不走 get_indicator → 预算无效
+- 改造：所有策略的指标统一走 get_indicator（47 个注册指标 + 补全缺失的如 ichimoku）
+- 存储：主进程算一次所有指标，存进种子 DB（SQLite，自包含）。老板确认不用 Parquet（回测 worker 用 Python 不用 DuckDB）
+- 分段时 K 线+指标一起从种子切片传给 worker
+- 增加 ~7GB，净效果 ~29GB（22GB 精简字段 + 7GB 指标）
+
+**④ 1m 分段加速（前三步完成后自然可用）**
+- 210万根 1m 切 4 段（各 ~52.5万根 + 2000根预热）
+- K 线+指标一起切片，worker 不重算指标
+- 引擎不管 balance → 所有策略都吻合
+- 减少数据传输：指标存文件而非 pickle（worker 自读种子 DB 的切片）
+- 吻合验证：重叠区 3 笔交易对比，不吻合跳 500 根后取
+- 预热 2000 根够用（顾问确认：最长窗口 SMA(200)，2000 是 10 倍冗余）
+
+#### 已写好的代码（待改造）
+- _split_candles / _worker_segment / _merge_segment_trades / _rebuild_combo_summary_from_trades 四个函数
+- _worker_segment 已加 precomputed_indicators 参数
+- Bug 2（close_type 大小写）已修
+- 调度逻辑（_run_1m_segmented）已写好
+
+#### 顾问补充风险
+- combo_summary 重算要复现提款逻辑（当前 enable_withdraw=False 不影响，留接口）
+- 动态注码策略依赖 balance（当前 fixed_bet=True 不影响，以后换策略注意）
+- 过渡期：跑种子前 rm -f indicator_cache.db（不修缓存逻辑，马上删）
+
+#### 临时测试脚本（用完删）
+- test_segment.py — 分段并行对比
+- test_precomputed_indicators.py — 预算指标 POC
+- test_precomputed_formal.py — 正式 3 策略验证
+- handoff_to_consultant.md — 顾问 handoff
+
+**Why:** 老板原话："指标库直接存入种子里，反正指标是跟着K线跑，是不会变的" + "回测只管开关仓，过后用计算来知道这个策略是否爆仓"
+**How to apply:** ①引擎去balance → ②精简字段 → ③指标全走缓存+存种子 → ④分段加速自然可用
+
+### Step 4｜双持仓引擎（TTP期间保留原仓 + 反向另开新仓）
+> 2026-03-27 凌晨老板与白纱讨论确认方向
+- **背景**：当前引擎同一时间只能持一个方向（多或空），信号反转时直接反手（平旧开新）
+- **老板的新逻辑**：TTP 激活期间保留原仓位继续 TTP 移动/止盈，反手信号另外开仓 → 同时持有一多一空
+- **最初叫"双引擎"**（两个引擎实例各跑一个方向），讨论后简化为**改一个引擎的持仓管理**（单仓 → 允许同时一多一空），比双引擎更简洁
+- **需要改 BacktestEngine 的点**：
+  - `self.position` 从单个变成最多 2 个（一多一空）
+  - 信号处理：同向信号忽略，反向信号不平原仓，新开一个
+  - TTP/止损：每个仓位独立计算
+  - 平仓条件：各自的 TTP 触发或止损触发
+- **与 Step 3 的关系**：都是改 BacktestEngine，可以一起做（Step 3 去 balance + Step 4 双持仓）
+- **Why:** 老板原话："TTP激活期间保留原仓位，继续TTP移动或止盈，反手信号另外开仓"
+- **How to apply:** 跟 Step 3 引擎改造一起规划，改完后种子需要重跑（双持仓的交易数据跟单仓不同）
+
+### Step 5｜4个种子集成到 DuckDB + 跑 Gate
+> Step 4 跑完后，会有 4 个种子库
+- **4个种子**：
+  - ① 纯信号（seed_v3.db）
+  - ② TTP Close（seed_v3_ttp.db）
+  - ③ TTP High/Low（seed_v3_ttp_highlow.db）
+  - ④ 双持仓（新，Step 4 产出）
+- **做法**：4个 SQLite 种子的 paired_trades + combo_summary 全部导入 Step 2 建好的 DuckDB（带 seed_source 字段区分来源），然后从 DuckDB 跑 Gate 筛选
+- **好处**：① 报告查询快 10-100 倍 ② 4个种子统一查询，Gate/哨兵/策略分析一个入口 ③ 跨种子对比（同一策略在不同种子下的表现）
+- **注意**：indicator_cache.db 的 DuckDB 迁移已被"种子架构升级"替代 — 指标整合进种子后，indicator_cache.db 直接删掉，不需要迁移
+- **Why:** 老板 2026-03-27 确认：种子报告查询慢（上亿笔 paired_trades 扫全表），4个种子集成到 DuckDB 统一查询层，Gate 从 DuckDB 跑
+- **How to apply:** 写导入脚本：4个 SQLite 种子的 paired_trades/combo_summary 导入（带 seed_source 字段）；改 Gate/分析工具的查询逻辑从 SQLite → DuckDB
+
+---
+
+## 其他待办
+
+### 哨兵营 v3 改进（老板已确认方向，三方共识）
+- ① 用 L2 摆动追踪生成分钟级 regime 标签（替换月级）
+- ② 分币种独立训练（先 BTC+ETH）
+- ③ 加多时间框架输入（1h/4h）
+- **Why:** Grok+Gemini+白纱三方共识，老板已确认方向
+- **How to apply:** 哨兵营相关任务时优先推进
+
+### ❌ seed_v3_ttp_highlow.db 镜像轮 1m 缺失修复 — 老板说不需要（2026-03-29）
+> 2026-03-27 深夜发现，老板确认等种子跑完再修
+
+**问题**：seed_v3_ttp_highlow.db 的镜像轮中，7个币（BTC_COIN/DOT/ETH/ETH_COIN/LINK/SOL/XRP）的 1m 数据全部缺失（0条），但正常轮 1m 全部完整（每币 105 组）。
+
+**现象**：镜像轮跑到这7个币的1m时报"数据不存在，跳过"，但数据文件全部存在（200MB+，2,102,000根K线）。
+
+**根因**：断点恢复状态不一致。之前某次运行跑镜像轮1m时中途崩溃，部分 combo 被标记为"已完成"写入 completed_set，但实际交易数据（paired_trades）没有持久化。后续每次重启，断点恢复读到"已完成"→ 跳过 → DB 里实际 0 条 → 形成"永久跳过但无数据"的死循环。
+
+**证据**：
+- 正常轮12个币1m全部 ✅ 105组 = 数据文件没问题
+- 代码确认：镜像轮和正常轮的 `load_candles` 调用完全相同（generate_seed.py L782），镜像处理在加载之后（L796-797）
+- DB 查询：这7个币的1m镜像 combo_summary 和 paired_trades 均为 0 条
+- 日志：第一次运行在 DOT/1m 镜像时中断，后续运行每次预过滤跳过 5985 组
+
+**修复方案**（种子全部跑完后执行）：
+```sql
+-- 1. 查看受影响的 combo（确认范围）
+SELECT combo_id, coin, interval, strategy, is_mirror
+FROM combo_summary
+WHERE is_mirror = 1 AND interval = '1m'
+AND coin IN ('BTC_COIN','DOT','ETH','ETH_COIN','LINK','SOL','XRP')
+AND total_trades = 0;
+
+-- 2. 删除这些空的 combo_summary 记录（让断点恢复不再跳过）
+DELETE FROM combo_summary
+WHERE is_mirror = 1 AND interval = '1m'
+AND coin IN ('BTC_COIN','DOT','ETH','ETH_COIN','LINK','SOL','XRP')
+AND total_trades = 0;
+
+-- 3. 删除对应的 paired_trades（如果有残留空记录）
+DELETE FROM paired_trades
+WHERE combo_id IN (
+    SELECT combo_id FROM combo_summary
+    WHERE is_mirror = 1 AND interval = '1m'
+    AND coin IN ('BTC_COIN','DOT','ETH','ETH_COIN','LINK','SOL','XRP')
+);
+```
+注意：第3步的 SQL 要在第2步之前执行（因为第2步删完后 combo_id 就没了）。正确顺序是 3→2。
+
+**修复后重跑**：
+```bash
+cd "/Volumes/BIWIN NV 7400 2TB/project/auto-trading/lab"
+python3 src/backtest/generate_seed.py --ttp --mirror --db reports/seed_v3_ttp_highlow.db --coins BTC_COIN DOT ETH ETH_COIN LINK SOL XRP --intervals 1m --workers 1
+```
+断点恢复不再跳过这7个币的1m镜像，会正常加载数据重跑。
+
+### ✅ generate_seed.py 跑完不停止 bug — 已修复
+> 2026-03-28 发现，2026-03-29 黑丝修复（wuji-auto-trading）
+> 排查结论：TTP 分支（line 1544）已有 return，不会循环。非 TTP 分支末尾缺 return → 加上了显式 return + 完成日志。两个副本（src/backtest/ + backtest/engine/）均已同步。
+
+**⛔ 触发条件**：所有种子进程跑完后才执行，不能在种子运行中间操作DB
+**Why:** 断点恢复状态不一致导致镜像1m永久跳过
+**How to apply:** 确认无进程写入DB → 执行SQL清理 → 重跑镜像1m → 验证7币×105策略全部写入
+
+### 删除旧 Gate 脚本（验证通过后）
+- 待删：`lab/run_gate_v41.py` + `lab/run_gate_v41_ttp.py`
+- 替代者：`lab/gate_runner.py`（统一入口，修了旧脚本 5 个变量名 bug）
+- **触发条件**：`--matrix` 首次跑完 + Gate 输出冠军数量跟旧 report 对得上
+- **Why:** gate_runner.py 已覆盖所有功能，旧脚本有 bug（patch_db_paths 变量名全错），留着只是退路
+- **How to apply:** 矩阵跑完验证后，`rm` 两个旧文件 + 从 CHECKPOINT 任务历程记录
+
+### GP v1.0 岛屿模型+CMA-ES 部署
+- 代码完成（6文件改动），待部署 Nitro 测试
+- **Why:** 进化效率提升
+- **How to apply:** 有 Nitro 空闲时部署
+
+### Paper Trade 实测
+- 代码完成，待实测
+- **Why:** 验证策略实盘表现
+- **How to apply:** 老板指示时启动

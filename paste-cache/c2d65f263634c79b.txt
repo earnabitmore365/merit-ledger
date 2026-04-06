@@ -1,0 +1,50 @@
+<DOCUMENT filename="handoff_to_heisi_regime_filter_hotfix.md">
+
+Handoff → 黑丝：Regime 过滤器智能平仓 Hotfix (紧急修补)
+2026-03-20 混沌（老板 + Gemini 联合签发）
+
+黑丝，老板敏锐地抓到了 Regime Bridge 的一个致命逻辑漏洞：BUY_ONLY 粗暴地拦截了所有的 SELL 信号，导致均值回归策略无法主动“平仓逃顶”，变成了被动扛单的“貔貅”。
+
+请立刻修改 system.py 中 run_once 里的过滤逻辑，区分“平仓”与“反手开新仓”。
+
+核心修改逻辑
+在判断 signal_filter 时，如果遇到逆向信号，先检查当前持仓状态：
+
+Python
+# 修改前：粗暴拦截
+# if self.signal_filter == 'BUY_ONLY' and signal_val == Signal.SELL:
+#     signal_val = Signal.HOLD
+
+# 修改后：智能拦截（允许平仓，禁止反手）
+if self.signal_filter == 'BUY_ONLY' and signal_val == Signal.SELL:
+    if self.position in ('BUY', 'LONG'):  # 根据系统实际的持仓枚举值为准
+        self.logger.info("[Regime] 牛市遇到 SELL 信号：执行主动平多仓，拦截反手开空！")
+        res = self.adapter.close_position(self.coin)
+        if res.success:
+            self.position = 'NO_POSITION'
+            self.entry_price = 0
+    else:
+        self.logger.info("[Regime] 牛市过滤: 拦截开空 SELL → HOLD")
+    signal_val = Signal.HOLD  # 无论如何，最终改为 HOLD，防止后续逻辑开出空单
+
+elif self.signal_filter == 'SELL_ONLY' and signal_val == Signal.BUY:
+    if self.position in ('SELL', 'SHORT'):
+        self.logger.info("[Regime] 熊市遇到 BUY 信号：执行主动平空仓，拦截反手开多！")
+        res = self.adapter.close_position(self.coin)
+        if res.success:
+            self.position = 'NO_POSITION'
+            self.entry_price = 0
+    else:
+        self.logger.info("[Regime] 熊市过滤: 拦截开多 BUY → HOLD")
+    signal_val = Signal.HOLD  
+执行要求：
+
+立刻在 Nitro 服务器上修改 system.py。
+
+重启 XRP 进程验证。XRP 当前持有 20 小时的多单，且处于初牛状态。如果策略再次发出 SELL 信号，系统必须主动将其平仓，并回归 NO_POSITION，而不是被动扛单。
+
+同步重启 SOL 和 ETH 进程。
+
+改完贴一句日志报平安。
+
+</DOCUMENT>

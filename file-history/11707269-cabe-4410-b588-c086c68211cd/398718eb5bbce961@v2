@@ -1,0 +1,46 @@
+# Plan: Regime 视觉验证看板
+
+## Context
+
+老板需要验证 ADX regime 切换是否"跳得对"。Grok 建议做一个视觉验证层——在 K 线图上用颜色标注 regime 状态（盘整=绿，趋势=红），叠加 ADX 曲线 + 25/20 阈值线。老板肉眼看图就能判断切换是否正确。未来扩展到 5-7 个状态时，这个看板也是验证基础。
+
+## 实现方案
+
+### 新建文件
+`lab/regime_dashboard.py` — Python 脚本，生成 `lab/reports/regime_dashboard.html`
+
+### 数据获取
+1. **K 线数据**：从本地 JSON 文件读取（`src/backtest/data/historical/{COIN}/{interval}.json`），取最近 N 根（默认 500 根）
+2. **ADX 计算**：用 `indicator_cache.init_cache()` + `get_indicator('adx', period=14)` 获取 ADX 序列
+3. **Regime 判断**：直接用 ADX 值按 RegimeRouter 逻辑判断（>25=趋势，<20=盘整，20-25=保持上一状态），不需要启动 RegimeDetector
+
+### HTML 渲染（参考 mirror_comparison.html 风格）
+- **Canvas 原生画 K 线图**（零依赖，贴合项目风格）
+- K 线背景色：绿色半透明 = 盘整（normal），红色半透明 = 趋势（flipped）
+- 下方子图：ADX 曲线 + 两条水平线（25 和 20）
+- 顶部控制：币种选择（ETH/XRP）、周期选择（1m/5m/15m/1h）、K 线数量滑块
+- 鼠标悬浮显示 OHLCV + ADX 值 + regime 状态
+
+### CLI 参数
+```
+python3 lab/regime_dashboard.py --coin ETH --interval 1m --bars 500
+```
+默认 ETH 1m 500 根。输出 `lab/reports/regime_dashboard.html`。
+
+### 关键复用
+- K 线数据格式：`{timestamp, open, high, low, close, volume}` dict
+- 指标系统：`lab/src/core/indicator_cache.py` 的 `init_cache()` + `get_indicator()`
+- HTML 样式：复用 `mirror_comparison.html` 的 CSS 变量（dark theme）
+- ADX 阈值：复用 `regime_router.py` 的 25/20 标准
+
+### 涉及文件
+- 新建：`lab/regime_dashboard.py`（~200行）
+- 读取：`lab/src/core/indicator_cache.py`（init_cache / get_indicator）
+- 参考：`lab/reports/mirror_comparison.html`（CSS 风格）
+- 参考：`lab/src/trading/regime_router.py`（ADX 阈值逻辑）
+
+## 验证
+1. `python3 lab/regime_dashboard.py --coin ETH --interval 1m --bars 500` 生成 HTML
+2. 浏览器打开，K 线背景色绿/红交替，对应 ADX 在 20/25 上下穿越
+3. 肉眼对比：趋势段（明显单边涨/跌）应该是红色，震荡段应该是绿色
+4. ADX 子图的曲线应与背景色一致（>25 红，<20 绿）

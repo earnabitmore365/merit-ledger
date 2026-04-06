@@ -1,0 +1,30 @@
+#!/bin/bash
+# 清理 + 用 4 workers 重启 scheduler
+echo "=== 停止所有 GP 进程 ==="
+pkill -f "gp_scheduler.py" 2>/dev/null
+pkill -f "gp_evolve.py" 2>/dev/null
+sleep 3
+
+remaining=$(pgrep -f "gp_evolve\|gp_scheduler" | wc -l)
+echo "残留进程: $remaining"
+if [ "$remaining" -gt 0 ]; then
+    pkill -9 -f "gp_evolve.py" 2>/dev/null
+    pkill -9 -f "gp_scheduler.py" 2>/dev/null
+    sleep 2
+fi
+
+echo "=== 基线内存 ==="
+free -m | head -2
+
+echo "=== 启动 scheduler: 4 workers + regime ==="
+cd ~/trading/gp_engine
+nohup python3 -u gp_scheduler.py --workers 4 --rounds 0 --regime > scheduler_output.log 2>&1 &
+echo "scheduler PID=$!"
+sleep 5
+
+echo "=== 确认启动 ==="
+ps aux | grep gp_scheduler | grep -v grep
+echo "=== 内存 ==="
+free -m | head -2
+echo "=== 日志头 ==="
+head -20 scheduler_output.log

@@ -1,0 +1,72 @@
+# Plan: README_KLINES_SEED.md 补查询指南 + generate_seed.py/build_seed_report.py 代码段落索引
+
+## Context
+
+执事要求：
+1. 把 `文档/种子/duckdb.md` 和 `sqlite.md` 里的查询方法写进 README，不用每次翻外部文档
+2. .py 文件加代码段落索引，方便维护和查询
+
+## 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `data/README_KLINES_SEED.md` | 新增"查询种子数据"章节（DuckDB/SQLite 查询示例 + 推算衍生字段公式） |
+| `src/backtest/generate_seed.py` | 文件头加代码段落索引（关键函数/类/常量的行号） |
+| `backtest/build_seed_report.py` | 文件头加代码段落索引 |
+
+## 改动 1：README 查询指南
+
+在 seed_report.duckdb 章节后、指标系统章节前，新增：
+
+- DuckDB 查询示例（combo_summary 筛选、paired_trades 查交易、高 Sharpe 策略筛选）
+- 推算衍生字段（holding_bars、r_value 的 Python + SQL 公式）
+- SQLite 直接查（仅在需要写入时使用）
+- 原则声明：DuckDB 优先，参考文档指向 `文档/种子/duckdb.md` 和 `sqlite.md`
+
+## 改动 2：generate_seed.py 代码段落索引
+
+在文件头 docstring 末尾加索引：
+
+```
+代码段落索引（行号随改动更新）：
+  SimTrade        行 81          交易 namedtuple（10字段）
+  TradeSimulator  行 151         4种模式交易模拟器
+  常量区          行 561-567     LEVERAGE/FEE_RATE/SLIPPAGE 等
+  load_candles    行 668         K线加载（DuckDB→list[dict]）
+  save_sim_combo  行 1157        后算 PnL + 存入 SQLite
+  _SEGMENT_*      行 1300-1302   分段常量
+  _split_segments 行 1305        分段切割
+  _worker_segment 行 1322        子进程 worker（信号+交易）
+  _run_strategy_segmented 行 1383  4段并跑+校准匹配+fallback+最后一关
+  _worker_coin_interval   行 1663  单币种单周期主流程
+  main            行 2423        CLI 入口（argparse + 调度）
+```
+
+## 改动 3：build_seed_report.py 代码段落索引
+
+```
+代码段落索引（行号随改动更新）：
+  SEED_TYPES/REPORT_DB    行 33-40    种子路径配置
+  固定参数                行 43-58    INITIAL_CAPITAL/LEVERAGE/FEE_RATE 等
+  import_sqlite_to_duckdb 行 64      Step 1 导入（ATTACH + INSERT SELECT）
+  compute_post_metrics    行 187     Step 2 后算14字段（pnl推算+余额曲线+Sharpe等）
+  run_post_calc           行 348     逐 combo 后算调度
+  create_indexes          行 401     Step 3 索引
+  print_summary           行 410     统计汇总+抽查
+  build_report            行 454     主入口（3步流程）
+  argparse                行 479     CLI 参数化（--report-dir/--output）
+```
+
+## 验证
+
+1. wuji-verify 四件套对 generate_seed.py 和 build_seed_report.py
+2. grep seed_v3 README → 0
+3. 代码段落索引行号 spot check（读实际行号确认）
+
+## 自审
+
+- **完整性**：✅ README 查询指南 + 两个 .py 文件代码索引
+- **真实性**：✅ 行号需要 spot check 确认
+- **有效性**：✅ 只改 plan 内 3 个文件
+- **第一性原理**：✅ 把散落在外部文档的知识内聚到使用点，减少查找成本
+- **遗留**：无

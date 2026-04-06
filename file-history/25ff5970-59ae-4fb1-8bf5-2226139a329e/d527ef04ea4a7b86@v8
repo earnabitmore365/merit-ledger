@@ -1,0 +1,62 @@
+# 收尾4项 — 路径匹配修复 + 结构索引 + cron + 文档重写
+
+## Context
+
+上一轮 mission 遗留的 4 项，老祖要求一起做。第 1 项（路径匹配）本该当场修不该留。
+
+---
+
+## 1. review-plan 路径匹配修复
+
+**问题**：review-plan 从 plan 文件提取 file_refs 时，`YYYY-MM-DD.md` 这类模板路径变成 mission item，跟实际文件名（`2026-04-02.md`）匹配不上，导致 mission complete 被打回。
+
+**改动**：`~/.claude/merit/merit_gate.py` review_plan 函数
+- 提取 file_refs 时过滤掉含 `YYYY`、`XXX`、`<` 等模板占位符的路径
+- 只保留真实文件路径
+
+---
+
+## 3. merit_gate.py 结构索引行号更新
+
+**问题**：多次改动后文件头的结构索引行号严重偏移，找不到对应代码。
+
+**改动**：`~/.claude/merit/merit_gate.py` 文件头 L12-L37 的结构索引
+- 重新扫描所有函数/段落的实际行号并更新
+
+---
+
+## 4. evolve.py 加 4am cron
+
+**问题**：evolve.py 手动跑通了，需要加入 4am 批处理。
+
+**改动**：`~/.claude/scripts/daily_digest.py`
+- 在 process_yesterday() 后调 evolve.py（同一个 cron 同一个批次）
+- 或：单独加 launchd plist
+
+更简方案：在 daily_digest.py 末尾加一行 `subprocess.run(["python3", evolve_path])`，跟记忆批处理一起跑。
+
+---
+
+## 5. credit_system_design.md 全文重写
+
+**问题**：整个文件是 v6 旧描述（Haiku 队长、旧架构等），跟当前 v7 完全不符。
+
+**改动**：`~/.claude/projects/-Users-allenbot/memory/credit_system_design.md`
+- 全文重写为 v7 现状：石卫统一引擎 + MiniMax only + mission 押金制 + 段位体系 + 规则进化引擎 + review-plan 激励机制
+
+---
+
+## 改动文件清单
+
+| 文件 | 改动类型 |
+|------|---------|
+| `~/.claude/merit/merit_gate.py` | 修 review_plan file_refs 过滤 + 更新结构索引行号 |
+| `~/.claude/scripts/daily_digest.py` | 末尾加调 evolve.py |
+| `~/.claude/projects/-Users-allenbot/memory/credit_system_design.md` | 全文重写 |
+
+## 验证
+
+- review-plan 跑一次确认 file_refs 不含模板路径
+- merit_gate.py 结构索引行号跟实际代码对得上
+- `python3 daily_digest.py` 跑一次确认 evolve.py 被调用
+- credit_system_design.md 内容跟当前系统一致

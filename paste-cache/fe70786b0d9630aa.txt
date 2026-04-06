@@ -1,0 +1,40 @@
+allenbot@Echo ~ % ssh -p 2222 pc_heisi_claude@localhost
+"/home/pc_heisi_claude/trading-env/bin/python3<2028>/home/pc_heisi_claude/trading/bitmex_dashboard.py"
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.6.87.2-microsoft-standard-WSL2 x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Mon Mar 16 01:06:19 AEDT 2026
+
+  System load:  7.56                Processes:             31
+  Usage of /:   0.8% of 1006.85GB   Users logged in:       0
+  Memory usage: 65%                 IPv4 address for eth0: 192.168.53.8
+  Swap usage:   73%
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.6.87.2-microsoft-standard-WSL2 x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Mon Mar 16 01:06:19 AEDT 2026
+
+  System load:  7.56                Processes:             31
+  Usage of /:   0.8% of 1006.85GB   Users logged in:       0
+  Memory usage: 65%                 IPv4 address for eth0: 192.168.53.8
+  Swap usage:   73%
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+This message is shown once a day. To disable it please create the
+/home/pc_heisi_claude/.hushlogin file.
+pc_heisi_claude@DESKTOP-DVMCKC7:~$ 

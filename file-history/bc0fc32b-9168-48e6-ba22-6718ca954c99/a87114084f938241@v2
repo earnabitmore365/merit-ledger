@@ -1,0 +1,80 @@
+# Plan: 1m 分段回测 — 4段并跑 + 结合验证
+
+## Context
+
+generate_seed.py 的 1m 分段回测有 bug：4 段各自独立跑 TradeSimulator，段尾持仓被 end_of_data 截断，段间无仓位交接。旧两仪只验证了 3 策略 × ADA 恰好没跨段就说通过。当前代码被我改成"信号分段+交易全量"绕过了问题，但老祖要求的是真正的 4 段并跑 + 结合。
+
+**老祖死命令**：4 段并跑 + 结合必须落地。
+**执事方案**：逐段验证结合处，不吻合时调整预热重跑该段，不是全量重跑。
+
+## 修改文件
+
+`/Volumes/SSD-2TB/project/wuji-auto-trading/src/backtest/generate_seed.py`
+
+修改 3 个函数：`_worker_segment`、`_run_strategy_segmented`、`_SEGMENT_MIN_CANDLES`
+
+## 方案
+
+### _worker_segment — 恢复跑完整回测
+
+恢复信号 + 4 种模式 TradeSimulator。返回值改为 dict：
+
+```python
+{
+    "signals": list[str],           # 完整信号（含预热区）
+    "trades": {mode: [SimTrade]},   # 完整交易（含预热区，不过滤）
+    "warmup_n": int,                # 预热根数
+}
+```
+
+不在 worker 里过滤预热区交易——由 _run_strategy_segmented 负责，因为结合处验证需要知道预热区内的交易。
+
+### _run_strategy_segmented — 4段并跑 + 逐段结合
+
+```
+第一轮：4段并行跑（信号+交易）
+         ↓
+第二轮：逐段验证结合处（串行）
+         段0尾 vs 段1 → 段1尾 vs 段2 → 段2尾 vs 段3
+         ↓
+     不吻合？→ 调整下段预热起点 → 重跑该段 → 继续验证
+         ↓
+合并：每段取有效区交易，按时间排序
+```
+
+**结合处验证逻辑**：
+1. 取段 i 有效区最后一笔交易（所有 4 种模式中）
+2. 如果任意模式有 close_type == "end_of_data" → 不吻合
+3. 取所有 end_of_data 交易中最早的 open_candle_idx（全局坐标），设为 X
+4. 段 i+1 重跑：
+   - new_actual_start = X（有效区从这笔交易的开仓点开始）
+   - new_start = max(0, X - warmup)（保留指标预热）
+   - 段 i+1 的 end 不变
+   - 重跑后段 i+1 的 TradeSimulator 会自然在 X 开仓，正确平仓
+5. 段 i 丢弃所有 end_of_data 交易
+6. 段 i+1 的有效区交易从 new_actual_start 开始取
+
+**合并**：
+- 每段取 open_candle_idx >= actual_start 的交易（有效区）
+- 段 i 排除 end_of_data（已被下段接管）
+- 全部合并后按 open_candle_idx 排序
+
+### _SEGMENT_MIN_CANDLES
+
+保持 100_000（启用分段）。注释更新为：已实现结合验证+不吻合重跑。
+
+## 验证方案
+
+1. **BTC 1m × 3 策略 × 4 模式**：全量 vs 新分段，逐笔对比零差异
+2. **特别关注 momentum_slope_long**：之前旧方案 102→165 笔（+62%），必须验证回到 102 笔
+3. **人为制造跨段场景**：找一个在段边界附近有持仓的策略，确认重跑机制触发并正确处理
+4. 验证脚本放 lab/seed_fix/test_segment_v3.py
+
+## 执行顺序
+
+1. 写验证脚本 test_segment_v3.py（在 lab 里，不改主线）
+2. 跑验证，确认零差异
+3. 汇报老板，过关后才改主线代码
+4. 改主线 generate_seed.py
+5. 调 merit_gate.py --review-plan 提交石卫审查
+6. 补录 CHANGELOG

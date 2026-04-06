@@ -1,69 +1,0 @@
-第五：我刚让他帮我挑5个策略出来做验证，以下是结果：
-维度 1：重跑对比 — ￼ 5/5 通过
-┌──────────┬──────┬──────┬──────────────────┐ │ 策略 │ 币种 │ 周期 │ 结果 │ ├──────────┼──────┼──────┼──────────────────┤ │ cci │ LINK │ 15m │ 15 项全部一致 ￼ │ ├──────────┼──────┼──────┼──────────────────┤ │ ichimoku │ SOL │ 1m │ 15 项全部一致 ￼ │ ├──────────┼──────┼──────┼──────────────────┤ │ adx │ BNB │ 15m │ 15 项全部一致 ￼ │ ├──────────┼──────┼──────┼──────────────────┤ │ roc │ DOT │ 1h │ 15 项全部一致 ￼ │ ├──────────┼──────┼──────┼──────────────────┤ │ vpt │ AVAX │ 15m │ 15 项全部一致 ￼ │ └──────────┴──────┴──────┴──────────────────┘
-维度 2：内部一致性
-    •    PnL 一致性：19/20 通过，1 组差 $0.01（vroc/BTC_COIN/5m，浮点精度）
-    •    胜率一致性：2236/2236 通过（零不一致）
-    •    平仓类型：ttp + signal <= paired_count 全部通过
-维度 3：逻辑合理性
-┌──────────────────┬──────────────────────────────────────────────────────┐ │ 检查项 │ 结果 │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ MFE < 0 │ 0 / 30,033,724 ￼ │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ MAE < 0 │ 0 / 30,033,724 ￼ │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ 有PnL但fee=0 │ 0 / 30,033,724 ￼ │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ 非法 direction │ 0 / 30,033,724 ￼ │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ 价格 <= 0 │ 0 / 30,033,724 ￼ │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ 新增8字段NULL │ 0 / 2,236 ￼ │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ max < min │ 0 / 2,236 ￼ │ │ balance │ │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ holding_bars <= │ 68 / 30,033,724 ￼ │ │ 0 │ │ ├──────────────────┼──────────────────────────────────────────────────────┤ │ close_type 分布 │ signal 28.6M / ttp 1.28M / stop_loss 92K / │ │ │ end_of_data 1.6K ￼ │ └──────────────────┴──────────────────────────────────────────────────────┘
-维度 4：Regime 一致性 — ￼ 100/100 通过
-
-
-——————————————————
-回复：
-你的 8GB seed_report.db 完全不废，它依然是高质量、可用的资产——从你分享的 Claude 验证结果看，数据完整性、内部一致性、逻辑合理性、regime 一致性都非常高（重跑对比 5/5 全一致、PnL 仅一笔浮点 $0.01 差、MFE/MAE/价格/方向等零异常、holding_bars <=0 只 68 笔异常率 <0.00023%），这说明生成过程靠谱，数值可信。
-8GB 在 SQLite 里属于“较大但完全可接受”的规模（官方上限 281 TB，实际很多人用 10-50GB 做分析没问题），你的问题是典型的“insert 重 + WAL 碎片”导致文件膨胀 + 潜在读慢，而不是数据本身坏了。以下是针对你的情况（crypto 回测、paired_trades 850万行、combo 1720行、regime 67万行）的保命 + 优化路线，优先零成本操作。
-阶段 1：立即优化现有 db（推荐先做，10-90 分钟）
-这些不会改任何一行数据，只清理碎片、回收空间、加速查询。
-    1    VACUUM（最关键，强烈推荐）：
-    •    为什么：生成时大量 commit + insert 产生大量 free pages 和碎片，文件虚胖。VACUUM 重建 db，回收空间 + 紧凑页面。
-    •    操作（终端或 sqlite3 工具）：   sqlite3 reports/seed_report.db "VACUUM;"   或生成新文件（原文件不动，安全）：   sqlite3 reports/seed_report.db "VACUUM INTO 'seed_report_vacuumed.db';"  
-    •    预期效果：
-    •    文件可能缩小 20-50%（从 8GB → 4-6GB 很常见）。
-    •    后续查询（尤其是 GROUP BY、JOIN、AVG(r_value)）明显快。
-    •    时间：8GB 规模，SSD 上大概 20-60 分钟（HDD 更长）。期间 db 锁定，别中断。
-    •    注意：需要至少 8-16GB 空闲盘空间（VACUUM 过程中会临时复制一份）。
-    2    ANALYZE（更新统计，让查询优化器聪明）：   sqlite3 reports/seed_report.db "ANALYZE;"  
-    •    尤其对你的 GROUP BY regime_at_open、strategy 等查询有帮助，5-15 分钟。
-    3    调 PRAGMA（读性能永久提升）：
-    •    在你的分析脚本（Python + sqlite3）开头加：python   conn.execute("PRAGMA journal_mode = WAL;")
-    •    conn.execute("PRAGMA synchronous = NORMAL;")
-    •    conn.execute("PRAGMA cache_size = -200000;")  # 200MB 缓存，调到内存允许（如 -1000000 = 1GB）
-    •    conn.execute("PRAGMA mmap_size = 4000000000;")  # 4GB mmap，如果有 16GB+ 内存超快
-    •    conn.execute("PRAGMA temp_store = MEMORY;")  
-    •    测试查询时间：如 SELECT strategy, AVG(r_value), COUNT(*) FROM paired_trades GROUP BY strategy ORDER BY AVG(r_value) DESC LIMIT 20;
-    4    快速校验（确认优化前后一致）：
-    •    跑你之前 Claude 用的几个检查 SQL，看结果是否 100% 一致（尤其是 PnL sum、MFE/MAE <0 等）。
-做完这些，如果查询秒级出结果、文件缩小到 5-6GB，就继续用原 db 分析（top 策略、regime 过滤等）。
-阶段 2：如果还是慢/卡（查询 >10s、内存爆），升级工具（不重跑、不丢数据）
-    •    DuckDB（强烈推荐，零迁移成本）：
-    •    DuckDB 专为分析设计，列式存储 + 并行，8GB db 查询快 5-20x（尤其是聚合、JOIN）。
-    •    直接 attach 你的 SQLite：sql   INSTALL sqlite;
-    •    LOAD sqlite;
-    •    ATTACH 'reports/seed_report.db' AS sqlite_db (TYPE SQLITE);  
-    •    然后用 DuckDB 查询（语法几乎一样）：sql   SELECT strategy, AVG(r_value), COUNT(*) 
-    •    FROM sqlite_db.paired_trades 
-    •    GROUP BY strategy 
-    •    ORDER BY AVG(r_value) DESC LIMIT 10;  
-    •    优势：读超快、内存高效、可直接转 Parquet/CSV 进一步分析。
-    •    安装：pip install duckdb 或 brew install duckdb。
-    •    导出关键表到 Parquet（压缩 + 列式，文件小、读秒杀）：python   import pandas as pd
-    •    import sqlite3
-    •    
-    •    conn = sqlite3.connect('reports/seed_report.db')
-    •    # 导出 paired_trades（最大表）
-    •    pd.read_sql("SELECT * FROM paired_trades", conn).to_parquet('paired.parquet', compression='zstd', engine='pyarrow')
-    •    # combo_summary 和 regime_timeline 也导  
-    •    Parquet 可能只 2-4GB，DuckDB / pandas / polars 读飞起。
-    •    分库（如果想保持 SQLite）：
-    •    按 coin 或 strategy 分表/分 db（e.g. paired_trades_LINK.db、paired_trades_SOL.db）。
-    •    用 ATTACH 附加多个 db 查询。
-阶段 3：啥时候考虑重跑？
-只有当你发现核心数值有系统性问题（e.g. funding_count 全错、regime 分布不合理、PnL sum 与 final_balance 差几 %）时，才重跑。现在验证结果这么好（5/5 重跑一致、异常率极低），先别重跑——8GB 是你的“黄金 baseline”，用它先挖出高 R 策略、regime 甜点、ttp 效果等价值。
-优先行动建议（今天就能做）：
-    1    备份 db：cp seed_report.db seed_report_backup.db
-    2    跑 VACUUM INTO 新文件（安全）。
-    3    试 DuckDB attach 测试查询速度。
-    4    如果快，继续分析；如果还卡，再 Parquet 导出。
-需要我给你写完整一键优化脚本（Python 版：VACUUM + PRAGMA + 简单校验）？或 DuckDB 示例查询？直接说～ 8GB 不是负担，是财富，继续冲！￼￼

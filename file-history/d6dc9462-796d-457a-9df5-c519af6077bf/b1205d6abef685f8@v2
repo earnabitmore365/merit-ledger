@@ -1,0 +1,69 @@
+# 计划：排查 mean_reversion_mirror 阈值 + 决定调参还是换周期
+
+## Context
+
+比赛实盘自 3/21 18:16 regime 切换到初熊后，SOL/ETH/XRP 全程 HOLD，距今约 32 小时无开单。
+Gemini 和白纱共同分析后，确认了问题方向：**不是代码 bug，是策略阈值在当前低波动行情下触发不了**。
+
+调阈值比换周期风险低（不需要动 Feed Gateway、TTP bar 计数、Regime Bridge 配合）。
+
+## 目标
+
+查清楚 mean_reversion_mirror 策略的阈值参数，对比当前行情波动率，判断：
+- 是阈值太紧 → 调参数（±X% 改小一点）
+- 是行情确实不够格 → 等或换
+
+## 黑丝执行步骤
+
+### 步骤 1：查 mean_reversion_mirror 阈值参数
+
+读 `lab/` 下的 mean_reversion_mirror 策略文件：
+```
+lab/src/strategy/mean_reversion_mirror.py
+```
+找：
+- 均值回归阈值（通常是 `threshold`、`deviation`、`std_mult` 之类的参数）
+- 信号触发条件（价格偏离 MA 多少% 或多少个标准差才触发 BUY/SELL）
+
+### 步骤 2：对比当前行情数据
+
+查最近 24 小时 ETH 1m 的价格偏离度：
+```bash
+ssh pc_heisi_claude@100.88.115.98 '
+# 用 python 算最近 500 根 K 线的价格 vs MA 的偏离度分布
+cd ~/trading && python3 -c "
+import json
+# 从 feed_gateway 的 indicator cache 或直接读 websocket 数据
+# 计算 ETH 1m 的 (price - MA) / MA 分布
+print(\"TODO\")
+"
+'
+```
+（具体命令由黑丝根据代码结构决定）
+
+### 步骤 3：对比 ETH 3/21 01:31 开仓时的偏离度
+
+从日志可知，01:31 触发 BUY @ $2138.15。计算当时的偏离度（需要从 Feed Gateway 的 K 线数据或 indicator_cache.db 查对应时间的 MA 值）。
+
+### 步骤 4：出结论 + 方案
+
+根据步骤 1-3 的数据：
+
+**如果当前行情偏离度 < 历史开仓偏离度（阈值太紧）：**
+→ 方案 A：调阈值参数（缩小 X%），使策略在当前行情也能触发
+→ 只改 `mean_reversion_mirror.py` 一个参数，不动 Gateway/TTP/Regime Bridge
+→ 改完后 process_guard.sh 重启三个策略进程，验证有无新信号
+
+**如果当前行情偏离度接近历史，但就是 HOLD（策略合理）：**
+→ 方案 B：等 regime 切换，不乱动
+→ 或者考虑换 ETH 15m + mean_reversion_mirror（周期方案，风险更高）
+
+## 验证标准
+
+调参后，48 小时内有 SELL 信号产出（不要求必须开单，只要策略有信号就说明阈值有效）。
+
+## 关键约束
+
+- 不能在比赛中间做大改动（换周期 = 动 Gateway + TTP + Regime Bridge，风险太大）
+- 调参只改一个参数，必须先在 lab 里确认策略逻辑正确，再部署
+- 改完必须 py_compile 验证，重启进程后观察日志

@@ -1,0 +1,119 @@
+# Plan: 修复 monitor 目录 Critical + Major 两个 Bug
+
+## Context
+
+code review 发现两个需要在实盘前修复的问题：
+1. **Critical** `trader_bot.py:46` — `TG_API_BASE` 在 import 时用空 `BOT_TOKEN` 构建，`main()` 更新 `BOT_TOKEN` 后 `TG_API_BASE` 不跟着更新，bot 所有请求永远带空 token
+2. **Major** `gateway_monitor.sh:32` — curl JSON 用字符串插值构建，告警内容含引号/换行时 JSON 损坏，最需要报警时失效
+
+---
+
+## 步骤
+
+### 1. 调研（已完成）
+
+- ✅ `trader_bot.py:46` `TG_API_BASE` 模块级，`main():693` 只 `global BOT_TOKEN`，未重建 `TG_API_BASE`
+- ✅ `_send()/:132`、`_get_updates()/:103`、`_answer_callback()/:163` 三处都用 `TG_API_BASE`，全部受影响
+- ✅ `gateway_monitor.sh:28-33` `send_telegram()` 直接 `"${msg}"` 插值进 JSON，无转义
+- ✅ macOS `date -d` 不可用（BSD date），脚本里已用 `date -d` 说明是部署在 Linux Nitro 上，不影响我们的改动
+
+### 2. 修改
+
+**改动一 — `trader_bot.py:693`（`main()` 里补加 `global TG_API_BASE` 并重建）**：
+```python
+# 改前
+global BOT_TOKEN, CHAT_ID, THREAD_ID
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+THREAD_ID = int(os.getenv("TELEGRAM_TRADER_THREAD_ID", "12030"))
+
+# 改后（补 TG_API_BASE）
+global BOT_TOKEN, CHAT_ID, THREAD_ID, TG_API_BASE
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+THREAD_ID = int(os.getenv("TELEGRAM_TRADER_THREAD_ID", "12030"))
+TG_API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
+```
+
+**改动二 — `gateway_monitor.sh:28-33`（`send_telegram` 用 `--data-urlencode` 或 Python 转义）**：
+
+最简修法：用 `printf '%s' "$1" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))"` 转义 text 字段，然后用 `--data` 拼接合法 JSON：
+```bash
+send_telegram() {
+    local msg="$1"
+    local text_json
+    text_json=$(printf '%s' "$msg" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))")
+    curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+        -H "Content-Type: application/json" \
+        -d "{\"chat_id\": ${CHAT_ID}, \"message_thread_id\": ${THREAD_ID}, \"text\": ${text_json}, \"parse_mode\": \"HTML\"}" \
+        > /dev/null 2>&1
+}
+```
+
+### 3. 四件套验证（wuji-verify）
+
+```bash
+python3 ~/.claude/merit/wuji-verify.py \
+  /Volumes/SSD-2TB/project/wuji-auto-trading/trading/monitor/trader_bot.py
+```
+
+`gateway_monitor.sh` 是 bash 脚本，wuji-verify 不覆盖，手动验证：
+```bash
+python3 -c "
+import subprocess
+result = subprocess.run(['bash', '-n',
+  '/Volumes/SSD-2TB/project/wuji-auto-trading/trading/monitor/gateway_monitor.sh'],
+  capture_output=True, text=True)
+print('语法:', '✅' if result.returncode == 0 else '❌ ' + result.stderr)
+"
+```
+
+### 4. Sonnet Code Review
+
+改完后逐行审查：
+- `TG_API_BASE` 更新后，`_send`、`_get_updates`、`_answer_callback` 三处调用是否都能拿到正确 URL ✅
+- `text_json` python3 转义后，JSON 构造是否合法，含引号/换行/Unicode 的告警内容是否安全
+
+### 5. 更新 CHANGELOG
+
+```
+### HH:MM EDIT trader_bot.py + gateway_monitor.sh — 修复TG_API_BASE不更新(Critical) + curl JSON注入(Major)
+```
+
+### 6. 自审（两遍）
+
+**第一遍**
+- 完整：两文件都改，wuji-verify + bash -n 验证，CHANGELOG ✅
+- 真实：grep 确认 TG_API_BASE 三处调用者，bash -n 语法检查，python3 转义可验证 ✅
+- 有效：最小改动；python3 转义不引入新依赖（脚本里已用 python3）✅
+- 知常：global 只声明了引用不重建字符串，这是 Python 字符串不可变的基本性质 ✅
+- 静制动：先 grep 确认行号和调用方，再写 plan ✅
+
+**第二遍（边界检查）**
+- `TG_API_BASE` 重建在 `BOT_TOKEN` 赋值之后，顺序正确 ✅
+- 若 `BOT_TOKEN` 为空，`main()` 的 `if not BOT_TOKEN: sys.exit(1)` 会在重建后立即退出，不会用空 URL 运行 ✅
+- python3 不在 PATH 的边缘情况：脚本已经依赖 python3（第1行 `GATEWAY_START` 里有 `python3`），可以假设 python3 可用 ✅
+- `text_json` 包含完整 JSON 字符串（含引号），直接拼入 JSON body 时格式正确（`"text": "..."`）✅
+
+两遍全绿。
+
+### 7. 汇报执事
+
+---
+
+## 关键文件
+
+| 文件 | 作用 |
+|------|------|
+| `trading/monitor/trader_bot.py` | Critical 修复 |
+| `trading/monitor/gateway_monitor.sh` | Major 修复 |
+| `/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md` | 变更日志 |
+
+---
+
+## 验证标准
+
+- `wuji-verify trader_bot.py` 全绿（含 smoke test）
+- `bash -n gateway_monitor.sh` 语法通过
+- CHANGELOG 更新
+- 自审两遍全 ✅

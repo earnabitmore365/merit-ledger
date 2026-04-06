@@ -1,0 +1,9 @@
+{
+  "id": "28",
+  "subject": "顺手修：mirror namespace + TRX清除",
+  "description": "mirror.py namespace修复 + 确认TRX数据量报老板后清除",
+  "activeForm": "顺手修",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": []
+}

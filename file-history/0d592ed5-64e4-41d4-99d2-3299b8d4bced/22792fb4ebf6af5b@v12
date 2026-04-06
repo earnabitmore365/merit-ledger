@@ -1,0 +1,96 @@
+# Plan: 清理交易系统全部遗留问题
+
+## Context
+
+回测空档，趁机把交易系统代码 review 发现的所有问题一次清完。
+剩余 1 Major + 1 Suggestion，同时检查是否还有漏网的同类问题。
+
+---
+
+## 步骤
+
+### 1. 调研（已完成）
+
+- ✅ `paper_trade/run.py:455` — `side = 'BUY'/'SELL'` 但 `StopLossManager` 判断 `'LONG'/'SHORT'`，tick 级止损/TTP 从未生效
+- ✅ `trader_report.py:28` — `TG_API_BASE` 模块级构建，懒加载暂安全但架构脆弱
+- ✅ `trader_report.py._send()` 是唯一使用 `TG_API_BASE` 的地方，内联 URL 最简
+
+### 2. 修改
+
+**改动一 — `paper_trade/run.py:455-458`（Major：position_side 传错）**：
+```python
+# 改前
+side = 'BUY' if pos.side == 'LONG' else 'SELL'
+result = champ.risk_manager.check(
+    pos, price,
+    position_side=side,
+    ...
+)
+
+# 改后（pos.side 已经是 'LONG'/'SHORT'，直接传）
+result = champ.risk_manager.check(
+    pos, price,
+    position_side=pos.side,
+    entry_price=pos.entry_price,
+)
+```
+
+**改动二 — `trader_report.py:28,47`（消除 TG_API_BASE 隐患）**：
+```python
+# 删除行 28
+TG_API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"  # 删掉
+
+# 行 47 内联
+url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+```
+
+### 3. 四件套验证（wuji-verify）
+
+```bash
+python3 ~/.claude/merit/wuji-verify.py \
+  /Volumes/SSD-2TB/project/wuji-auto-trading/trading/paper_trade/run.py
+
+python3 ~/.claude/merit/wuji-verify.py \
+  /Volumes/SSD-2TB/project/wuji-auto-trading/trading/trader_report.py
+```
+
+### 4. Code Review
+
+- `pos.side` 来自 `Position` dataclass（`exchange/base.py`），值为 `'LONG'`/`'SHORT'` ✅
+- 删掉 `TG_API_BASE` 后无其他引用（`_send` 是唯一调用方）✅
+- `BOT_TOKEN` 模块级变量在 `_send()` 里有 `if not BOT_TOKEN` guard ✅
+
+### 5. 更新 CHANGELOG
+
+### 6. 自审（两遍）
+
+**第一遍**
+- 完整：2处改动覆盖2文件 ✅
+- 真实：`StopLossManager._check_fixed_stop_loss` 里判断 `== "LONG"` / `== "SHORT"` 已在前次 review 读过 ✅
+- 有效：各1-2行 ✅
+- 知常：`pos.side` 已经是正确格式，多余的映射是 bug 根因 ✅
+- 静制动：先读 StopLossManager 源码确认期望值再改 ✅
+
+**第二遍**
+- `pos.side` 如果为 `None`（无持仓）：不会到这里，前面 `if not pos: continue` 过滤了 ✅
+- 删 `TG_API_BASE` 后 `trader_report.py` 内无其他引用：grep 确认 ✅
+- `BOT_TOKEN` 在 `_send()` 被使用时已经是正确值（懒加载后 env 已设） ✅
+
+### 7. 汇报
+
+---
+
+## 关键文件
+
+| 文件 | 改动 |
+|------|------|
+| `trading/paper_trade/run.py` | Major：position_side 直传 pos.side |
+| `trading/trader_report.py` | 删 TG_API_BASE，_send 内联 URL |
+
+---
+
+## 验证标准
+
+- wuji-verify 两文件全绿
+- grep TG_API_BASE trader_report.py → 0 匹配
+- CHANGELOG 更新

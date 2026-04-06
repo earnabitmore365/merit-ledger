@@ -1,0 +1,29 @@
+# 遗留清单（持久化）
+
+> 发现问题加进来，做完了才删。每次【自审】从这里读，不从脑子编。
+
+## 待处理
+
+- [ ] **verify.py 四件套验证系统**（顾问 handoff #8）：创建 verify_registry.json + verify.py + 挂 PostToolUse + 先注册 merit 框架试水
+- [ ] **backlog 按项目分**：从 merit/ 搬到各项目 memory/backlog.md，CLAUDE.md 加说明，session_start 注入提醒
+- [ ] **记忆系统落地测试**：Stop 写 daily md 功能已部署但未实测（需要新 session 验证）
+- [ ] **自审协议写入 CLAUDE.md + rules.md**：协议文档在 merit/ 但 CLAUDE.md 只有一句话，rules INJECT 区没有四关摘要
+- [ ] merit_gate.py 结构索引行号需更新（多次改动后严重偏移）
+- [ ] taiji-audit 插件需推送 GitHub 更新（audit_engine.py memsearch→daily md）
+- [ ] credit_system_design.md 正文内容还有大量 v6 旧描述需要全文更新
+- [ ] 石卫 check_self_audit 的 COMPLETION_KEYWORDS 需要持续补充（"方案/定稿"已加，可能还缺）
+- [ ] UserPromptSubmit 语气识别 bug 已修（prompt vs message.content），需在新 session 实测确认
+- [ ] GP 进化树 scheduler 需重启（Nitro SSH 已恢复，修复版已上传但未重启）
+
+## 已完成
+
+- [x] mission submit→complete→押金归还+奖励 实测通过（2026-04-02）
+- [x] mission extend 全流程实测通过（2026-04-02）
+- [x] 石卫 plan mode 介入（check_plan_update）落地+正反验证（2026-04-02）
+- [x] 石卫自审检测（check_self_audit）落地+audit_reminder 注入验证（2026-04-02）
+- [x] PostToolUse 四件套信号落地（2026-04-02）
+- [x] LOCKED_LEVELS 从硬编码改为 credit.json locked 标记（2026-04-02）
+- [x] UserPromptSubmit 语气识别 bug 修复（prompt 字段）（2026-04-02）
+- [x] 共命原则写入全局+项目级 CLAUDE.md（2026-04-02）
+- [x] memsearch 彻底清理（插件+缓存+marketplace+known_marketplaces）（2026-04-01）
+- [x] 记忆系统部署（db_write.py daily md + session_start 注入 + daily_digest 5am cron）（2026-04-01）

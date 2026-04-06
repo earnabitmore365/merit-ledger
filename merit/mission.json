@@ -19,12 +19,12 @@
     {
       "type": "modify",
       "file": "/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md",
-      "done": false
+      "done": true
     },
     {
       "type": "modify",
       "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/data/README_KLINES_SEED.md",
-      "done": false
+      "done": true
     },
     {
       "type": "bash",

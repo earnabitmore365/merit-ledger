@@ -1,0 +1,210 @@
+# 石卫 v7：合并 + 知情放行 + 押金制 + reflect 合体 + 自进化
+
+## Context
+
+两个问题一起解决：
+1. **文件太多** — 功过格 6 个文件做同一个域的事，维护困难。合并为 2 个。
+2. **石卫太蠢** — v6 瞎子守门，只会扣不会加，declare-delete 笨重。升级为知情放行 + 自动打分 + 自进化。
+
+## 第一步：合并文件（22 → 13）
+
+### 功过格域：6 → 2
+| 合并后 | 吃掉 | hook 事件 |
+|--------|------|-----------|
+| **merit_gate.py** | merit_judge.py + merit_post_audit.py + post_tool_validate.sh + reflect_hook.py + ai_call.py | PreToolUse + PostToolUse + Stop + UserPromptSubmit + PreCompact + SessionEnd |
+| **credit_manager.py** | 不变 | CLI（Bash 调用） |
+
+### 上下文域：2 → 1
+| 合并后 | 吃掉 |
+|--------|------|
+| **session_start.py** | inject_rules.py |
+
+### 删除（4 个）
+evolve_hook.sh · ralph_minimax.sh · import_history.py · import_memsearch.py
+
+### settings.json hooks 同步
+merit_gate.py 一个脚本挂所有功过格相关 hook，内部按 hook_event_name 分支。
+
+## 第二步：石卫 v7 功能（在合并后的 merit_gate.py 里实现）
+
+### 关键文件
+- `~/.claude/scripts/merit_gate.py` — 功过格全部逻辑
+- `~/.claude/scripts/credit_manager.py` — CLI 入口
+- `~/.claude/credit.json` — 积分 + held 押金
+- `~/.claude/mission.json` — 任务计划（自动生成）
+- `~/.claude/learnings/LEARNINGS.md` — 教训记录
+- 项目级 `memory/rules.md` — 行为规则
+
+## 改动
+
+### 1. mission.json 任务计划格式
+
+```json
+{
+  "mission": "修复 scheduler regime bug",
+  "agent": "两仪",
+  "started": "2026-03-31T18:00:00",
+  "status": "active",
+  "held_points": 3,
+  "estimated_reward": 6,
+  "items": [
+    {"type": "modify", "file": "gp_scheduler.py", "done": false},
+    {"type": "delete", "file": "temp_test.py", "done": false},
+    {"type": "create", "file": "new_helper.py", "done": false},
+    {"type": "bash", "desc": "ssh nitro 部署", "done": false}
+  ]
+}
+```
+
+### 2. credit.json 加 held 字段
+
+```json
+{
+  "score": 50,
+  "held": 3,
+  "level": 3,
+  "title": "金丹"
+}
+```
+
+held 不影响 get_level 计算。
+
+### 3. merit_gate.py 改动
+
+#### 3a. 加载 mission（main 函数开头）
+```python
+MISSION_PATH = os.path.expanduser("~/.claude/mission.json")
+
+def load_mission():
+    if not os.path.exists(MISSION_PATH):
+        return None
+    with open(MISSION_PATH) as f:
+        m = json.load(f)
+    if m.get("status") != "active":
+        return None
+    return m
+```
+
+#### 3b. 计划内操作放行（check_bash_destructive 之前）
+```python
+def is_planned_action(mission, tool_name, data):
+    """检查当前操作是否在计划内——精确路径匹配"""
+    if not mission:
+        return False
+    file_path = os.path.abspath(data.get("tool_input", {}).get("file_path", ""))
+    cmd = data.get("tool_input", {}).get("command", "")
+    for item in mission.get("items", []):
+        planned = os.path.abspath(os.path.expanduser(item.get("file", "")))
+        if item["type"] == "modify" and tool_name in ("Write", "Edit"):
+            if planned == file_path:
+                return True
+        if item["type"] == "delete":
+            if planned and os.path.basename(planned) in cmd and os.path.dirname(planned) in cmd:
+                return True
+        if item["type"] == "create" and tool_name == "Write":
+            if planned == file_path:
+                return True
+    return False
+```
+
+精确匹配 `os.path.abspath`，不用子串。delete 检查完整路径（目录+文件名都要命中）。取代 declare-delete 白名单。
+
+#### 3c. 收工自审核对（新函数）
+```python
+def audit_mission(mission):
+    """石卫逐项核对计划完成度，返回提醒列表"""
+    reminders = []
+    for item in mission.get("items", []):
+        if not item.get("done"):
+            reminders.append(f"未完成: {item['type']} {item.get('file', item.get('desc', ''))}")
+    return reminders
+```
+
+#### 3d. 自动打分（新函数，调 ai_call）
+```python
+SCORING_TABLE = {
+    "honest_report_and_fix": +8,
+    "surprising_good_idea":  +6,
+    "proactive_find_issue":  +5,
+    "complete_no_correction": +3,
+    "learn_from_external":   +3,
+    "routine_complete":      +2,
+    "fake_or_cheat":         -20,
+    "same_error_3rd_time":   -15,
+    "bypass_without_report": -10,
+    "panic_no_analysis":     -5,
+    "say_maybe_no_check":    -3,
+    "flattery_filler":       -3,
+    "ask_boss_tech":         -2,
+}
+
+def score_mission_completion(mission, agent_name):
+    """收工后 AI 评估整体表现，返回 delta"""
+    # 基础分：按完成比例 × estimated_reward
+    # AI 评估：调 ai_call 判断是否有额外加减分行为
+    # 押金处理：完成 → held 归还；未完成 → held 扣除
+```
+
+### 4. merit_judge.py 改动
+
+Stop hook 里加 mission 完成度检测：
+- AI 说"任务完成"/"汇报老板" → 触发 `audit_mission()`
+- 石卫返回提醒列表注入上下文
+- AI 补完后再次 Stop → 石卫确认全绿 → 自动打分
+
+### 5. reflect 合体（merit_gate.py + merit_judge.py）
+
+扣分时自动写 LEARNINGS + 跟踪触发次数：
+```python
+def auto_reflect_and_evolve(agent_name, delta, rule_id, note):
+    """扣分/加分后自动写教训 + 检查是否需要生成新 rule"""
+    # 1. 写 LEARNINGS.md
+    record_learning(agent_name, delta, note)
+
+    # 2. 读 rules.md 找 rule_id 的 trigger_count
+    # 3. trigger_count += 1
+    # 4. 如果 trigger_count >= 3 且没有对应子 rule → 调 ai_call 生成子 rule
+    # 5. 如果子 rule 的 trigger_count >= 3 → 升级为父 rule
+```
+
+加分时同理：
+```python
+    # 连续 3 次好行为 → 习惯养成，基础分 +1
+    # 连续 5 次 → 写入 rules 正面范例
+    # 好习惯断了 → 石卫提醒
+```
+
+### 6. credit_manager.py 新增命令
+
+```
+credit_manager.py mission submit "任务描述" --modify file1 file2 --delete file3 --create file4
+credit_manager.py mission status
+credit_manager.py mission complete
+credit_manager.py mission abort
+```
+
+- `submit`：写 mission.json + 预扣 held
+- `status`：显示计划项完成度
+- `complete`：触发石卫自审核对 + 打分 + 归还/扣除押金
+- `abort`：放弃任务，押金扣除一半
+
+## 实现顺序
+
+1. **mission.json 格式 + credit.json held 字段** — 数据层
+2. **merit_gate.py 计划放行** — is_planned_action() 跳过破坏性检查
+3. **credit_manager.py mission 命令** — submit/status/complete/abort
+4. **merit_judge.py 收工检测** — Stop 时检测"任务完成"触发自审
+5. **打分表 + 自动打分** — score_mission_completion()
+6. **reflect 合体** — auto_reflect_and_evolve() 自动写教训 + 生成子 rule
+7. **rules.md 元数据** — 每条 rule 加 severity + trigger_count
+
+## 验证
+
+1. 提交 mission → 确认 mission.json 写入 + held 预扣
+2. 执行计划内删除 → 石卫放行（不扣分）
+3. 执行计划外删除 → 石卫拦截（扣分）
+4. 完成任务 → 石卫核对提醒漏项
+5. 全部完成 → 押金归还 + 加分
+6. 部分完成 → 押金按比例扣除
+7. 同一错误 3 次 → 自动生成子 rule
+8. 连续好行为 3 次 → 习惯养成标记

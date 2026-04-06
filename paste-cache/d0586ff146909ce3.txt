@@ -1,0 +1,82 @@
+<DOCUMENT filename="handoff_to_heisi_three_chariot_safety_final_fixed.md">
+Handoff → 黑丝：三驾马车实盘加固终极版（Grok + Gemini 联合修正版）
+2026-03-19 18:05 混沌（团队共识）
+
+目的：429风暴 + 级联故障已解决。加固熔断机制，今晚继续实盘观察24h。
+
+老板最终判决：
+系统核心没问题（mirror v2.1 + 动态阈值 + TTP完美）。
+继续跑SOL 1m $100 + ETH 1m $100 + XRP 5m $80。
+
+针对3个问题的最终答复：
+
+TTP 10秒轮询够用，如果已加上WebSocket监听则更完美。
+
+“保持上次状态”极度危险（会导致幽灵反向仓位），必须加上强制拦截的熔断机制！
+
+长期监控将脱离SSH隧道，改用本地脚本 + Telegram推送。短期先用autossh挂机。
+
+黑丝立即执行（修改系统主循环，加上真熔断）
+
+第一步：加上Circuit Breaker熔断（完整闭环版）
+在 system.py 中，修改 _sync_position，加入自动恢复逻辑：
+
+Python
+    def _sync_position(self):
+        # 初始化熔断变量
+        self.sync_fails = getattr(self, 'sync_fails', 0)
+        self.halt_mode = getattr(self, 'halt_mode', False)
+
+        try:
+            positions = self.exchange.get_positions()
+            # 成功获取，重置失败次数
+            self.sync_fails = 0
+            if self.halt_mode:
+                self.logger.info("网络恢复，成功获取真实仓位，解除 HALT 熔断状态。")
+                self.halt_mode = False
+            
+            # ... 原有的处理 position 的逻辑 ...
+            
+        except Exception as e:
+            self.sync_fails += 1
+            self.logger.warning(f"持仓同步失败（第{self.sync_fails}次）: {e}")
+            if self.sync_fails >= 3:
+                if not self.halt_mode:
+                    self.logger.error("连续3次同步失败！进入 HALT 熔断状态！防止幽灵仓位。")
+                    self.halt_mode = True
+            # 把异常抛出，让外层知道同步失败了
+            raise e
+第二步：在主引擎加上“真刹车”拦截
+在 system.py 的 run_once(self) 方法最开头，加上熔断拦截：
+
+Python
+    def run_once(self):
+        try:
+            self._sync_position()
+        except Exception:
+            pass  # 允许同步失败，但不直接退出，交给 halt_mode 判断
+
+        # 【真刹车】：如果处于熔断状态，直接跳过本轮所有的信号生成和交易动作！
+        if getattr(self, 'halt_mode', False):
+            self.logger.warning("系统处于 HALT 熔断状态，跳过本轮 K 线获取与交易，等待网络恢复...")
+            return 
+            
+        try:
+            klines = self._get_klines()
+            # ... 后续正常的获取 K 线和生成信号逻辑 ...
+第三步：继续实盘观察
+重启修改后的3个进程，保持当前资金分配。
+
+纪律（永久）：
+
+任何REST调用必须带try/except和退避。
+
+绝对不能在无法获取真实仓位时盲目发单。
+
+更新CHECKPOINT.md。
+
+黑丝，这份是补全了“真刹车”的实盘保命宪法。
+改完立即重启3个进程，贴新日志上来。我们需要确认429彻底消失，且程序在网络抖动时能正确打印“HALT熔断”。
+老板已拍板：继续实盘，重点盯熔断和24h PnL。
+执行！
+</DOCUMENT>

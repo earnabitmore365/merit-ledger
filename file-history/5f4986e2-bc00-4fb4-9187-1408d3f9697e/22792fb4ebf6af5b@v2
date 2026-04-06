@@ -1,0 +1,83 @@
+# Plan: 修复 wuji-auto-trading 5个Critical Bug
+
+## Context
+代码审查发现5个直接影响实盘资金安全的 Critical Bug，分布在3个文件。需要修复后才能安全进入实盘。
+
+---
+
+## Bug 清单与修复方案
+
+### Bug 1 — stop_loss.py:150,165 | NameError: `coin` 未定义
+**根因**：`_check_fixed_stop_loss()` 方法的参数列表里没有 `coin`，但日志里直接用了 `coin`，止损触发时必然 `NameError` 崩溃。
+**修复**：在方法开头从 `position` 提取 coin：
+```python
+coin = position.coin if hasattr(position, 'coin') else position.get('coin', 'UNKNOWN')
+```
+
+### Bug 2 — websocket.py:364 | 价格错误除以 1,000,000
+**根因**：HyperLiquid WebSocket trades 频道的 `px` 字段是字符串小数（如 `"85000.5"`），不是微单位整数。当前代码 `float(price) / 1000000` 把 BTC 变成 $0.085，下单价格全错。
+**修复**：删除 `/ 1000000`，直接 `float(price)`。
+
+### Bug 3 — websocket.py:381-390 | `_send()` 跨 event loop 调用失败
+**根因**：`_send()` 每次创建新 event loop，但 `self._ws` 是属于 `_run()` 那个 loop 的 async 对象，跨 loop 调用 `.send()` 会抛异常。所有 `subscribe()` / `unsubscribe()` 的运行时消息实际上全部静默失败。
+**修复**：
+1. 在 `_run()` 的 `_connect_and_listen()` 入口保存当前 loop 到 `self._loop`
+2. `_send()` 改为 `asyncio.run_coroutine_threadsafe(self._ws.send(...), self._loop)`
+
+### Bug 4 — adapter.py:279-409 | `get_available_coins` 重复定义（类型冲突）
+**根因**：
+- 第一个定义（279-313）返回 `List[Dict]`，`get_coin_names()` 依赖它做 `c['name']`
+- 第二个定义（375-409）返回 `List[str]`，按成交量排序，覆盖了第一个
+- `get_coin_names()` 现在对着 `List[str]` 做 `.get('name')` 会 AttributeError
+**修复**：把第一个定义重命名为 `get_coins_info()`，`get_coin_names()` 改为调用 `get_coins_info()`。
+
+### Bug 5 — adapter.py:663-683 | IOC 订单错误解析逻辑反了
+**根因**：`"could not immediately match"` 是 IOC 订单**未能成交**被取消的错误信息，当前代码把它当作"成交了"，导致真正的失败订单被当成 `success=True` 返回。
+**修复**：
+```python
+if 'could not immediately match' in error_msg:
+    # IOC 未能立即成交，订单已取消
+    return OrderResult(success=False, message="IOC订单未能立即成交，已取消")
+```
+同样的错误逻辑在 `close_position()` (829行) 也需要同步修复。
+
+---
+
+## 附加修复（同步做，不增加工作量）
+
+### Bug 12 — stop_loss.py:232 | `__repr__` 缺结尾 `>`
+在 f-string 末尾加上 `>`。
+
+---
+
+## 执行方案：3个 Agent 并行
+
+| Agent | 文件 | 覆盖 Bug |
+|-------|------|----------|
+| A | `src/core/risk/stop_loss.py` | #1, #12 |
+| B | `src/exchange/hyperliquid/websocket.py` | #2, #3 |
+| C | `src/exchange/hyperliquid/adapter.py` | #4, #5（含 place_order + close_position） |
+
+所有 Agent 指定 `model: sonnet`，不使用 general-purpose。
+
+---
+
+## 关键文件路径
+
+- `/Volumes/SSD-2TB/project/wuji-auto-trading/src/core/risk/stop_loss.py`
+- `/Volumes/SSD-2TB/project/wuji-auto-trading/src/exchange/hyperliquid/websocket.py`
+- `/Volumes/SSD-2TB/project/wuji-auto-trading/src/exchange/hyperliquid/adapter.py`
+
+---
+
+## 验证方案
+
+每个 Agent 完成后执行四件套：
+```bash
+# 语法
+python3 -m py_compile <file>
+# 逻辑（人工检查改动行）
+# 全链路（确认调用方无报错）
+grep -r "get_available_coins\|_check_fixed_stop_loss\|_send\|could not immediately" src/
+# 文档（无需更新，bugfix不改接口）
+```

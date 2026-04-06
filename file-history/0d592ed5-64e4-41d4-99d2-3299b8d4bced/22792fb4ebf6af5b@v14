@@ -1,0 +1,128 @@
+# Plan: Vultr 清理 + wuji-auto-trading 重新部署
+
+## Context
+
+Vultr Tokyo (`abby-trader`, 100.122.227.7) 上跑的是旧 `/opt/auto-trading/lab/` 结构。
+需要清理旧代码，部署新 `wuji-auto-trading`，确认 Gateway 和数据管道正常。
+
+**当前状态**：
+- 运行中：`feed_gateway.py` 9 币种（自 3/24 起）
+- Cron：`gateway_monitor.sh` 每 5 分钟
+- `.env`：在 `/opt/auto-trading/lab/.env`，含 BitMEX/HL/Telegram 全部密钥
+- 无 GitHub SSH，需要 rsync 部署
+- 系统 Python 3.12，已装 zmq/websocket-client/dotenv
+
+---
+
+## 步骤
+
+### Step 1: 停止运行中的进程
+
+```bash
+# 1a. 停 cron
+ssh root@100.122.227.7 "crontab -r"
+
+# 1b. 杀 gateway
+ssh root@100.122.227.7 "pkill -f feed_gateway; sleep 2; ps aux | grep python3 | grep -v grep"
+```
+
+### Step 2: 备份 .env + 清理旧代码
+
+```bash
+# 2a. 备份 .env
+ssh root@100.122.227.7 "cp /opt/auto-trading/lab/.env /tmp/trading.env.bak"
+
+# 2b. 清理旧代码（保留 logs 和 reports）
+ssh root@100.122.227.7 "
+  mv /opt/auto-trading/lab/logs /tmp/trading_logs_bak 2>/dev/null
+  mv /opt/auto-trading/lab/reports /tmp/trading_reports_bak 2>/dev/null
+  rm -rf /opt/auto-trading
+"
+```
+
+### Step 3: 部署新代码（rsync）
+
+```bash
+# 从本地 rsync（排除 .git、__pycache__、reports、logs、.env、duckdb）
+rsync -avz --delete \
+  --exclude '.git' \
+  --exclude '__pycache__' \
+  --exclude 'reports/' \
+  --exclude 'logs/' \
+  --exclude '*.db' \
+  --exclude '*.duckdb' \
+  --exclude '*.duckdb.tmp' \
+  --exclude '.env' \
+  --exclude '.DS_Store' \
+  /Volumes/SSD-2TB/project/wuji-auto-trading/ \
+  root@100.122.227.7:/opt/wuji-auto-trading/
+```
+
+### Step 4: 恢复 .env + 创建目录
+
+```bash
+ssh root@100.122.227.7 "
+  cp /tmp/trading.env.bak /opt/wuji-auto-trading/.env
+  mkdir -p /opt/wuji-auto-trading/logs
+  mkdir -p /opt/wuji-auto-trading/reports
+  touch /opt/wuji-auto-trading/.wuji-root
+"
+```
+
+### Step 5: 安装缺失依赖
+
+```bash
+ssh root@100.122.227.7 "pip3 install duckdb eth-account hyperliquid 2>&1 | tail -5"
+```
+
+### Step 6: 启动 Gateway
+
+```bash
+ssh root@100.122.227.7 "
+  cd /opt/wuji-auto-trading
+  nohup python3 src/data/feed_gateway.py \
+    --coins SOL,ETH,XRP,BTC,BNB,ADA,AVAX,LINK,DOT \
+    --intervals 1m,1m,1m,1m,1m,1m,1m,1m,1m \
+    >> logs/gateway.log 2>&1 &
+  sleep 10
+  echo '=== 进程 ==='
+  ps aux | grep feed_gateway | grep -v grep
+  echo '=== 最后5行日志 ==='
+  tail -5 logs/gateway.log
+"
+```
+
+### Step 7: 验证数据流
+
+```bash
+# 等 2-3 分钟后检查
+ssh root@100.122.227.7 "
+  echo '=== Gateway 健康 ==='
+  tail -20 /opt/wuji-auto-trading/logs/gateway.log | grep -E 'KLINE|PUB|订阅|连接'
+  echo '=== 9 币种都有数据？ ==='
+  for coin in SOL ETH XRP BTC BNB ADA AVAX LINK DOT; do
+    last=\$(grep \"KLINE.\${coin}\" /opt/wuji-auto-trading/logs/gateway.log | tail -1)
+    echo \"  \${coin}: \${last:0:80}\"
+  done
+"
+```
+
+### Step 8: 恢复 cron（gateway_monitor）
+
+```bash
+ssh root@100.122.227.7 "
+  echo '*/5 * * * * cd /opt/wuji-auto-trading && bash trading/monitor/gateway_monitor.sh >> logs/gateway_monitor.log 2>&1' | crontab -
+  crontab -l
+"
+```
+
+### Step 9: CHANGELOG + 自审
+
+---
+
+## 验证标准
+
+- Gateway 进程存活（ps aux）
+- 9 个币种全部有 KLINE 数据（grep 日志）
+- gateway_monitor cron 已设置
+- .env 密钥完整（脱敏确认）

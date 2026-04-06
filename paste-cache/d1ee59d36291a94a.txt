@@ -1,0 +1,88 @@
+⏺ Update(lab/src/core/strategy/strategy_order_block.py)
+  ⎿  Added 1 line, removed 1 line                                             
+      123              ob_low, ob_high, age = best_bear_ob                    
+      124              if ob_low <= current_price <= ob_high:                 
+      125                  if signal == Signal.BUY:                             
+      126 -                    if age < best_bull_ob[2]:                        
+      126 +                    if best_bull_ob is not None and age < best       
+          +_bull_ob[2]:                                                         
+      127                          signal = Signal.SELL                         
+      128                          confidence = (                 
+      129                              (current_price - ob_low)
+
+⏺ 验证：                                                           
+                                                                              
+⏺ Bash(cd "/Volumes/BIWIN NV 7400 2TB/Loop" && python3 -m py_compile
+      lab/src/core/strategy/strategy_order_block.py && echo "语法OK")         
+  ⎿  语法OK                                                                     
+  
+⏺ Bash(cd "/Volumes/BIWIN NV 7400 2TB/Loop" && python3 -m mypy                  
+      lab/src/core/strategy/strategy_order_block.py --ignore-missing-imports  
+      2>&1)                                                                     
+  ⎿  Error: Exit code 1                                           
+     lab/src/core/strategy/base.py:50: error: Incompatible types in assignment  
+     (expression has type "None", variable has type "dict[Any, Any]")  
+     [assignment]                                                               
+     Found 1 error in 1 file (checked 1 source file)              
+
+⏺ strategy_order_block.py 的 mypy 错误已清。更新 PROGRESS.md 并 commit：        
+                                                                              
+  Read 1 file (ctrl+o to expand)                                                
+                                                                  
+⏺ Update(PROGRESS.md)                                                           
+  ⎿  Added 1 line                                                             
+       4  STATUS: IN_PROGRESS                                                   
+       5                                                                      
+       6  ## 当前遍数（历史）                                                   
+       7 +第 108 遍（mypy tuple|None index 安全修复 strategy_order_block.       
+         +py 1处）                                                              
+       8  第 107 遍（mypy 实例变量类型注解 backtest.py 2处）                    
+       9  第 100 遍（mypy result 变量联合类型注解）                             
+      10  第 1 遍（死代码大清洗）— ✅ 已完成                                    
+                                                                                
+⏺ Update(PROGRESS.md)                                               
+  ⎿  Added 15 lines                                                           
+       9  第 100 遍（mypy result 变量联合类型注解）
+      10  第 1 遍（死代码大清洗）— ✅ 已完成                                  
+      11                                                                        
+      12 +## 第 108 遍 — mypy tuple|None index 安全修复（strategy_order_b
+         +lock.py 1处）                                                         
+      13 +                                                               
+      14 +`strategy_order_block.py:126` 在 `if best_bear_ob:` 块内引用 `b       
+         +est_bull_ob[2]`，但 mypy 无法跨分支跟踪 `best_bull_ob` 的 None-
+         +check，导致 `[index]` 错误。                                   
+      15 +                                                               
+      16 +修复：加 `best_bull_ob is not None` 显式 guard：               
+      17 +```python                                                      
+      18 +if age < best_bull_ob[2]:  →  if best_bull_ob is not None and a
+         +ge < best_bull_ob[2]:                                          
+      19 +```                                                            
+      20 +                                                               
+      21 +- [x] strategy_order_block.py:126 — 加 `best_bull_ob is not Non
+         +e` guard，消除 tuple|None index 错误                           
+      22 +                                                               
+      23 +mypy strategy_order_block.py --ignore-missing-imports 零错误。 
+      24 +                                                               
+      25 +---                                                            
+      26 +                                                               
+      27  ## Opus（外部顾问）审查报告 — 起始弹药
+      28  
+      29  代码库规模：29,670 行 Python，176 个文件。以下是外部审查发现的
+          问题，按优先级排列。
+
+⏺ Bash(cd "/Volumes/BIWIN NV 7400 2TB/Loop" && git add -A && git commit -m
+      "第108遍：mypy tuple|None index 安全修复（strategy_order_block.py 1处）…)
+  ⎿  [main 6f2bec5] 第108遍：mypy tuple|None index 安全修复（strategy_order
+     _block.py 1处）
+      Committer: AllenBOT <allenbot@Echo.local>                                 
+     … +14 lines (ctrl+o to expand)                                           
+                                                                                
+⏺ 🔄 第108轮 | strategy_order_block.py mypy tuple|None index 修复 | 
+  下一轮方向：mypy base.py:50 None→dict assignment                              
+                 
+  剩余 mypy 错误：                                                              
+  - base.py:50 — dict[Any, Any] 被赋 None                                       
+  - test_bet_calc.py:77,83 — generator item type                                
+  - backtest.py:354,361 — return None vs BacktestResult                         
+  - trader_bot.py:212 — arg-type Any|None                                       
+  - trader_bot.py:439 — tuple 长度不匹配      

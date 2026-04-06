@@ -1,0 +1,82 @@
+# 计划：初熊不开单解决方案 — 换策略 or 去 mirror
+
+## Context
+
+比赛实盘自 3/21 18:16 regime 切换到初熊后，SOL/ETH/XRP 全程 HOLD，距今约 32 小时无开单。
+
+**已确认：**
+- 不动阈值（阈值是回测选出来的结果）
+- mean_reversion_mirror 在初熊 SELL_ONLY 下产出 BUY 信号 → 全被 Regime Bridge 拦截 → 全程 HOLD
+- 需要换一种解法
+
+## 老板的两个方向
+
+**方向 A：初熊换成 non-mirror（去掉 --mirror 标志）**
+**方向 B：找另一个策略代替熊市**
+
+---
+
+## 方向 A 分析：去掉 --mirror
+
+**逻辑**：mean_reversion（无 mirror）自然产出 BUY 和 SELL 两类信号：
+- BUY = 价格低于 MA × 0.995（价格跌了，等反弹）→ 初牛 BUY_ONLY 通过
+- SELL = 价格高于 MA × 1.005（价格涨了，等回落）→ 初熊 SELL_ONLY 通过
+
+**优点**：
+- 改动极小：只改 `~/trading/process_guard.sh` 的三行，把 `--mirror` 删掉
+- Regime Bridge 照常工作，自动选方向
+- 在初熊下，等行情出现反弹小高点（> MA × 1.005）就 SELL
+
+**缺点 / 风险**：
+- mean_reversion（非 mirror）Gate TTP SHORT 排名：ETH 69.96x（未被选为冠军）
+- 不是经过 Gate 严格验证的 SHORT 策略
+- 初熊中的反弹行情可能不够 0.5% 偏离
+
+**改动文件**：`~/trading/process_guard.sh` 三行去掉 `--mirror` 标志
+
+---
+
+## 方向 B 分析：换策略
+
+**查 Gate TTP 非 mirror SHORT 冠军结果（ETH/SOL/XRP）：**
+
+| 币种 | 最佳非mirror策略 | all_pnl | 是否被Gate选中 |
+|------|------------|---------|--------------|
+| ETH | ad (30m) | 69.96x | ❌ 未入选 |
+| SOL | ad (30m) | 98.36x | ❌ 未入选 |
+| XRP | ad (30m) | 102.86x | ❌ 未入选 |
+
+**关键问题**：`ad` / `ad_long` 策略已被老板在 #93 任务清除（中彩票策略，靠 2020 年 3 笔交易撑全程）。
+
+**Gate TTP 选中的 SHORT 冠军大多数是 mirror 策略**（mean_reversion_mirror / bb_squeeze_mirror / elder_ray_mirror），这些 mirror 策略同样在 SELL_ONLY 下会遇到类似问题（也产 BUY 居多）。
+
+**换策略选项**（Gate TTP 选中的 SHORT，ETH）：
+- ETH 15m: `bb_squeeze_mirror`（sp_dip, 358x）— 也是 mirror，信号方向待查
+- ETH 15m: `elder_ray_mirror`（sp_flat, 231x）— 也是 mirror
+- ETH 1m: 无合适非 mirror 冠军
+
+**结论**：换 SHORT 策略难找到非 mirror 的好选项，Gate 选出来的都是 mirror 策略。
+
+---
+
+## 推荐方案
+
+**推荐方向 A（去掉 --mirror）**，原因：
+1. 改动最小（只改 process_guard.sh 三行）
+2. mean_reversion 本身逻辑适合两方向：跌了买反弹（初牛），涨了空回落（初熊）
+3. Gate TTP 选出的 SHORT mirror 策略也大概率存在同样的 SELL 信号缺失问题
+
+**执行步骤（方向 A）：**
+1. 编辑 `~/trading/process_guard.sh`，三行删掉 `--mirror` 标志
+2. 杀旧进程（让 process_guard.sh 自动重启）
+3. 观察日志：2 小时内是否出现 SELL 信号
+
+## 验证标准
+
+调参后，2小时内有 SELL 信号产出（不要求必须开单，只要策略有信号就说明阈值有效）。
+
+## 关键约束
+
+- 不能在比赛中间做大改动（换周期 = 动 Gateway + TTP + Regime Bridge，风险太大）
+- 调参只改 bitmex_race.py 的 coin_thresholds，一个 dict，不动任何其他文件
+- 改完必须 py_compile 验证，重启进程后观察日志

@@ -1,0 +1,12 @@
+# Telegram 监控 + TTP 探针（自审完毕）
+
+## 自审修正
+1. urllib 替代 requests（零依赖）
+2. TTP 日志只在关键事件打（防爆）
+3. 老板需配 Telegram Bot Token
+
+## 改动文件
+1. `lab/src/monitor/telegram_alert.py` — 新建（~30行）
+2. `lab/src/trading/system.py` — 接入 send_alert（+15行）
+3. `lab/src/core/risk/ttp.py` — 加探针日志（+20行）
+4. `lab/bitmex_race.py` — 变盘处接入 send_alert（+3行）

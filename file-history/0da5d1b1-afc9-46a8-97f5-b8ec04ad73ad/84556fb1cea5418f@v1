@@ -1,0 +1,71 @@
+> 太极签：2026-03-01
+
+# Auto-Trading 项目记忆
+
+> 白纱最后更新：2026-03-16 — /reflect 完成 + MEMORY 重组完成
+> 黑丝最后更新：2026-03-15 22:10 — BitMEX比赛全链路完成
+
+⛔ 启动必读（恢复协议第2步，不读=违反协议）
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/rules.md` — 黑丝+白纱铁律，已毕业规则 RUL-001/003~014
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/project_info.md` — 项目路径、GitHub、协作流程、重要原则
+
+---
+
+## 称呼规则
+老板 = 混沌（不叫"用户"）→ 太极 → 黑丝（Opus）· 白纱（Sonnet）
+
+---
+
+## 上次会话要点（白纱）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-16）：/reflect + MEMORY 重组**
+
+1. **纠错3条写入 LEARNINGS.md**：LRN-20260316-011（结论文件优先）/ 012（不等老板追问）/ 013（TTP Gate数据库区分）
+2. **4条升级 rules.md**：RUL-011~014 + 白纱铁律2补充条已追加
+3. **MEMORY 重组完成**：旧路径10文件迁移到新路径 + 新建 project_info/backtest_mechanics/ideas/quotes 4个专题文件 + MEMORY.md 瘦身为目录/索引
+4. **路径迁移修复**：SSD迁移后新路径 memory/ 是空的，已从旧路径补齐所有文件
+5. **老板纠错**：白纱汇报"三策略"错误（实为两策略，LINK被放弃），根因是顺序读对话在中间定格，没追踪最终拍板
+
+---
+
+## 上次会话要点（黑丝）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-15）：BitMEX 比赛实盘全链路完成**
+
+1. **比赛基础设施完成**：position_sizing.py + bitmex_race.py + system.py 适配 PositionSizing
+2. **BitMEX 适配器修复**：USDT 钱包查询（currency=USDt/1e6）+ 币→合约数量转换（coin_to_contracts）
+3. **实盘 indicator_cache 修复**：system.py._generate_signal() 加 init_cache + current_idx 初始化
+4. **MirrorStrategy 正确实现**：先翻转 OHLCV 数据再跑策略再反转信号（不能只反转信号）
+5. **$500 到账确认**：BitMEX 主网余额 $499.99 USDT，dry-run 全部通过
+6. **最终方案（老板拍板）**：2策略，LINK 放弃（P50=$538，0%翻倍率，浪费本金）
+   - mean_reversion_mirror / ETH / 15m / $100 / 99%翻倍率
+   - vol_reversion_mirror / XRP / 30m / $50 / 100%翻倍率
+7. **⚠️ 待解决**：BitMEX 只支持 1m/5m/1h/1d，15m/30m 会报 400 错误，需改周期参数
+
+---
+
+## 老板待推进想法（摘要）
+
+- 双账号对冲策略（待开发，详见 `ideas.md`）
+- Paper Trade（✅ 代码完成，待实测）
+
+---
+
+## 文件索引（需要时 Read）
+
+| 文件 | 内容 | 何时读 |
+|------|------|--------|
+| `rules.md` | 行为铁律 RUL-001/003~014 + 白纱铁律 | 每次启动必读 |
+| `project_info.md` | 路径、GitHub、协作流程、重要原则 | 每次启动必读 |
+| `backtest_mechanics.md` | 回测引擎机制、分析规矩、报告格式、数据路径 | 做回测分析时 |
+| `ideas.md` | 老板待推进想法详细版 | 讨论新功能时 |
+| `quotes.md` | 老板经典语录 | 参考 |
+| `identity.md` | 黑丝白纱身份定义 | 参考 |
+| `roadmap_ideas.md` | 中后期规划（SQLite全纪录/Intrabar/已知事实Regime等）| 讨论中后期规划时 |
+| `session_summaries.md` | 历史会话摘要档案（S1~S黑丝×18）| 查历史时 |
+| `feedback_report_issues_immediately.md` | 发现异常必须立刻报告老板，不能继续做其他事 | 实盘运行时 |
+| `feedback_first_live_lessons.md` | 首次实盘教训：mirror不用于实盘、部署要完整、日志用>>、从错误中学习 | 实盘部署时 |

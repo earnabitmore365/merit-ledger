@@ -1,0 +1,9 @@
+{
+  "id": "25",
+  "subject": "选人第二步：合格策略详情表",
+  "description": "合格策略的月均PnL/爆发月数等详情，按币种分组PnL降序",
+  "activeForm": "详情表",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,26 @@
+{
+  "mission": "plan: velvety-munching-raccoon.md",
+  "agent": "太极",
+  "started": "2026-04-02T11:10:06",
+  "status": "completed",
+  "estimated_reward": 0,
+  "held_points": 3,
+  "items": [
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/verify_registry.json",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/verify.py",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/merit_gate.py",
+      "done": true
+    }
+  ],
+  "completed": "2026-04-02T11:13:17"
+}

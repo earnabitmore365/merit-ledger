@@ -1,0 +1,20 @@
+---
+name: feedback_always_sync_all_docs
+description: 改了任何文件必须同步全链路——全局CLAUDE.md、项目CLAUDE.md、MEMORY.md、rules.md、GitHub 全部同步。永久性扣分项。
+type: feedback
+---
+
+改动必须同步全链路，缺一个都算未完成。
+
+**Why:** 2026-03-30 太极重构了项目级 CLAUDE.md（两仪宗规），但全局 CLAUDE.md 没跟上。老板发现差别巨大——"怎么项目级的和全局的差别那么大？"。同一天内完整性-6 违规多次（之前文档不更新也被罚过多次）。老板明确说"再犯永久性扣分"。
+
+**How to apply:** 每次改任何文件后，立刻检查以下清单：
+1. 全局 CLAUDE.md（~/.claude/CLAUDE.md）
+2. 项目 CLAUDE.md（项目根目录/CLAUDE.md）
+3. 太极 MEMORY.md
+4. 项目 MEMORY.md
+5. credit_system_design.md（如涉及功过格）
+6. GitHub repo（如涉及 merit-ledger）
+7. Downloads 副本（如老板要发给顾问）
+
+一个都不能漏。自审时第一项就检查这个。

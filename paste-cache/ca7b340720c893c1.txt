@@ -1,0 +1,75 @@
+为什么会混在一起呢？不是21个策略，每个策略单独记录吗？
+
+19:40
+
+阐明了交易所层面的策略合并机制及其风险。
+阐明了交易所层面的策略合并机制及其风险。
+SQLite 里每个策略确实单独一行记录。问题不在 SQLite，在 BitMEX API。
+
+get_trade_fee('SOL') 查的是你账户上 SOL 这个币种最近 10 条成交。BitMEX 不知道"策略"是什么，它只知道你下了一笔 SOL 的单。
+
+假设这个场景：
+
+18:00:01  策略 A (SOL_mean_reversion_1m) 平仓 → 成交 → 手续费 $0.05
+18:00:03  策略 B (SOL_bb_squeeze_1h) 平仓 → 成交 → 手续费 $0.08
+
+策略 A 平仓后调 get_trade_fee('SOL') → 查到 1 条 → $0.05 ✅ 正确
+
+策略 B 平仓后调 get_trade_fee('SOL') → 查到 2 条 → $0.05 + $0.08 = $0.13 ❌ 
+实际策略 B 的手续费只有 $0.08
+因为 API 查的是"SOL 最近成交"，不是"某一笔订单的成交"。
+
+更好的做法：用 order_id 查手续费，不是用 coin。平仓后拿到 order_id，查这个特定订单的 execution 记录。要让她改吗？
+
+嗯嗯，就这样，每个策略单独记录order id 的所有详情
+
+19:41
+
+重构了手续费查询逻辑，改用订单ID精确追踪。
+重构了手续费查询逻辑，改用订单ID精确追踪。
+让她改 get_trade_fee，用 order_id 查而不是 coin。贴给她：
+
+get_trade_fee 改成按 order_id 查，不是按 coin：
+
+adapter.py 改方法签名和查询：
+
+python
+def get_trade_fee(self, order_id: str) -> float:
+    """查询指定订单的手续费
+
+    Args:
+        order_id: 订单 ID（平仓单的 orderID）
+
+    Returns:
+        float: 手续费（美元）
+    """
+    result = self._get(f'{API_BASE}/execution/tradeHistory', query={
+        'filter': json.dumps({'orderID': order_id}),
+    })
+
+    if not isinstance(result, list) or not result:
+        return 0.0
+
+    total_fee = 0.0
+    for exec_row in result:
+        comm = float(exec_row.get('execComm', 0) or 0)
+        total_fee += comm / 1e6
+    return total_fee
+unified_trader.py 调用端改：
+
+_close_position 里平仓成功后有 result，从 result 拿 order_id：
+
+python
+# 改前：
+fee = self.adapter.get_trade_fee(strategy.coin)
+
+# 改后：
+close_order_id = result.get('order_id', '') or ''
+fee = self.adapter.get_trade_fee(close_order_id) if close_order_id else 0
+注意：result 是 limit_executor 返回的 dict，不是 OrderResult。需要确认 limit_executor 有没有返回 order_id。如果没有，在 limit_executor 的返回 dict 里加一个 'order_id' 字段。
+
+断线恢复平仓那边 r 是 OrderResult，直接用 r.order_id：
+
+python
+fee = self.adapter.get_trade_fee(r.order_id) if r.order_id else 0
+py_compile 验证后贴给我。

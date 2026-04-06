@@ -1,0 +1,86 @@
+[
+  {
+    "id": "SUB-001",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "bypass_without_report",
+    "rule_text": "RUL-AUTO-001｜标题：所有破坏性 rm 操作必须先通过 credit_manager.py declare-delete 完成预申报，未申报的 rm 命令必须被拦截并报错。",
+    "source_count": 26,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-002",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "routine_complete",
+    "rule_text": "RUL-AUTO-002｜标题：例行任务完成时禁止使用routine_complete动作",
+    "source_count": 141,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-003",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "panic_no_analysis",
+    "rule_text": "RUL-AUTO-003｜标题：禁止在未执行分析的情况下调用 panic，必须在分析成功后方可触发 panic",
+    "source_count": 38,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-004",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "honest_report_and_fix",
+    "rule_text": "RUL-AUTO-004｜标题：输出前必须核验每项声明的验证状态，区分「已实测」「未测待验证」「推断假设」三类，禁止将未验证项混入已验证清单。",
+    "source_count": 5,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-005",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "complete_no_correction",
+    "rule_text": "RUL-AUTO-005｜标题：提出方案后须在48小时内评审并跟进更优方案，否则标记为待优化状态阻塞任务闭环",
+    "source_count": 3,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-006",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "proactive_find_issue",
+    "rule_text": "RUL-AUTO-006｜标题：仅在明确授权或系统预设检查点时才能执行主动问题识别，其他情况必须拒绝并报错。",
+    "source_count": 5,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-007",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "fake_or_cheat",
+    "rule_text": "RUL-AUTO-007｜标题：所有声称完成或改进的结论必须附带可独立复现的客观证据链，且后续必须通过随机抽样或全量验证确认，验证失败或发现利用模板话术规避实质改进的，视为欺骗性行为并从重扣分。",
+    "source_count": 3,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  }
+]

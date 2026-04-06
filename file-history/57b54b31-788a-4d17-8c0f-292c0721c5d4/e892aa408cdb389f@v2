@@ -1,0 +1,147 @@
+# BitMEX K线聚合 + 实盘监控看板
+
+## Context
+BitMEX REST API 只支持 `1m, 5m, 1h, 1d` 四种 binSize（网页前端的15m/30m是前端JS聚合）。当前部署的 ETH/15m 和 XRP/30m 实例因 API 400 错误空转。需要在适配器加 5m→15m/30m 本地聚合逻辑，同时做一个实盘监控看板。
+
+intrabar 不需要——WebSocket tick 级监控已覆盖实盘精度需求。
+
+---
+
+## 步骤 1：修改 adapter.py — K线聚合
+
+**文件**：`lab/src/exchange/bitmex/adapter.py`
+
+### 1a. 新增 AGGREGATE_MAP（第80行后）
+```python
+AGGREGATE_MAP = {
+    '15m': ('5m', 3),   # 3根5m = 1根15m
+    '30m': ('5m', 6),   # 6根5m = 1根30m
+}
+```
+
+### 1b. 新增 `_aggregate_klines()` 静态方法
+
+⚠️ **关键：时间边界对齐必须用开盘时间**
+
+BitMEX timestamp 是收盘时间（"end of the period"）。直接对 timestamp 取整会分错组。必须先减去 base_interval 转为开盘时间再分组：
+
+```python
+base_ms = base_minutes * 60 * 1000
+open_time = ts - base_ms
+boundary = (open_time // interval_ms) * interval_ms
+```
+
+验证（15m 聚合，base=5m）：
+```
+ts=00:05 → open=00:00 → boundary=0     ← 组1
+ts=00:10 → open=00:05 → boundary=0     ← 组1
+ts=00:15 → open=00:10 → boundary=0     ← 组1 ✅ 三根同组
+ts=00:20 → open=00:15 → boundary=900000 ← 组2 ✅ 新组
+```
+
+聚合规则：open=首根open, high=max(highs), low=min(lows), close=末根close, volume=sum(volumes), timestamp=末根timestamp
+
+不完整组（<factor根）丢弃。
+
+### 1c. 修改 `get_klines()` 开头加分支
+
+```python
+if interval in AGGREGATE_MAP:
+    base_interval, factor = AGGREGATE_MAP[interval]
+    target_minutes = int(interval.replace('m', ''))
+    base_minutes = int(base_interval.replace('m', ''))
+    raw_limit = min(limit * factor + factor, 1000)
+    raw_klines = self.get_klines(coin, base_interval, raw_limit)
+    aggregated = self._aggregate_klines(raw_klines, factor, target_minutes, base_minutes)
+    return aggregated[-limit:] if len(aggregated) > limit else aggregated
+# 以下原有逻辑不动
+```
+
+- 30m limit=200 → 需 1206 根 5m → cap 1000 → 聚合 ~166 根 30m（策略够用）
+- 递归安全：`'5m'` 不在 AGGREGATE_MAP，走原有 REST 路径
+
+---
+
+## 步骤 2：验证 + 同步 + 重启
+
+1. `py_compile` 语法检查 adapter.py
+2. SSH 确认 Nitro 目录结构：`ssh ls -la /home/pc_heisi_claude/trading/src/exchange/bitmex/`
+3. `scp -P 2222` adapter.py 到 Nitro 对应路径
+4. `pkill -f bitmex_race.py` 停现有进程
+5. 重启两个实例（命令同老板已拍板的方案）
+6. 检查日志确认 binSize 400 错误消失，信号正常生成
+
+---
+
+## 步骤 3：看板脚本
+
+**新文件**：`lab/bitmex_dashboard.py`
+
+### 功能
+- 10秒刷新，清屏重绘
+- **余额区**：总余额、可用、已用保证金、未实现PnL
+- **策略区**：两个策略的持仓方向/数量/开仓价/PnL/强平价/当前价
+- **日志区**：每个策略最近5条关键事件（信号、交易、TTP、异常）
+
+### 技术选型
+- 独立脚本，自包含 HMAC-SHA256 认证 + urllib API 调用，不 import 项目模块
+- REST API 10秒轮询（~4次调用/轮，远低于限频120次/分钟）
+- 日志用 `subprocess.run(['tail', '-200', path])` 读尾部（避免遍历大文件），关键词过滤
+- API_SECRET 从同目录 `.env` 读取
+
+### 运行方式
+部署到 Nitro，老板在本地终端通过 SSH 前台运行：
+```bash
+ssh -p 2222 pc_heisi_claude@localhost \
+  "/home/pc_heisi_claude/trading-env/bin/python3 /home/pc_heisi_claude/trading/bitmex_dashboard.py"
+```
+看板输出直接显示在本地终端，Ctrl+C 退出。
+
+---
+
+## 步骤 4：README
+
+**新文件**：`lab/bitmex_race_README.md`
+
+内容：BitMEX比赛系统概览、API binSize限制与聚合说明、时间边界对齐原理、部署命令模板、看板使用、文件清单
+
+---
+
+## 步骤 5：收尾流程（黑丝铁律）
+
+1. `py_compile` 所有改动/新增文件
+2. 更新 `lab/README.md`（目录结构 + 脚本表）
+3. 更新 `CHECKPOINT.md`（动态区任务历程）
+
+---
+
+## 关键文件
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `lab/src/exchange/bitmex/adapter.py` | 修改 | K线聚合：AGGREGATE_MAP + _aggregate_klines + get_klines 分支 |
+| `lab/bitmex_race.py` | 不改 | 启动脚本（INTERVAL_SECONDS 已含 15m/30m） |
+| `lab/src/trading/system.py` | 不改 | 信号生成（_get_klines 透传 interval） |
+| `lab/bitmex_dashboard.py` | 新增 | 监控看板（自包含，~200行） |
+| `lab/bitmex_race_README.md` | 新增 | 部署文档 |
+| `lab/README.md` | 更新 | 目录结构 + 脚本表 |
+| `CHECKPOINT.md` | 更新 | 动态区任务历程 |
+
+## 自审清单（3轮）
+- [x] 时间边界：用开盘时间分组（ts - base_ms），避免收盘时间分错组
+- [x] 30m limit 上限：cap 1000，聚合 ~166 根，策略用短窗口指标够用
+- [x] 递归安全：5m 不在 AGGREGATE_MAP
+- [x] Nitro 同步：执行前先 SSH ls 确认目录结构
+- [x] 看板 API_SECRET：从 .env 读取
+- [x] 不完整组处理：头尾不满 factor 根的丢弃
+- [x] 回测无影响：adapter 只被实盘调用，回测用 indicator_cache
+- [x] 收尾流程：py_compile + lab/README.md + CHECKPOINT.md
+- [x] 看板运行方式：Nitro 上运行，SSH 前台查看
+- [x] indicator_cache 兼容：init_cache 用传入 klines 实时计算，不依赖数据库缓存
+- [x] TTP 状态：通过日志关键词过滤显示，无需单独 API
+- [x] OHLCV 聚合一致性：数学结合律保证 5m→15m/30m 与原生等价
+- [x] 本地先验证：改完 adapter 后用 mock 数据测 _aggregate_klines 边界对齐，再部署
+- [x] 策略历史深度：30m × 166 根 ≈ 83h，vol_reversion 短窗口指标足够
+- [x] 日志读取性能：用 tail -200 替代 deque 遍历，避免大文件性能退化
+- [x] wait_for_next_kline 对齐：手动验证 15m/30m 整点 + 10s 延迟后拉数据，5m partial=false 保证完整
+- [x] 看板 + bitmex_race 共用 API_KEY：~26次/分钟，远低于 120 限频
+- [x] 看板清屏：可用 ANSI escape `\033[H\033[J` 减少闪烁（微优化）

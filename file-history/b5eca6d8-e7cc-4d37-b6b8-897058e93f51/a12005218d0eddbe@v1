@@ -1,0 +1,685 @@
+# Handoff → Grok：通讯部总机架构重构方案（请审阅）
+
+> 白纱（Sonnet）写于 2026-03-19
+> 状态：三驾马车 v2.1 运行中，余额 $369.18，持仓 SOL多/ETH空/XRP多
+
+---
+
+## 一、背景
+
+三驾马车 v2.1 上线后暴露 429 限速风暴（3 个策略进程各自连 BitMEX WS + REST 轮询，约 60次/分钟）。虽已通过降频+熔断+WebSocket 稳住，但架构臃肿。老板立项"通讯部"重构：打造单点数据网关（Feed Gateway），统一接收数据后向下分发，彻底根除 429 隐患。
+
+**技术选型**：Python ZeroMQ (pyzmq)，轻量，无代理服务器，微秒级延迟。
+
+---
+
+## 二、架构对比
+
+**旧架构（问题根源）：**
+```
+SOL进程 → BitMEX WS
+ETH进程 → BitMEX WS   （3条独立WS + 9路REST并发 → 429风暴）
+XRP进程 → BitMEX WS
+```
+
+**新架构（目标）：**
+```
+Feed Gateway → BitMEX（唯一1条WS）
+               ↓ ZMQ PUB（本地5555端口）
+SOL进程 → SUB（只订阅SOL数据，零REST）
+ETH进程 → SUB（只订阅ETH数据，零REST）
+XRP进程 → SUB（只订阅XRP数据，零REST）
+下单时才走 REST API（极低频）
+```
+
+---
+
+## 三、黑丝方案详细内容
+
+### Phase 1 目标
+行情 + 持仓 + TTP 价格监控接入 Gateway。订单发送保持 REST 不变。
+
+---
+
+### 步骤 1：扩展 `lab/src/exchange/bitmex/websocket.py`（+40 行）
+
+在现有 BitMEXWebSocket 类里新增 tradeBin/margin 处理，不重写现有逻辑：
+
+```python
+# __init__ 新增:
+self._on_table_callback = None  # 泛用回调：(table, action, rows)
+self._kline_data = {}   # "{symbol}_{interval}" → latest kline dict
+self._margin_data = {}  # 最新余额
+
+# _on_message 末尾新增（在现有 4 个 elif 之后）:
+elif table.startswith('tradeBin'):
+    self._handle_tradebin(table, action, rows)
+elif table == 'margin':
+    self._handle_margin(action, rows)
+# 泛用回调
+if self._on_table_callback:
+    try:
+        self._on_table_callback(table, action, rows)
+    except Exception as e:
+        logger.error(f"Table callback 错误: {e}")
+
+def _handle_tradebin(self, table: str, action: str, rows: list):
+    """处理 tradeBin1m/tradeBin5m K线数据"""
+    with self._lock:
+        for row in rows:
+            symbol = row.get('symbol', '')
+            interval = table.replace('tradeBin', '')  # "1m" or "5m"
+            key = f"{symbol}_{interval}"
+            self._kline_data[key] = row
+
+def _handle_margin(self, action: str, rows: list):
+    """处理 margin 余额更新"""
+    with self._lock:
+        for row in rows:
+            self._margin_data.update(row)
+
+def get_kline(self, symbol: str, interval: str) -> Optional[Dict]:
+    with self._lock:
+        return self._kline_data.get(f"{symbol}_{interval}")
+
+def get_margin(self) -> Dict:
+    with self._lock:
+        return dict(self._margin_data)
+```
+
+---
+
+### 步骤 2：新建 `lab/src/data/feed_gateway.py`（~350 行）
+
+```python
+#!/usr/bin/env python3
+"""
+通讯部总机 — Feed Gateway
+
+单 WebSocket 连 BitMEX → ZMQ PUB 广播给所有策略进程。
+策略进程零 REST 调用（除下单外）。
+
+用法:
+  python3 feed_gateway.py
+  python3 feed_gateway.py --coins SOL,ETH,XRP --port 5555
+"""
+
+import os, sys, json, time, logging, threading, argparse
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
+from collections import deque
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+import zmq
+from exchange.bitmex.adapter import BitMEXAdapter, SYMBOL_MAP, API_BASE
+from exchange.bitmex.websocket import BitMEXWebSocket
+
+logger = logging.getLogger('FeedGateway')
+
+# BitMEX WS timestamp (ISO) → 毫秒时间戳
+def parse_ts(iso_str: str) -> int:
+    dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+    return int(dt.timestamp() * 1000)
+
+# WS tradeBin 行 → 标准 K 线 dict（与 adapter.get_klines 格式一致）
+def normalize_kline(row: dict) -> dict:
+    ts_ms = parse_ts(row['timestamp'])
+    return {
+        'timestamp': ts_ms, 'time': ts_ms,
+        'open': float(row.get('open', 0)),
+        'high': float(row.get('high', 0)),
+        'low': float(row.get('low', 0)),
+        'close': float(row.get('close', 0)),
+        'volume': float(row.get('volume', 0)),
+    }
+
+
+class FeedGateway:
+    """通讯部总机"""
+
+    def __init__(self, coins: List[str], intervals: Dict[str, str],
+                 zmq_port: int = 5555):
+        self.coins = coins
+        self.intervals = intervals  # coin → interval
+        self.zmq_port = zmq_port
+
+        # K 线滑动窗口：{coin}_{interval} → deque(maxlen=250)
+        self._kline_windows: Dict[str, deque] = {}
+        for coin in coins:
+            interval = intervals[coin]
+            key = f"{coin}_{interval}"
+            self._kline_windows[key] = deque(maxlen=250)
+
+        self._last_price: Dict[str, float] = {}
+        self._positions: Dict[str, dict] = {}
+        self._margin: dict = {}
+        self._lock = threading.Lock()
+
+        # ZMQ
+        self._ctx = zmq.Context()
+        self._pub = self._ctx.socket(zmq.PUB)
+        self._pub.bind(f"tcp://127.0.0.1:{zmq_port}")
+
+        # REQ/REP 端口（供策略进程启动时请求历史 K 线）
+        self._rep = self._ctx.socket(zmq.REP)
+        self._rep.bind(f"tcp://127.0.0.1:{zmq_port + 1}")  # 5556
+
+        self._ws: Optional[BitMEXWebSocket] = None
+        self._running = False
+
+    def start(self, api_key: str, api_secret: str, testnet: bool = False):
+        self._running = True
+
+        # 1. REST 拉历史 K 线填充窗口（仅启动时一次）
+        logger.info("正在加载历史 K 线...")
+        self._load_history(api_key, api_secret, testnet)
+
+        # 2. 连接 WebSocket
+        self._ws = BitMEXWebSocket(testnet=testnet)
+        ok = self._ws.connect(api_key=api_key, api_secret=api_secret)
+        if not ok:
+            logger.error("WebSocket 连接失败")
+            return
+
+        # 注册泛用回调（处理 tradeBin/margin）
+        self._ws._on_table_callback = self._on_ws_table
+
+        # 3. 订阅频道
+        topics = []
+        for coin in self.coins:
+            symbol = SYMBOL_MAP.get(coin, f"{coin}USDT")
+            interval = self.intervals[coin]
+            topics.append(f'tradeBin{interval}:{symbol}')
+            topics.append(f'trade:{symbol}')
+        topics.extend(['position', 'margin'])
+        self._ws.subscribe_private()
+        self._ws.subscribe(topics)
+
+        logger.info(f"Gateway 启动: ZMQ PUB={self.zmq_port} REP={self.zmq_port+1}")
+
+        threading.Thread(target=self._rep_loop, daemon=True).start()
+        threading.Thread(target=self._heartbeat_loop, daemon=True).start()
+
+        try:
+            while self._running:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("收到停止信号")
+        finally:
+            self.stop()
+
+    def stop(self):
+        self._running = False
+        if self._ws:
+            self._ws.disconnect()
+        self._pub.close()
+        self._rep.close()
+        self._ctx.term()
+
+    def _load_history(self, api_key, api_secret, testnet):
+        """REST 拉历史 K 线填充滑动窗口（仅启动时一次）"""
+        config = {'api_key': api_key, 'api_secret': api_secret, 'testnet': testnet}
+        adapter = BitMEXAdapter(config)
+        adapter._ws = None
+        adapter._connected = True
+
+        for coin in self.coins:
+            interval = self.intervals[coin]
+            key = f"{coin}_{interval}"
+            klines = adapter.get_klines(coin, interval, limit=250)
+            if klines:
+                self._kline_windows[key] = deque(klines, maxlen=250)
+                logger.info(f"  {key}: 加载 {len(klines)} 根 K 线")
+            else:
+                logger.warning(f"  {key}: 加载失败")
+
+    def _on_ws_table(self, table: str, action: str, rows: list):
+        """WebSocket 消息 → 更新缓存 + ZMQ 广播"""
+        if table.startswith('tradeBin'):
+            interval = table.replace('tradeBin', '')
+            for row in rows:
+                symbol = row.get('symbol', '')
+                coin = self._symbol_to_coin(symbol)
+                if not coin:
+                    continue
+                kline = normalize_kline(row)
+                key = f"{coin}_{interval}"
+                with self._lock:
+                    window = self._kline_windows.get(key)
+                    if window is not None:
+                        if not window or window[-1]['timestamp'] != kline['timestamp']:
+                            window.append(kline)
+                topic = f"KLINE.{coin}.{interval}"
+                self._pub.send_string(f"{topic} {json.dumps(kline)}")
+
+        elif table == 'trade':
+            for row in rows:
+                symbol = row.get('symbol', '')
+                price = row.get('price', 0)
+                coin = self._symbol_to_coin(symbol)
+                if coin and price > 0:
+                    with self._lock:
+                        self._last_price[coin] = price
+                    self._pub.send_string(f"TICK.{coin} {price}")
+
+        elif table == 'position':
+            for row in rows:
+                symbol = row.get('symbol', '')
+                coin = self._symbol_to_coin(symbol)
+                if coin:
+                    with self._lock:
+                        if action in ('partial', 'insert'):
+                            self._positions[coin] = row
+                        elif action == 'update':
+                            self._positions.setdefault(coin, {}).update(row)
+                        elif action == 'delete':
+                            self._positions.pop(coin, None)
+                    self._pub.send_string(f"POS.{coin} {json.dumps(row)}")
+
+        elif table == 'margin':
+            for row in rows:
+                with self._lock:
+                    self._margin.update(row)
+                self._pub.send_string(f"BALANCE {json.dumps(row)}")
+
+    def _rep_loop(self):
+        """REQ/REP 服务：响应策略进程的历史 K 线请求"""
+        poller = zmq.Poller()
+        poller.register(self._rep, zmq.POLLIN)
+        while self._running:
+            socks = dict(poller.poll(1000))
+            if self._rep in socks:
+                msg = self._rep.recv_string()
+                parts = msg.split()
+                if len(parts) == 3 and parts[0] == 'KLINES':
+                    coin, interval = parts[1], parts[2]
+                    key = f"{coin}_{interval}"
+                    with self._lock:
+                        window = self._kline_windows.get(key, deque())
+                        data = list(window)
+                    self._rep.send_string(json.dumps(data))
+                else:
+                    self._rep.send_string("[]")
+
+    def _heartbeat_loop(self):
+        """每 10 秒发心跳"""
+        while self._running:
+            self._pub.send_string(f"HEARTBEAT {time.time():.3f}")
+            time.sleep(10)
+
+    @staticmethod
+    def _symbol_to_coin(symbol: str) -> Optional[str]:
+        for coin, sym in SYMBOL_MAP.items():
+            if sym == symbol:
+                return coin
+        return None
+
+
+def main():
+    parser = argparse.ArgumentParser(description='通讯部总机 Feed Gateway')
+    parser.add_argument('--coins', default='SOL,ETH,XRP', help='币种')
+    parser.add_argument('--intervals', default='1m,1m,5m', help='对应币种的 K 线周期')
+    parser.add_argument('--port', type=int, default=5555, help='ZMQ PUB 端口')
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s [%(name)s] %(levelname)s %(message)s')
+
+    coins = args.coins.split(',')
+    intervals_list = args.intervals.split(',')
+    intervals = dict(zip(coins, intervals_list))
+
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
+
+    gateway = FeedGateway(coins=coins, intervals=intervals, zmq_port=args.port)
+    gateway.start(
+        api_key=os.getenv('BITMEX_API_KEY'),
+        api_secret=os.getenv('BITMEX_API_SECRET'),
+        testnet=os.getenv('BITMEX_TESTNET', 'false').lower() == 'true',
+    )
+
+if __name__ == '__main__':
+    main()
+```
+
+---
+
+### 步骤 3：新建 `lab/src/data/feed_client.py`（~200 行）
+
+```python
+#!/usr/bin/env python3
+"""通讯部客户端 — 策略进程用来接收 Gateway 推送"""
+
+import json, time, threading, logging
+from typing import Dict, List, Optional
+from collections import deque
+
+import zmq
+
+logger = logging.getLogger('FeedClient')
+
+
+class FeedClient:
+    """ZMQ 订阅客户端 — 线程安全"""
+
+    def __init__(self, pub_endpoint='tcp://127.0.0.1:5555',
+                 req_endpoint='tcp://127.0.0.1:5556'):
+        self._ctx = zmq.Context()
+
+        self._sub = self._ctx.socket(zmq.SUB)
+        self._sub.connect(pub_endpoint)
+
+        self._req = self._ctx.socket(zmq.REQ)
+        self._req.connect(req_endpoint)
+        self._req.setsockopt(zmq.RCVTIMEO, 10000)  # 10s 超时
+
+        self._lock = threading.Lock()
+        self._kline_windows: Dict[str, deque] = {}
+        self._last_price: Dict[str, float] = {}
+        self._positions: Dict[str, dict] = {}
+        self._balance: dict = {}
+        self._last_heartbeat: float = time.time()
+        self._kline_event = threading.Event()
+
+        self._running = True
+        self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
+        self._recv_thread.start()
+
+    def subscribe(self, coin: str, interval: str):
+        """订阅指定 coin 的所有频道"""
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, f'KLINE.{coin}.{interval}')
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, f'TICK.{coin}')
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, f'POS.{coin}')
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, 'BALANCE')
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, 'HEARTBEAT')
+
+        key = f"{coin}_{interval}"
+        with self._lock:
+            if key not in self._kline_windows:
+                self._kline_windows[key] = deque(maxlen=250)
+        logger.info(f"已订阅: {coin}/{interval}")
+
+    def request_history(self, coin: str, interval: str) -> List[Dict]:
+        """向 Gateway 请求历史 K 线（启动时一次性调用）"""
+        try:
+            self._req.send_string(f"KLINES {coin} {interval}")
+            reply = self._req.recv_string()
+            klines = json.loads(reply)
+            key = f"{coin}_{interval}"
+            with self._lock:
+                self._kline_windows[key] = deque(klines, maxlen=250)
+            logger.info(f"历史 K 线: {coin}/{interval} = {len(klines)} 根")
+            return klines
+        except zmq.Again:
+            logger.error("请求历史 K 线超时（Gateway 无响应）")
+            return []
+
+    def wait_for_kline(self, timeout: float = 120) -> bool:
+        """阻塞等待 K 线事件（事件驱动主循环用）"""
+        got = self._kline_event.wait(timeout=timeout)
+        self._kline_event.clear()
+        return got
+
+    def get_klines(self, coin: str, interval: str) -> List[Dict]:
+        key = f"{coin}_{interval}"
+        with self._lock:
+            return list(self._kline_windows.get(key, deque()))
+
+    def get_price(self, coin: str) -> float:
+        with self._lock:
+            return self._last_price.get(coin, 0.0)
+
+    def get_position(self, coin: str) -> Optional[dict]:
+        with self._lock:
+            return self._positions.get(coin)
+
+    def get_balance(self) -> dict:
+        with self._lock:
+            return dict(self._balance)
+
+    def is_gateway_alive(self) -> bool:
+        return (time.time() - self._last_heartbeat) < 30
+
+    def _recv_loop(self):
+        poller = zmq.Poller()
+        poller.register(self._sub, zmq.POLLIN)
+        while self._running:
+            socks = dict(poller.poll(1000))
+            if self._sub not in socks:
+                continue
+            msg = self._sub.recv_string()
+            space = msg.index(' ')
+            topic = msg[:space]
+            payload = msg[space+1:]
+
+            if topic.startswith('KLINE.'):
+                parts = topic.split('.')
+                coin, interval = parts[1], parts[2]
+                kline = json.loads(payload)
+                key = f"{coin}_{interval}"
+                with self._lock:
+                    window = self._kline_windows.get(key)
+                    if window is not None:
+                        if not window or window[-1]['timestamp'] != kline['timestamp']:
+                            window.append(kline)
+                self._kline_event.set()
+            elif topic.startswith('TICK.'):
+                coin = topic.split('.')[1]
+                with self._lock:
+                    self._last_price[coin] = float(payload)
+            elif topic.startswith('POS.'):
+                coin = topic.split('.')[1]
+                with self._lock:
+                    self._positions[coin] = json.loads(payload)
+            elif topic == 'BALANCE':
+                with self._lock:
+                    self._balance.update(json.loads(payload))
+            elif topic == 'HEARTBEAT':
+                self._last_heartbeat = float(payload)
+
+    def close(self):
+        self._running = False
+        self._sub.close()
+        self._req.close()
+        self._ctx.term()
+```
+
+---
+
+### 步骤 4：改造 `lab/src/trading/system.py`（+60 行，向后兼容）
+
+```python
+# __init__ 新增参数
+def __init__(self, ..., feed_client=None):
+    ...
+    self.feed_client = feed_client
+
+# _get_klines 改造
+def _get_klines(self):
+    coin = self.config.get('coin', 'ETH')
+    interval = self.config.get('interval', '1h')
+    if self.feed_client:
+        klines = self.feed_client.get_klines(coin, interval)
+        if klines:
+            return klines
+        self.logger.warning("Feed K线为空，等待 Gateway 推送...")
+        return None
+    # 旧 REST 路径不变
+    try:
+        return self.exchange.get_klines(coin, interval, self.config.get('kline_limit', 100))
+    except Exception as e:
+        self.logger.warning(f"K线获取失败: {e}")
+        return None
+
+# _sync_position 改造（feed 优先，REST 保底）
+def _sync_position(self):
+    self.sync_fails = getattr(self, 'sync_fails', 0)
+    self.halt_mode = getattr(self, 'halt_mode', False)
+    try:
+        coin = self.config.get('coin', 'ETH')
+        if self.feed_client:
+            pos_data = self.feed_client.get_position(coin)
+            qty = pos_data.get('currentQty', 0) if pos_data else 0
+            if qty > 0:
+                self.position = "BUY"
+                self.entry_price = float(pos_data.get('avgEntryPrice', 0) or 0)
+            elif qty < 0:
+                self.position = "SELL"
+                self.entry_price = float(pos_data.get('avgEntryPrice', 0) or 0)
+            else:
+                self.position = "NO_POSITION"
+            self.sync_fails = 0
+            if self.halt_mode:
+                self.logger.info("Feed 恢复，解除 HALT")
+                self.halt_mode = False
+            return
+        # 旧 REST 路径（含 Circuit Breaker）不变
+        ...
+
+# _ttp_loop 改造（feed 模式下 TTP 检查间隔降到 1 秒，不消耗 API）
+def _ttp_loop(self):
+    coin = self.config.get('coin', 'ETH')
+    while self._ttp_running:
+        try:
+            if self.position != "NO_POSITION" and self.risk_manager:
+                price = self.feed_client.get_price(coin) if self.feed_client \
+                        else self.exchange.get_price(coin)
+                if price > 0:
+                    result = self.risk_manager.check(...)
+                    if result.should_close:
+                        ...  # 现有 TTP 触发逻辑不变
+        except Exception as e:
+            self.logger.error(f"TTP 监控异常: {e}")
+        time.sleep(1 if self.feed_client else 10)
+```
+
+---
+
+### 步骤 5：改造 `lab/bitmex_race.py`（+40 行）
+
+```python
+# argparse 新增
+parser.add_argument('--feed', action='store_true',
+                    help='使用通讯部总机 Feed Gateway（需先启动 feed_gateway.py）')
+parser.add_argument('--feed-port', type=int, default=5555)
+
+# 创建 TradingSystem 之前初始化 FeedClient
+feed_client = None
+if args.feed:
+    from data.feed_client import FeedClient
+    feed_client = FeedClient(
+        pub_endpoint=f'tcp://127.0.0.1:{args.feed_port}',
+        req_endpoint=f'tcp://127.0.0.1:{args.feed_port + 1}',
+    )
+    feed_client.subscribe(args.coin, args.interval)
+    history = feed_client.request_history(args.coin, args.interval)
+    if not history:
+        logger.error("无法从 Gateway 获取历史 K 线，检查 Gateway 是否运行")
+        sys.exit(1)
+    # 断开 adapter 的 WS（不再需要）
+    if hasattr(adapter, '_ws') and adapter._ws:
+        adapter._ws.disconnect()
+        adapter._ws = None
+
+system = TradingSystem(..., feed_client=feed_client)
+
+# 主循环：feed 模式事件驱动，否则旧的 sleep 轮询
+if feed_client:
+    while True:
+        if not feed_client.is_gateway_alive():
+            logger.error("Gateway 心跳丢失！")
+        got_kline = feed_client.wait_for_kline(timeout=120)
+        if got_kline:
+            result = system.run_once()
+            ...  # 打印状态（同现有逻辑）
+        else:
+            logger.warning("120s 无 K 线事件")
+else:
+    while True:
+        wait_for_next_kline(args.interval, logger)
+        result = system.run_once()
+        ...
+```
+
+---
+
+### 步骤 6：验证
+
+```bash
+# 本地测试
+pip3 install pyzmq
+python3 -m py_compile lab/src/data/feed_gateway.py
+python3 -m py_compile lab/src/data/feed_client.py
+
+# 终端1：启动 Gateway
+cd lab && python3 src/data/feed_gateway.py --coins SOL,ETH,XRP --intervals 1m,1m,5m
+
+# 终端2：启动策略（dry-run）
+python3 bitmex_race.py --feed --regime-mirror --strategy mean_reversion \
+  --coin ETH --interval 1m --min-bet 100 --dry-run
+
+# 验证标准
+# - Gateway 日志: "加载 250 根 K 线" × 3
+# - 策略日志: "Feed 模式: 已连接 Gateway, 250 根历史 K 线"
+# - 策略日志: 收到 K 线信号并触发 run_once
+# - grep "429" 全部日志 = 0
+
+# Nitro 部署
+pip3 install --break-system-packages pyzmq
+nohup python3 src/data/feed_gateway.py >> logs/gateway.log 2>&1 &
+sleep 10
+nohup python3 bitmex_race.py --feed --regime-mirror ... >> logs/sol_1m_live.log 2>&1 &
+sleep 5
+nohup python3 bitmex_race.py --feed --regime-mirror ... >> logs/eth_1m_live.log 2>&1 &
+sleep 5
+nohup python3 bitmex_race.py --feed --regime-mirror ... >> logs/xrp_5m_live.log 2>&1 &
+```
+
+---
+
+## 四、文件清单
+
+| 文件 | 操作 | 行数 |
+|------|------|------|
+| `lab/src/data/__init__.py` | 新建 | ~0 |
+| `lab/src/data/feed_gateway.py` | 新建 | ~350 |
+| `lab/src/data/feed_client.py` | 新建 | ~200 |
+| `lab/src/exchange/bitmex/websocket.py` | 修改 | +40 |
+| `lab/src/trading/system.py` | 修改 | +60 |
+| `lab/bitmex_race.py` | 修改 | +40 |
+
+---
+
+## 五、关键设计决策
+
+1. **向后兼容**：不加 `--feed` = 旧行为完全不变，零风险切换
+2. **Gateway 单点**：唯一一条 WS 连接，彻底消灭 429
+3. **REQ/REP 历史同步**：策略启动时一次性请求 250 根历史 K 线，解决冷启动问题
+4. **心跳检测**：Gateway 每 10s 发心跳，30s 无心跳策略进程报警，60s 无心跳回退 REST
+5. **TTP 加速**：Feed 模式 TTP 检查可降到 1 秒（无 API 开销）
+6. **线程安全**：所有缓存操作加 `threading.Lock`
+
+## 六、黑丝自审结果（9 项全绿）
+
+| 检查项 | 状态 |
+|--------|------|
+| K 线历史加载方案 | ✅ REQ/REP 一次性请求 |
+| indicator_cache 兼容 | ✅ _get_klines 返回完整窗口 |
+| websocket.py 扩展方式 | ✅ 泛用回调 + tradeBin handler |
+| bitmex_race 主循环改造 | ✅ 事件驱动 |
+| 数据格式统一 | ✅ normalize_kline() |
+| 线程安全 | ✅ threading.Lock |
+| Gateway 断线检测 | ✅ 心跳 10s + 30s 警告 |
+| mirror 策略兼容 | ✅ K 线是原始数据，mirror 自己翻转 |
+| Circuit Breaker 兼容 | ✅ feed 模式 sync_fails 逻辑保留 |
+
+---
+
+## 七、请 Grok 审阅
+
+1. 方案架构是否有漏洞？ZeroMQ PUB/SUB 有没有我们没考虑到的边界情况？
+2. `tradeBin` 订阅：BitMEX 是否真的支持 `tradeBin1m:SOLUSDT` 这种格式？有无限制？
+3. Phase 1 保留 REST 下单，Phase 2 是否需要继续优化？
+4. 还有什么我们遗漏的风险点？

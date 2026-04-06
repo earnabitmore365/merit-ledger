@@ -1,0 +1,83 @@
+# SSH 隧道免密自动重连
+
+## Context
+
+SSH 反向隧道断线后无法自动重连（需要输密码），导致老板每次都要手动操作。本次彻底解决。
+
+## 已确认前提
+
+- Nitro 无 autossh，用 while true 循环
+- Nitro 无 ~/.ssh/mac_tunnel key
+- Mac Mini 无 authorized_keys 文件
+- Mac Mini PubkeyAuthentication=yes（默认开启）
+- 策略进程全部正常运行，不需要重启
+
+## 执行步骤（严格顺序，每步验证）
+
+### 步骤1：Nitro 生成 SSH key
+```bash
+ssh -p 2222 pc_heisi_claude@localhost 'ssh-keygen -t ed25519 -f ~/.ssh/mac_tunnel -N "" -C "tunnel-to-mac"'
+```
+验证：key 文件存在
+
+### 步骤2：把 Nitro 公钥加到 Mac Mini
+```bash
+scp -P 2222 pc_heisi_claude@localhost:~/.ssh/mac_tunnel.pub /tmp/nitro_pub.pub
+cat /tmp/nitro_pub.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+验证：authorized_keys 包含 tunnel-to-mac
+
+### 步骤3：验证免密连接
+```bash
+ssh -p 2222 pc_heisi_claude@localhost \
+  'ssh -i ~/.ssh/mac_tunnel -o StrictHostKeyChecking=no -o BatchMode=yes allenbot@192.168.0.15 echo OK'
+```
+验证：输出 OK，无密码提示
+
+### 步骤4：在 Nitro 创建隧道守护脚本
+```bash
+ssh -p 2222 pc_heisi_claude@localhost 'cat > ~/tunnel_guard.sh << '\''SCRIPT'\''
+#!/bin/bash
+# 隧道守护：免密自动重连
+while true; do
+    ssh -R 2222:localhost:22 \
+        -i ~/.ssh/mac_tunnel \
+        -o StrictHostKeyChecking=no \
+        -o ServerAliveInterval=30 \
+        -o ServerAliveCountMax=3 \
+        -o ExitOnForwardFailure=yes \
+        -N allenbot@192.168.0.15
+    echo "$(date) 隧道断了，5秒后重连" >> ~/tunnel.log
+    sleep 5
+done
+SCRIPT
+chmod +x ~/tunnel_guard.sh'
+```
+
+### 步骤5：切换隧道（关键！一条命令杀旧+启新）
+```bash
+ssh -p 2222 pc_heisi_claude@localhost \
+  'pkill -f "ssh -R 2222" 2>/dev/null; sleep 2; nohup ~/tunnel_guard.sh > /dev/null 2>&1 &'
+```
+此时旧隧道断 → 我这边 2222 断开 → 5秒后新隧道自动重连（免密）
+
+### 步骤6：验证自动恢复
+```bash
+sleep 15 && nc -z -w 3 localhost 2222 && echo "自动重连成功" || echo "失败"
+```
+
+### 步骤7：验证断线自动重连
+```bash
+# 手动杀一次隧道连接
+lsof -i :2222 | grep LISTEN | awk '{print $2}' | xargs kill
+sleep 15
+nc -z -w 3 localhost 2222 && echo "二次重连成功" || echo "失败"
+```
+
+## 验证标准
+
+1. 免密连接 ✅
+2. 步骤5后自动恢复 ✅
+3. 手动断一次，15秒内自动恢复 ✅
+4. 策略进程不受影响 ✅

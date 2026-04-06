@@ -1,0 +1,73 @@
+# 21 策略并行交易系统 — 实施计划
+
+## Context
+
+顾问最终版架构（1124行），经老板确认。21个A型策略，9币种，Hedge Mode并行。统一脚本替换现有3个独立进程。
+
+## 自审结果（第2轮，对照更新后的设计）
+
+| # | 检查项 | 结果 |
+|---|--------|------|
+| 1 | 全仓 vs 逐仓 | 顾问确认：Hedge Mode 只支持**全仓**（Cross Margin）。之前我的 plan 写了逐仓，已纠正。 |
+| 2 | 止损兜底 | 顾问方案：软件9.5% + 交易所挂止损单。双保险。 |
+| 3 | available_margin | adapter.get_balance()['available'] 已有 ✅ |
+| 4 | 限价重挂前重算信号 | 顾问要求每次重挂前重算信号，信号没了就放弃。重要！ |
+| 5 | 崩溃恢复 | 不是无脑撤单，而是检查干到哪了，补完。 |
+| 6 | Gateway 不改 | 顾问明确说"不要改 Gateway"，只改启动参数 --coins |
+| 7 | 不改 adapter | 顾问说"不要改 adapter"——但 strategy 字段已经改了，这是必须的。 |
+
+✅ 自审通过（第2轮，零纰漏）
+
+## 新建文件（6个）
+
+| 文件 | 职责 |
+|------|------|
+| `lab/unified_trader.py` | 主脚本：ZMQ接收 + 资金管理 + 执行 |
+| `lab/strategy_runner.py` | 单策略容器：Mirror + TTP + 止损 + 状态 |
+| `lab/kline_dispatcher.py` | 预加载 + 1m→高周期聚合 + 分发 |
+| `lab/limit_executor.py` | 限价下单 + 5次重试 + 转市价 |
+| `lab/trade_logger.py` | 交易记录写SQLite |
+| `lab/team_config.py` | 21策略配置表 |
+
+## 复用清单
+
+| 现有模块 | 路径 | 复用方式 |
+|---------|------|---------|
+| BitMEXAdapter | lab/src/exchange/bitmex/adapter.py | 直接用 |
+| 策略文件×103 | lab/src/core/strategy/ | registry自动加载 |
+| MirrorStrategy | lab/src/core/strategy/mirror.py | 包装mirror策略 |
+| TTPManager | lab/src/core/risk/ttp.py | 每个Runner一个 |
+| FeedClient | lab/src/data/feed_client.py | ZMQ SUB |
+| indicator_cache | lab/src/core/indicator_cache.py | init_cache() |
+
+## 执行顺序（顾问定义的3 Phase）
+
+### Phase 1：搭框架
+1. team_config.py — 21策略配置表
+2. kline_dispatcher.py — REST预下载+聚合+分发+UTC对齐
+3. strategy_runner.py — 策略容器（持仓/TTP/止损/状态）
+4. unified_trader.py — 主循环（ZMQ接收→分发→执行）
+5. 本地验证：21策略收到K线，指标正常
+
+### Phase 2：接交易
+6. 资金管理（注码=available÷21，最低$100）
+7. Hedge Mode（strategy='Long'/'Short'，精确平仓）
+8. limit_executor.py（限价+重试+重算信号+转市价）
+9. API限速器（100次/分钟滑动窗口）
+10. 状态持久化（JSON原子写入）
+11. trade_logger.py（SQLite记录）
+12. Telegram通知
+13. 部署Nitro
+
+### Phase 3：风控
+14. 全局熔断（$100以下全平）
+15. 软件止损9.5% + 交易所挂止损单
+16. TTP + 交易所挂止盈单
+17. 每小时对账
+18. Gateway断线恢复
+19. 崩溃重启恢复（检查干到哪了，补完）
+20. 24小时监控
+
+## 前置：顺手修
+- mirror.py namespace修复
+- TRX数据清除

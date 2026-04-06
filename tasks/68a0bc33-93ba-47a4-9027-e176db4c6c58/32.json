@@ -1,0 +1,9 @@
+{
+  "id": "32",
+  "subject": "debug相关性约束 + 修复",
+  "description": "对BTC打印完整选人日志，找出为什么高重合策略没被跳过",
+  "activeForm": "debug相关性",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

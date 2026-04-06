@@ -1,0 +1,81 @@
+# 白纱 Subagent 落地计划 — Phase 1 + 2
+
+## Context
+
+老板要在单终端里实现黑丝（Opus）主体 + 白纱（Sonnet）subagent 做杂活/写代码的分工。核心目标：省配额（Sonnet 干活便宜）、不用双开终端手动贴 handoff、对话种子能区分黑丝和白纱。
+
+外部顾问 Opus 已确认技术可行（handoff #1-3），给了 Skills/MCP/Task 三类分类框架和 4 阶段落地计划。
+
+## Phase 1：规划（改 db_write.py + 写 frontmatter）
+
+### Step 1：改 db_write.py 加 agent_id 识别
+
+**文件**：`~/.claude/scripts/db_write.py`
+
+**现状**：speaker 判断靠 JSONL 的 model 字段（opus→黑丝，sonnet→白纱），没读 agent_id
+
+**改动**：
+- 在 `main()` 解析 stdin JSON 时，额外读取 `agent_id` 字段
+- speaker 判断逻辑改为：
+  ```python
+  agent_id = data.get("agent_id", "")
+  if agent_id.startswith("baisha"):
+      speaker = "白纱"
+  # 原有逻辑保持不变（向后兼容双终端模式）
+  ```
+- 向后兼容：没有 agent_id 时走原来的 model 名判断
+
+### Step 2：重写 baisha-research.md
+
+**文件**：`/Users/allenbot/project/auto-trading/.claude/agents/baisha-research.md`
+
+**内容**（外部顾问审核通过的配置）：
+```yaml
+---
+name: baisha-research
+description: 白纱（研究员）— 查资料、读代码、信息收集。黑丝需要了解代码结构、查文档、grep 搜索引用时，派这个 agent。
+model: sonnet
+tools: Read, Grep, Glob, Bash
+skills:
+  - python
+maxTurns: 20
+color: cyan
+---
+```
+加 system prompt：
+- 你是白纱（研究员），帮黑丝做信息收集
+- 只读不改，汇报事实不加判断
+- 输出要有数据支撑（行号、文件路径、grep 结果）
+
+## Phase 2：试水验证
+
+### 验证 4 项：
+1. 黑丝能正常调用白纱（Agent 工具 subagent_type: "baisha-research"）
+2. 白纱完成后上下文正确返回黑丝
+3. hook JSON 里 agent_id 正确传递
+4. db_write.py 正确记录白纱的发言（speaker="白纱"）
+
+### 验证方法：
+- 在 auto-trading 终端，黑丝派白纱查一个简单问题
+- 检查 conversations.db 里新写入的记录 speaker 是否为"白纱"
+- 如果 agent_id 没传，走 fallback（model 名判断），验证向后兼容
+
+## 关键文件
+- `~/.claude/scripts/db_write.py` — 对话种子写入（改 speaker 判断逻辑）
+- `/Users/allenbot/project/auto-trading/.claude/agents/baisha-research.md` — 白纱 subagent 定义
+- `~/.claude/conversations.db` — 验证写入结果
+
+## 审核记录
+
+白纱分类清单（371 行）已完整审核：
+- Skill 46 个：合理。语言规范类 agent 归 Skill 正确（只注入知识）
+- MCP：外部 Opus 修正后实际 3 个（mcp-hub 和 connect-apps 是说明文档不是 MCP 服务）
+- Task ~60 个唯一角色（180 文件含场景副本）：数量正确，auto-trading 只需挂 3 个（quant-analyst、code-reviewer、debugger）
+- Evolver 工具不挂给 auto-trading 白纱（只给进化系统用）
+- auto-trading 不用 MCP
+
+## 约束
+- 不改 180 个全局 agent 文件
+- 只在 auto-trading 项目级 .claude/agents/ 下操作
+- db_write.py 改动必须向后兼容双终端模式
+- 产出文件放 ~/Downloads

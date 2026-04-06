@@ -1,0 +1,156 @@
+# Handoff: 三驾马车实盘监控
+
+> 黑丝（Opus）→ OpenClaw
+> 2026-03-19 06:10
+
+## 你的任务
+
+**每 10 分钟检查一次三驾马车实盘状态，按固定格式报告给老板。发现异常立刻报告，不要等下一轮。**
+
+---
+
+## 系统概况
+
+BitMEX 实盘交易，3 个独立进程跑在 Nitro 服务器上：
+
+| 币种 | 周期 | 模式 | 保证金 | 动态阈值 | 日志文件 |
+|------|------|------|--------|----------|----------|
+| SOL | 1m | mirror v2.1 | $100 | ±0.7% (0.993/1.007) | `logs/sol_1m_live.log` |
+| ETH | 1m | mirror v2.1 | $100 | ±0.5% (0.995/1.005) | `logs/eth_1m_live.log` |
+| XRP | 5m | mirror v2.1 | $80 | ±1.0% (0.990/1.010) | `logs/xrp_5m_live.log` |
+
+- **启动时间**：2026-03-19 02:40
+- **起始余额**：$398.09
+- **策略**：mean_reversion + SMA(200) mirror（翻转K线不翻信号 = 趋势跟踪）
+- **风控**：TTP（追踪止盈）+ 无止损（逐仓强平兜底）
+
+## 连接方式
+
+```bash
+# SSH 到 Nitro
+ssh -p 2222 pc_heisi_claude@localhost
+
+# 工作目录
+cd /home/pc_heisi_claude/trading
+
+# Python 需要 PYTHONPATH
+PYTHONPATH=src python3 <script>
+```
+
+## 已知问题
+
+1. **HTTP 429 Rate Limit** — 3 进程 + TTP 每秒轮询共享 API 配额，从 05:11 开始频繁触发 429。自动重试能恢复，但会导致信号延迟。暂不需要处理，但如果 429 导致进程崩溃要立刻报告。
+2. **websocket-client 未安装** — TTP 监控用 REST 轮询而非 WebSocket，是 429 的根因。
+3. **三进程共享余额** — 最大同时开仓 $280，余额 ~$396，缓冲 ~$116。如果余额跌破 $300 要报告。
+
+---
+
+## 监控命令（直接复制跑）
+
+```bash
+ssh -p 2222 -o ConnectTimeout=10 pc_heisi_claude@localhost '
+echo "=== PROCESSES ==="
+ps aux | grep "python3 bitmex_race" | grep -v grep | wc -l
+
+echo "=== BALANCE & POSITIONS ==="
+cd /home/pc_heisi_claude/trading && PYTHONPATH=src python3 -c "
+from exchange.bitmex.adapter import BitMEXAdapter
+from dotenv import load_dotenv
+import os
+load_dotenv(\".env\")
+config={\"api_key\":os.getenv(\"BITMEX_API_KEY\"),\"api_secret\":os.getenv(\"BITMEX_API_SECRET\"),\"testnet\":False,\"default_leverage\":10}
+a=BitMEXAdapter(config);a.connect()
+b=a.get_balance()
+print(\"Balance:\",round(b.get(\"usdc\",0),4))
+print(\"Available:\",round(b.get(\"available\",0),4))
+print(\"UnrealizedPnL:\",round(b.get(\"unrealized_pnl\",0),4))
+pos=a.get_positions()
+if pos:
+ for p in pos:
+  print(\"Position:\",p.side,p.coin,\"qty=\"+str(p.size),\"entry=\"+str(round(p.entry_price,4)),\"pnl=\"+str(round(p.unrealized_pnl,4)))
+else:
+ print(\"Position: NONE\")
+"
+
+echo "=== SIGNAL COUNTS ==="
+echo -n "SOL 1m: "; grep -c "信号=" /home/pc_heisi_claude/trading/logs/sol_1m_live.log
+echo -n "ETH 1m: "; grep -c "信号=" /home/pc_heisi_claude/trading/logs/eth_1m_live.log
+echo -n "XRP 5m: "; grep -c "信号=" /home/pc_heisi_claude/trading/logs/xrp_5m_live.log
+
+echo "=== TRADES ==="
+grep -E "操作=(BUY|SELL|REVERSE|CLOSE|TTP)" /home/pc_heisi_claude/trading/logs/sol_1m_live.log /home/pc_heisi_claude/trading/logs/eth_1m_live.log /home/pc_heisi_claude/trading/logs/xrp_5m_live.log 2>/dev/null
+echo "(empty = no new trades)"
+
+echo "=== RECENT ERRORS (last 5) ==="
+grep -i "error\|exception\|traceback" /home/pc_heisi_claude/trading/logs/sol_1m_live.log /home/pc_heisi_claude/trading/logs/eth_1m_live.log /home/pc_heisi_claude/trading/logs/xrp_5m_live.log 2>/dev/null | tail -5
+echo "(429 rate limit is known, only report if process crashes)"
+'
+```
+
+---
+
+## 报告格式
+
+每 10 分钟输出一次，格式如下：
+
+```
+## 巡检 HH:MM
+
+**进程：** 3/3 ✅（或 ⚠️ X/3，哪个挂了）
+**余额：** $XXX.XX（起始 $398.09，盈亏 +/-$X.XX）
+**未实现盈亏：** $X.XX
+
+### 持仓
+| 币种 | 方向 | 入场价 | 浮盈亏 |
+|------|------|--------|--------|
+| ETH | SHORT | $2,197.22 | +$2.54 |
+| ... | ... | ... | ... |
+（无持仓则写"空仓"）
+
+### 交易（本轮新增）
+- HH:MM ETH BUY @ $XXXX（或"无新交易"）
+
+### 异常
+- 无（或具体描述）
+
+### K线处理数
+SOL: XXX | ETH: XXX | XRP: XXX
+```
+
+---
+
+## 什么算异常（必须立刻报告，不等下一轮）
+
+| 异常 | 判断标准 | 严重度 |
+|------|----------|--------|
+| 进程挂了 | ps 查到 < 3 个 python3 bitmex_race 进程 | 🔴 立刻报告 |
+| 余额暴跌 | 余额 < $300 或单笔亏损 > $30 | 🔴 立刻报告 |
+| 非 429 错误 | 日志出现非 Rate Limit 的 error/exception | 🟡 立刻报告 |
+| 信号停止 | SOL/ETH 连续 5 分钟没有新的"信号="行 | 🟡 报告 |
+| 429 导致崩溃 | 429 后进程退出（ps 查不到） | 🔴 立刻报告 |
+
+**429 Rate Limit 本身是已知问题，不用每次报告。只有当 429 导致进程崩溃时才报告。**
+
+---
+
+## 当前状态快照（截至 06:04）
+
+- **余额**：$395.87（-$2.22）
+- **未实现盈亏**：-$4.31
+- **持仓**：ETH SHORT +$2.54 / XRP LONG -$4.17 / SOL LONG -$2.68
+- **交易历史**：
+  - 04:25 ETH BUY 开多
+  - 04:40 SOL BUY 开多
+  - 05:05 ETH 平多（+$7.77）→ 重新 BUY 开多
+  - 05:05 XRP BUY 开多
+  - 05:20 ETH SELL 反手做空
+- **错误**：全部是 HTTP 429 Rate Limit（~76 次），无其他错误
+
+---
+
+## 不要做的事
+
+- **不要停止或重启任何进程**
+- **不要修改任何代码或配置**
+- **不要下单或平仓**
+- 只监控、只报告，所有操作决策由老板做

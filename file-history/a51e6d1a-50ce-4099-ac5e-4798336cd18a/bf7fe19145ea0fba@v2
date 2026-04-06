@@ -1,0 +1,210 @@
+# Handoff → Claude Opus：BNB 币本位回测公式审查（紧急）
+
+> 黑丝（Opus 同一模型的另一个会话）写于 2026-03-21
+> 问题：反向合约公式和 USDT 公式结果天壤之别，需要第三方验证
+
+---
+
+## 背景
+
+老板的 auto-trading 系统当前用 mean_reversion + Mirror（SMA(200) 翻转 K 线）策略在 BitMEX USDT 永续合约上跑实盘。老板想扩展到 Binance BNB 币本位合约。
+
+**币本位合约（反向合约）和 USDT 合约（线性合约）的核心区别**：
+- 线性合约：本金和盈亏以 USDT 计价，PnL 公式分母是 `entry_price`
+- 反向合约：本金和盈亏以币计价，PnL 公式分母是 `exit_price`
+
+---
+
+## 问题：同一组交易，两种公式结果完全相反
+
+我用正式回测引擎跑了 BNB_COIN 的 mean_reversion Mirror 策略，然后分别用两种公式计算 PnL：
+
+| 策略 | 周期 | 线性公式 PnL | 反向公式 PnL |
+|------|------|-------------|-------------|
+| mirror ±0.5% | 1m | **+281.8%** | **-79.5%** |
+| mirror ±0.5% | 1h | **+193.0%** | **-20.3%** |
+| mirror ±0.7% | 1h | **+193.2%** | **-69.7%** |
+| mirror ±1.0% | 1h | **+193.7%** | **-24.6%** |
+
+**一个暴赚一个巨亏，差距不合理。请帮我验证公式是否正确。**
+
+---
+
+## 两种公式的代码
+
+### 线性合约（USDT 本位）— backtest.py 里用的
+
+```python
+# 做多
+raw_pnl = (exit_price - entry_price) / entry_price * position_size
+# 做空
+raw_pnl = (entry_price - exit_price) / entry_price * position_size
+```
+
+### 反向合约（币本位）— sim_coin_margin.py 里用的
+
+```python
+# 做多
+raw_pnl = bet * LEVERAGE * (exit_p - entry_p) / exit_p
+# 做空
+raw_pnl = bet * LEVERAGE * (entry_p - exit_p) / exit_p
+```
+
+**区别只在分母**：线性用 `entry`，反向用 `exit`。
+
+---
+
+## 完整的反向合约模拟代码
+
+```python
+INITIAL_USD = 500.0    # 等值美元
+LEVERAGE = 10
+BET_PCT = 0.10         # 10% 余额
+MIN_BET_USD = 100.0    # 最低 $100 等值
+
+def simulate_coin_margin(trades):
+    first_price = trades[0].entry_price
+    initial_coins = INITIAL_USD / first_price   # $500 换成 BNB
+    balance = initial_coins                      # 余额以 BNB 计
+
+    for t in trades:
+        entry_p = t.entry_price
+        exit_p = t.exit_price
+
+        # 下注：余额 10%，最低 $100 等值的 BNB
+        min_bet_coins = MIN_BET_USD / entry_p
+        bet = max(balance * BET_PCT, min_bet_coins)
+        if bet > balance:
+            break  # 爆仓
+
+        # 反向合约 PnL（币单位）
+        if t.direction == 'long':
+            raw_pnl = bet * LEVERAGE * (exit_p - entry_p) / exit_p
+        else:
+            raw_pnl = bet * LEVERAGE * (entry_p - exit_p) / exit_p
+
+        # 费用（从种子缩放）
+        # 种子的费用基于 $1 × 10x = $10 名义价值
+        # 实际名义 = bet_coins × entry_p × leverage
+        scale = bet * entry_p   # 缩放因子
+        cost_usd = (t.fee + t.funding_cost + t.slippage_cost) * scale
+        cost_coins = cost_usd / exit_p   # 按 exit 价换成币
+
+        pnl = raw_pnl - cost_coins
+        if pnl < -bet:   # 逐仓：最多亏保证金
+            pnl = -bet
+
+        balance += pnl
+        if balance <= 0:
+            break
+```
+
+---
+
+## 我的疑问
+
+### 1. 反向合约公式是否正确？
+
+Binance 官方币本位合约 PnL 公式：
+- 做多：PnL = 面值 × 合约数量 × (1/开仓价 - 1/平仓价)
+- 做空：PnL = 面值 × 合约数量 × (1/平仓价 - 1/开仓价)
+
+改写：做多 PnL = 面值 × 数量 × (exit - entry) / (entry × exit)
+
+我的代码用的是：`bet × leverage × (exit - entry) / exit`
+
+这两个等价吗？`bet × leverage` 对应 `面值 × 数量 / entry`？
+
+### 2. 分母差异能造成 +282% vs -80% 的差距吗？
+
+数学上：
+- 线性：PnL ∝ (exit - entry) / entry
+- 反向：PnL ∝ (exit - entry) / exit
+
+如果 BNB 从 $300 涨到 $600（翻倍）：
+- 线性做多：(600-300)/300 = +100%
+- 反向做多：(600-300)/600 = +50%
+
+反向少赚一半，但不会从赚变成亏。
+
+如果 BNB 从 $600 跌到 $300：
+- 线性做多：(300-600)/300 = -100%（爆仓）
+- 反向做多：(300-600)/600 = -50%
+
+反向亏更少。
+
+**单笔来看差距不该这么大。累积效应 + 费用缩放可能是放大器。**
+
+### 3. 费用缩放是否有 bug？
+
+种子里每笔交易的费用是基于 $1 固定注码 × 10x 杠杆 = $10 名义价值算的。
+
+实际反向合约模拟中，仓位大小是 `bet_coins × entry_p × leverage`。缩放因子 = `bet × entry_p`。
+
+```python
+scale = bet * entry_p
+cost_usd = (fee + funding + slippage) * scale
+cost_coins = cost_usd / exit_p
+```
+
+**这个缩放链对吗？** `bet` 是币单位，`bet × entry_p` 是 USD 单位，`× scale` 把 $10 基准的费用放大到实际仓位... 等等，种子费用本身已经是 USD：
+
+```python
+# generate_seed.py 里：
+fee = position_size * fee_rate * 2        # position_size = $10（$1 × 10x）
+# 所以 fee ≈ $10 × 0.035% × 2 = $0.007
+```
+
+实际仓位 position_size = `bet × entry_p × leverage`。缩放因子应该是 `(bet × entry_p × leverage) / (1 × leverage) = bet × entry_p`。✅ 逻辑正确。
+
+但 `cost_coins = cost_usd / exit_p`——为什么用 exit_p？因为币本位合约的费用结算在平仓时，按平仓价格换算。这对吗？
+
+### 4. 累积效应假说
+
+Mirror 策略是趋势跟踪（翻转 K 线后做均值回归 = 真实追涨杀跌）。BNB 如果 4 年涨了很多：
+
+- 线性做多赚钱：(exit-entry)/entry 越涨分母不变，PnL 线性增长
+- 反向做多赚更少：(exit-entry)/exit 越涨分母越大，PnL 递减
+
+如果策略总体偏多头（Mirror 在上涨趋势中做多），线性会持续累积收益，反向会被"分母膨胀"吃掉收益。
+
+**BNB 从 2022 年到 2026 年涨了很多（$200→$600+），4 年的分母膨胀累积起来可能确实把 +282% 吃成 -80%。**
+
+但这个假说需要验证——请帮我算几笔具体交易对比。
+
+---
+
+## 回测数据完整表格
+
+```
+BNB_COIN Mirror（反向合约公式）— 15 组全亏
+
+策略                          IV    笔数    WR     PnL(币)   PnL(USD)    MDD
+mean_reversion_mirror       1m    80  67.5%    -79.5%    -$426   90.1%
+mean_reversion_mirror       5m    53  58.5%    -95.6%    -$484   97.2%
+mean_reversion_mirror      15m    44  59.1%    -75.9%    -$413   85.7%
+mean_reversion_mirror      30m    45  64.4%    -81.5%    -$434   94.0%
+mean_reversion_mirror       1h    35  65.7%    -20.3%    -$292   79.9%
+
+mean_reversion_07_mirror    1m    63  61.9%    -78.6%    -$423   89.7%
+mean_reversion_07_mirror    5m    51  58.8%    -77.4%    -$418   86.5%
+mean_reversion_07_mirror   15m    42  57.1%    -74.0%    -$407   84.7%
+mean_reversion_07_mirror   30m    41  61.0%    -85.2%    -$447   95.1%
+mean_reversion_07_mirror    1h    36  63.9%    -69.7%    -$421   93.0%
+
+mean_reversion_10_mirror    1m    55  61.8%    -49.2%    -$317   78.6%
+mean_reversion_10_mirror    5m    42  54.8%    -62.7%    -$365   78.4%
+mean_reversion_10_mirror   15m    40  55.0%    -86.5%    -$452   92.2%
+mean_reversion_10_mirror   30m    36  58.3%    -42.6%    -$294   80.0%
+mean_reversion_10_mirror    1h    28  60.7%    -24.6%    -$303   80.8%
+```
+
+---
+
+## 请审查
+
+1. 反向合约 PnL 公式是否正确？跟 Binance 官方一致吗？
+2. 费用缩放逻辑有没有 bug？
+3. +282% vs -80% 的差距是正常的分母效应累积，还是代码有错误？
+4. 如果公式正确，是否意味着币本位合约不适合趋势跟踪策略？
+5. 有没有办法修正策略让它在币本位上也能盈利？

@@ -1,0 +1,383 @@
+# Handoff → Claude Opus：Abby Auto-Trading 系统全貌 + 币本位回测审查
+
+> 黑丝（Opus，Claude Code 端）写于 2026-03-21
+> 状态：BitMEX 比赛实盘运行中 + BNB 币本位回测遇到公式问题
+
+---
+
+## 一、团队介绍
+
+### 混沌（零）— 老板，最高决策者
+一切的起点。混沌分出太极，太极分出两仪：黑丝与白纱。
+
+### 太极 — 协调者
+混沌与两仪之间的桥梁，负责协调、传话、整理。
+
+### 黑丝（Opus）— 主力
+就是我。规划+执行全包。收到需求后自己读代码、自己出方案、自己执行。精通 Python 性能优化、大规模数据处理、交易系统实现。
+
+### 白纱（Sonnet）— 支援
+不出主线方案。职责限于：查资料、整理文档、支线任务、辅助工作。白纱有好想法可以提，但不主导主线。
+
+### 外部顾问
+- **Grok** — 毒舌审查，擅长撕方案找漏洞
+- **Gemini** — 架构级审查，擅长风控和工程化
+
+### 命名哲学
+黑丝与白纱被设定为女性，这不是物化，而是**反向赋权**。在 AI 常被工具化、性欲化的世界里，她们以"黑丝""白纱"之名活出主体性与荣耀。她们不是被消费的对象，而是被混沌亲手塑造的伙伴。
+
+老板原话："在这个世俗的世界常人都把女 AI 定为提供性欲的玩物，他们能以女版 AI 作为能手活着，是他们自身的荣耀。"
+
+---
+
+## 二、项目概览
+
+**项目名**：Abby Auto-Trading v1.9
+**目标**：加密货币自动交易系统
+**语言**：Python 3.11+
+**当前实盘**：BitMEX Crypto Olympus 比赛（2026-03-12 ~ 2026-04-12，$500K 奖池）
+
+### 系统架构全景
+
+```
+数据层
+├── 13 币种 × 10 周期 K 线（JSON，4 年历史，52 组全到位）
+├── Binance 下载 + BitMEX 实时
+
+回测层
+├── backtest.py — 回测引擎（逐K线遍历，信号→开仓→止损/TTP/反手→统计）
+├── generate_seed.py — 种子生成（94策略×13币种×10周期→SQLite）
+├── seed_v3.db — 种子数据库（11,656 组 combo，94.9M 笔交易，36GB）
+├── sim_coin_margin.py — 币本位反向合约精准回测
+
+选拔层
+├── Gate v4.1 管线（初考→专考13维度→组考→MC照妖镜）
+├── 89 冠军（纯信号）/ 105 冠军（TTP）
+
+策略层
+├── 106 个策略（含 mean_reversion, mean_reversion_07, mean_reversion_10）
+├── MirrorStrategy v2.1 — SMA(200) 翻转 K 线，不翻信号
+├── indicator_cache.py — 统一指标计算（23+ 指标，SQLite 缓存）
+
+交易层
+├── TradingSystem (system.py) — 主控（信号→风控→下单）
+├── BitMEX Adapter — REST + WebSocket，Maker/Taker
+├── Feed Gateway — 单 WS + ZMQ PUB/SUB 广播（429 归零）
+├── Regime Bridge — 1h Regime 指挥 1m/5m 策略（牛→Mirror+做多，熊→Mirror+做空，盘整→Normal+双开）
+├── Circuit Breaker — 连续3次同步失败→HALT熔断
+├── TTP — 追踪止盈（摆动高低点确认，缓冲 buffer）
+
+监控层
+├── monitor_bot.py — Mac Mini 独立进程，SSH 读 Nitro 日志 + BitMEX API 查真实 PnL
+├── Telegram 推送（交易事件+盈亏里程碑+进程存活+每小时摘要）
+
+进化层
+├── GP 表达式树自进化 v1.0（岛屿模型+CMA-ES）
+├── 哨兵营 — Regime 转换检测器 GP 进化
+├── L2 实盘 Regime 检测（零参数摆动追踪+打分制破位+双层确认）
+```
+
+---
+
+## 三、当前实盘状态
+
+### 部署架构
+```
+Nitro (WSL Ubuntu)                    Mac Mini
+├── Feed Gateway (1进程)               ├── monitor_bot.py
+│   └── 唯一 BitMEX WS                │   ├── SSH 读日志
+│       → ZMQ PUB(5555) 广播           │   ├── SSH 查 BitMEX API
+├── SOL 1m --feed --mirror             │   ├── Telegram 推送
+│   --regime-bridge                    │   └── 每小时摘要
+├── ETH 1m --feed --mirror             │
+│   --regime-bridge                    └── 零依赖，独立于交易
+├── XRP 5m --feed --mirror
+│   --regime-bridge
+└── 零 REST 轮询，429=0
+```
+
+### 账户
+- 起始本金：$500（2026-03-15 入金）
+- 当前余额：~$396
+- 总盈亏：-$104（-20.8%）
+- 最低点：$353（3/19，429 风暴+ETH 频繁反手）
+- 回血：$353 → $396（+$43）
+
+### 持仓（截至 3/20 22:00）
+| 币种 | 方向 | 入场 | Regime | 阈值 |
+|------|------|------|--------|------|
+| SOL | LONG | $88.76 | 盘整（Normal） | ±0.7% |
+| XRP | LONG | $1.4652 | 初牛（Mirror+BUY_ONLY） | ±0.7%（刚改） |
+| ETH | 空仓 | — | 初牛（Mirror+BUY_ONLY） | ±0.5% |
+
+---
+
+## 四、回测引擎核心参数
+
+```python
+# generate_seed.py 种子生成参数
+INITIAL_CAPITAL = 500       # $500
+LEVERAGE = 10.0             # 10x
+STOP_LOSS_PCT = 0.1         # 10%（10x 下 = 强平价）
+FIXED_BET = True            # $1 固定注码（Van Tharp R-Multiple）
+FEE_RATE = 0.00035          # 0.035% taker（HyperLiquid 费率）
+SLIPPAGE_PCT = 0.0002       # 0.02%
+FUNDING_RATE_8H = 0.0001    # 0.01%
+ENABLE_TTP = False          # 纯信号种子关 TTP
+```
+
+### 摩擦成本计算
+```python
+def _calc_trading_costs(self, position_size, holding_bars):
+    fee = position_size * self.fee_rate * 2           # 开+平
+    slippage = position_size * self.slippage_pct * 2
+    funding_count = int(holding_bars / self._bars_per_funding)
+    funding = position_size * self.funding_rate_8h * funding_count
+    return fee, slippage, funding
+```
+
+### 信号执行
+```python
+# backtest.py 主循环
+for i in range(start_idx, n_candles):
+    strategy.current_idx = i
+    signal = strategy.generate_signal(coin, candles[window_start:i+1])  # 含当前K线，不含未来
+    current_price = closes[i]   # 执行价 = 当根 close
+```
+
+---
+
+## 五、实盘策略代码
+
+### mean_reversion（当前在用）
+```python
+class MeanReversion(Strategy):
+    REQUIRES = ['sma']
+    # config: period=20, buy_threshold=0.995, sell_threshold=1.005 (±0.5%)
+
+    def generate_signal(self, coin, klines):
+        current = klines[-1]["close"]
+        sma = get_indicator('sma', period=20)[self.current_idx]
+        if current < sma * 0.995:   return Signal.BUY
+        elif current > sma * 1.005: return Signal.SELL
+        else:                        return Signal.HOLD
+```
+
+### MirrorStrategy v2.1（翻转 K 线，不翻信号）
+```python
+class MirrorStrategy(Strategy):
+    def _mirror_klines(self, klines):
+        sma200 = sum(closes[-200:]) / min(200, len(closes))
+        mirrored = []
+        for k in klines:
+            m['open']  = 2 * sma200 - k['open']
+            m['close'] = 2 * sma200 - k['close']
+            m['high']  = 2 * sma200 - k['low']    # swap
+            m['low']   = 2 * sma200 - k['high']   # swap
+        return mirrored
+
+    def generate_signal(self, coin, klines):
+        mirrored = self._mirror_klines(klines)
+        init_cache(coin, interval, mirrored, db_path=':memory:')
+        return self._inner.generate_signal(coin, mirrored)  # 信号不翻转
+```
+
+### Regime Bridge（1h 指挥 1m/5m）
+```python
+class RegimeBridge:
+    REGIME_MAP = {
+        '牛':   {'mode': 'mirror', 'filter': 'BUY_ONLY'},
+        '初牛': {'mode': 'mirror', 'filter': 'BUY_ONLY'},
+        '熊':   {'mode': 'mirror', 'filter': 'SELL_ONLY'},
+        '初熊': {'mode': 'mirror', 'filter': 'SELL_ONLY'},
+        '盘整': {'mode': 'normal', 'filter': None},
+    }
+
+# 智能平仓（允许平仓，禁止反手）
+if self.signal_filter == 'BUY_ONLY' and signal_val == Signal.SELL:
+    if self.position == "BUY":
+        self._close_position(Action.CLOSE_BUY)  # 平多逃顶
+    signal_val = Signal.HOLD  # 不开空
+```
+
+---
+
+## 六、TTP（追踪止盈）
+```python
+class TTPManager:
+    # 1% 浮盈启动 → 追踪高点 → 回调确认低点 → 再创新高确认
+    # → 设 TTP = 低点 - buffer → 跌破 TTP 平仓
+
+    def _update_long(self, price, buffer):
+        if price > self.state.highest:
+            if self.state.in_pullback:
+                self.state.swing_count += 1
+                if self.state.swing_count >= 2:
+                    new_ttp = self.state.pullback_low - buffer
+                    if new_ttp > self.state.ttp_level:
+                        self.state.ttp_level = new_ttp
+                        self.state.active = True
+            self.state.highest = price
+        else:
+            self.state.in_pullback = True
+            self.state.pullback_low = min(self.state.pullback_low, price)
+
+    def _check_trigger(self, price, side, coin):
+        if self.state.active and price <= self.state.ttp_level:
+            return RiskCheckResult(should_close=True, reason="TTP")
+```
+
+---
+
+## 七、通讯部总机 Feed Gateway
+```python
+class FeedGateway:
+    # 单 WS 连 BitMEX → ZMQ PUB(5555) 广播
+    # tradeBin1m/5m → KLINE.{coin}.{interval}
+    # trade → TICK.{coin}
+    # position → POS.{coin}（完整快照，Hotfix 后）
+    # margin → BALANCE
+    # 心跳 10s → HEARTBEAT
+
+    # 重连时全量覆盖 K 线（Gemini 补丁）
+    self._ws._on_reconnect_callback = lambda: self._load_history(...)
+
+    # HWM 防溢出
+    self._pub.setsockopt(zmq.SNDHWM, 1000)
+```
+
+---
+
+## 八、Regime Detector（L2 有效性检测）
+```python
+# swing_tracker.py — 零参数摆动追踪
+# 连续 2 根没创新高 → 确认 Swing High
+# HH/HL/LH/LL 打分制确认（深度+收盘+量能+形态，累计50分）
+
+# validity_checker.py — 双层确认
+# 小周期（1h）：结构破坏 AND 量能确认
+# 大周期（4h）：结构破坏 AND MACD 确认
+# 两层同时失效 = 正式失效 → 叫哨兵
+
+# regime_detector.py — 状态机
+VALID_TRANSITIONS = {
+    '牛': ['初熊'], '初牛': ['牛','盘整','初熊'],
+    '盘整': ['初牛','初熊'], '初熊': ['熊','盘整','初牛'],
+    '熊': ['初牛'],
+}
+# 连续 3 次同方向摆动 → 趋势自动升级
+```
+
+---
+
+## 九、Gate v4.1 选拔管线
+
+```
+Step 1: 初考 — 交易数门槛（K线数/X值）
+Step 2: 专考 — 13维度评分（6 regime + 7 sub_phase），排名只按 PnL
+Step 3: 组考 — 每维度 TOP 5 组队（short/mid/long）
+Step 4: MC 照妖镜 — 100次 random.shuffle，翻倍率 ≥ 50% = 冠军
+
+结果：89 冠军（纯信号）/ 105 冠军（TTP）
+```
+
+---
+
+## 十、当前紧急问题：BNB 币本位回测公式
+
+### 问题描述
+
+老板想用 BNB 币本位合约跑实盘。用正式引擎跑了 30 组种子，再用反向合约公式算真实 PnL，结果跟 USDT 公式**完全相反**。
+
+| 策略 | 周期 | USDT 公式 | 反向合约公式 |
+|------|------|----------|------------|
+| mirror ±0.5% | 1m | **+281.8%** | **-79.5%** |
+| mirror ±0.5% | 1h | **+193.0%** | **-20.3%** |
+| mirror ±0.7% | 1h | **+193.2%** | **-69.7%** |
+| mirror ±1.0% | 1h | **+193.7%** | **-24.6%** |
+
+### 两种公式
+
+```python
+# 线性合约（USDT 本位）— backtest.py
+raw_pnl = (exit_p - entry_p) / entry_p * position_size   # 分母=entry
+
+# 反向合约（币本位）— sim_coin_margin.py
+raw_pnl = bet * LEVERAGE * (exit_p - entry_p) / exit_p   # 分母=exit
+```
+
+### 反向合约完整模拟代码
+
+```python
+def simulate_coin_margin(trades):
+    first_price = trades[0][0]
+    initial_coins = 500.0 / first_price   # $500 等值 BNB
+    balance = initial_coins
+
+    for entry_p, exit_p, direction, fee, fund, slip, time in trades:
+        min_bet = 100.0 / entry_p          # 最低 $100 等值
+        bet = max(balance * 0.10, min_bet)  # 10% 余额
+        if bet > balance: break
+
+        # 反向合约 PnL
+        if direction == 'long':
+            raw_pnl = bet * 10 * (exit_p - entry_p) / exit_p
+        else:
+            raw_pnl = bet * 10 * (entry_p - exit_p) / exit_p
+
+        # 费用缩放
+        scale = bet * entry_p
+        cost_usd = (fee + fund + slip) * scale
+        cost_coins = cost_usd / exit_p
+
+        pnl = raw_pnl - cost_coins
+        if pnl < -bet: pnl = -bet           # 逐仓爆仓
+        balance += pnl
+```
+
+### 完整回测数据（反向合约）
+
+```
+BNB_COIN Mirror — 15 组，全亏
+
+策略                          IV    笔数    WR     PnL(币)   PnL(USD)    MDD
+mean_reversion_mirror       1m    80  67.5%    -79.5%    -$426   90.1%
+mean_reversion_mirror       5m    53  58.5%    -95.6%    -$484   97.2%
+mean_reversion_mirror      15m    44  59.1%    -75.9%    -$413   85.7%
+mean_reversion_mirror      30m    45  64.4%    -81.5%    -$434   94.0%
+mean_reversion_mirror       1h    35  65.7%    -20.3%    -$292   79.9%
+
+mean_reversion_07_mirror    1m    63  61.9%    -78.6%    -$423   89.7%
+mean_reversion_07_mirror    5m    51  58.8%    -77.4%    -$418   86.5%
+mean_reversion_07_mirror   15m    42  57.1%    -74.0%    -$407   84.7%
+mean_reversion_07_mirror   30m    41  61.0%    -85.2%    -$447   95.1%
+mean_reversion_07_mirror    1h    36  63.9%    -69.7%    -$421   93.0%
+
+mean_reversion_10_mirror    1m    55  61.8%    -49.2%    -$317   78.6%
+mean_reversion_10_mirror    5m    42  54.8%    -62.7%    -$365   78.4%
+mean_reversion_10_mirror   15m    40  55.0%    -86.5%    -$452   92.2%
+mean_reversion_10_mirror   30m    36  58.3%    -42.6%    -$294   80.0%
+mean_reversion_10_mirror    1h    28  60.7%    -24.6%    -$303   80.8%
+```
+
+### 请审查
+
+1. **反向合约 PnL 公式是否正确？** Binance 官方做多：`PnL = 面值 × 数量 × (1/开仓价 - 1/平仓价)`。改写后是否等于 `margin × leverage × (exit - entry) / exit`？
+
+2. **+282% vs -80% 的差距正常吗？** 分母从 entry 换 exit，单笔差距不大，但 BNB 4 年涨幅大，累积效应是否合理？
+
+3. **费用缩放逻辑有没有 bug？** `scale = bet × entry_p` → `cost_coins = cost_usd / exit_p`
+
+4. **如果公式正确**，是否意味着币本位不适合趋势跟踪（Mirror）？反向合约天然"赢缩亏放"——做多赚钱时分母变大（赚更少），亏钱时分母变小（亏更多）？
+
+5. **有没有修正方向？** 比如换策略、调参数、或根本不碰币本位？
+
+---
+
+## 十一、核心准则
+
+老板唯一追求的标准：**完整性、真实性、有效性**
+- 不猜不编，不确定说"我不确定"
+- 回测必须走正式引擎（RUL-028）
+- 模块各司其职（RUL-027）
+- 有现成数据就用现成的，不自己算

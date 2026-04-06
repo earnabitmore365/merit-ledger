@@ -1,0 +1,324 @@
+# CHECKPOINT — Auto-Trading 项目状态
+
+> 本文件供白纱（Sonnet）与黑丝（Opus）交接使用，读完即可开始工作。
+> **动态区**随任务进展更新；**静态区**记录项目基础信息，不能乱改，但有事实数据变化、老板拍板新决策时必须同步更新。
+
+---
+
+<!-- DYNAMIC START -->
+
+> 白纱最后更新：2026-03-11 23:55
+> 黑丝最后更新：2026-03-21 19:58
+
+## 🎯 主线
+**BitMEX Crypto Olympus 比赛实盘 — 通讯部总机 Feed Gateway 运行中 + monitor_bot 429修复完成**
+
+## 🔧 支线
+- **GP v1.0 岛屿模型+CMA-ES** — ✅ 代码完成（6文件改动，待部署 Nitro 测试）
+- **GP 进化** — 骨架去重已部署（精英库+毕业生），调度器 v1.2 空缺优先轮转，Nitro 上 1 worker + islands 跑着
+- **哨兵营 v3 改进** — 🔧 待执行：①用L2摆动追踪生成分钟级regime标签（替换月级）②分币种独立训练（先BTC+ETH）③加多时间框架输入（1h/4h）
+- **增量回测管线** — ✅ 全量运行完成 + 每日 cron 已设
+- **每日自动管线** — ✅ cron 凌晨4点（下载→纯信号回测→TTP回测→报告→看板）
+
+## ⬜ 当前步骤
+**monitor_bot.py 429修复已完成，待部署 Mac Mini。**
+
+修改内容（monitor_bot.py，3处删除+2处新增）：
+- ❌ 删 `query_bitmex()` — 每60秒SSH到Nitro调BitMEX REST API的元凶
+- ❌ 删 `check_pnl_milestones()` — 依赖API数据的盈亏里程碑
+- ❌ 删 `PNL_CHECK_INTERVAL`/`PNL_MILESTONE`/`last_pnl_check`/`last_milestones`
+- ✅ 新增 `extract_balance_from_logs()` — 从Gateway日志提取余额
+- ✅ 新增 `extract_positions_from_logs()` — 从策略日志提取持仓
+- ✅ 每小时摘要改为纯日志提取（余额+持仓+regime），零API调用
+
+保留不动：`poll_logs()`（SSH读日志）、`parse_events()`（交易/Regime/TTP/HALT事件）、进程存活检测
+
+## 任务历程
+
+1. ✅ 初始系统搭建 — v1.4，44策略、回测引擎、curses UI
+2. ✅ UI 重构 — v1.5，BaseMenu组件库
+3. ✅ 全矩阵回测 v1+v2 — 1521→1720组
+4. ✅ Regime Detection v1+v2 — ADX三层复合
+5. ✅ 指标库 — 12个指标 + MarketScore
+6. ✅ 种子系统 v2 — 35字段schema + $1固定注码(Van Tharp)
+7. ✅ 数据下载全量 — 13币种 × 4周期 = 52组
+8. ✅ v2 种子生成 — 2236组 / 30M笔 / 7.54GB，验证通过
+9. ✅ 投资分析 — SOL/1h胜出 + BNB_COIN专项 + 路A/B验证（WF OOS崩盘，过拟合）
+10. ✅ 交易系统开发 — 4新文件，暂停等策略验证
+11. ✅ BTC历史时间表 — 21段已知事实（5类regime）
+12. ✅ Regime两层检测 — L1(12指标投票) + L2(各币种价格涨跌)
+13. ✅ Gate v3 — 25冠军（门槛→考场→组队→照妖镜）
+14. ✅ 专场照妖镜v5 — 15/15/14三考场，MC才是真照妖镜
+15. ✅ 策略审计#1-#75 — 代码审计全部完成，14❌→11❌修正，新建多个_2yi改进版
+16. ✅ 衍生品数据下载 — Funding Rate 83K条 + OI ~22K条 + LS Ratio ~20.7K条
+17. ✅ 深度清理 — 57废弃文件删除 + 策略命名统一（文件名=唯一源）
+18. ✅ 种子重建 — 88策略 / 10,912组 / 85.9M笔trades
+19. ✅ Gate v4.1 全管线 — 初考→专考13维度→组考→MC照妖镜→89冠军(Long40/Mid35/Short14)（含12个新拆分策略重跑）
+20. ✅ 币本位管线 — run_gate_v41_coin.py，9冠军(全mid队2h/4h)
+21. ✅ 方向过滤测试 — SMA50方向，最佳配对：1m~15m→4h, 30m→8h, 1h~4h→1d
+22. ✅ 量价过滤测试 — 中大周期全赚钱，方向是主力量价是质量提升器
+23. ✅ OI+FVG+FR降噪测试 — 方向+OI最佳组合，LS有害，FR/FVG看情况
+24. ✅ 装备配置哲学 — 裸跑选人→选完配装备（两步走）
+25. ✅ 降噪研究完整记录 — noise_reduction_research.md 12章全记录
+26. ✅ 合约81冠军+币本位9冠军装备配置
+27. ✅ 注码模拟 — 90冠军各$500独立跑，sim_position_sizing.py
+28. ✅ Regime组队切换 — 用regime_fact_labels自动切换，共用$500资金池
+29. ✅ 裸跑vs装备对比 — 装备在regime模式下减收益，仅SHORT可选穿
+30. ✅ 币本位精准回测 — 反向合约公式+Gate全管线，只1人存活
+31. ✅ 并发策略+提款机制 — 4测试×2版=8场景，sim_concurrent_regime.py
+32. ✅ 宏观指标照妖镜 — 9指标IC排名+分年+lag+权重对比，indicator_mirror.py
+33. ✅ L1踢掉（所有指标同步非领先，多余维护负担），三层架构定稿：L2(价格涨跌判regime) + L3(盘口Order Book)
+34. ✅ 哨兵检测体系脑暴 — 策略当传感器/去手续费/信号命中率，完整记录 sentinel_brainstorm.md
+35. ✅ 哨兵扫描 — 4步管线全部完成（种子13/13 + regime标签 + 哨兵扫描），耗时8.8小时
+36. ✅ 表达式树自进化 v0.1 — lab/gp_engine/ 完成，首跑过拟合未毕业
+37. ✅ 表达式树自进化 v0.2 — 5项升级(多周期/t-stat/WF/做空/无限循环)，231轮8毕业生
+38. ✅ 1m数据全量扩充 — 13币种全部2,102,000根(4年)，数据连续性验证通过(仅Binance源头1个81min gap)
+39. ✅ 表达式树自进化 v0.3 — 镜像毕业考(原始5窗+镜像5窗=10关需过9)
+40. ✅ 哨兵营 GP 进化 — sentinel_camp/ 6文件完成，F1适应度，4冠军(黄变绿/黄变红 F1=0.60，红变黄/绿变黄 F1=0.039)
+41. ✅ 表达式树自进化 v0.4 — 训练集内部3窗口WF取最低t-stat + 量能指标(volume_ratio/obv_slope)
+42. ✅ L2有效性检测模块 — lab/live_regime/ 6文件（零参数摆动+打分制破位+插针过滤+intrabar+升级检测），BTC 19/19匹配，2.4假警报/月
+43. ✅ GP/哨兵营6项批量修复 — RSI除零+ddof=1+日志聚合+崩溃保护+pickle缓存+版本号v0.4
+44. ✅ L2+L3并行开发 — live_runner.py(主网1h K线→regime) + order_book_checker.py(l2Book失衡) + websocket.py(l2Book订阅)
+45. ✅ TTP Intrabar验证 — 1m精度回放TTP，BTC/SOL/15m三组验证，34-47%触发率，77%更好，止损救援100%
+46. ✅ Exchange TTP适配 — ttp_orders.py，ExchangeTTPManager，trigger TP单 + positionTpsl grouping
+47. ✅ GP/哨兵精英库+断点续传 — 精英库Top20跨轮保留(graduates自动收录) + round_state.json断点续传 + 哨兵方向级恢复
+48. ✅ 精英库启动重评估+周期选择 — 启动时用当前fitness重新打分淘汰过时精英 + GP默认5m真实数据(--interval可选) + 去掉sub-sample默认值
+49. ✅ momentum_slope 拆分 — long/short两版（BUY/CLOSE + SELL/CLOSE），种子生成248组(124+124)
+50. ✅ 提款默认值修改 — backtest.py WITHDRAW_THRESHOLD=$5000, WITHDRAW_AMOUNT=$3000
+51. ✅ 镜像测试 — 翻转OHLCV验证方向策略，确认LONG优势=数据偏差，SHORT两边稳赚
+52. ✅ GP v0.5 反停滞升级 — 指标冷却2轮+方向70/30交替+PARSIMONY 0.02+--coin多币种，5文件改动
+53. ✅ GP v0.6 分池进化 — long/short各自独立锦标赛（鲨鱼比鲨鱼，鲤鱼比鲤鱼），每轮出两个冠军各自毕业考
+54. ✅ 哨兵营升级 — 指标冷却2轮+PARSIMONY 0.001→0.005
+55. ✅ 镜像训练数据 — 训练集=原始+镜像(价格翻转)，匹配毕业考10关难度（老板："数据不给多一倍，怎么可能跑出来"）
+56. ✅ 精英库方向分池 — hall_of_fame按L/S各Top100独立，注入时过滤冷却指标个体，日志显示交易量/胜率
+57. ✅ 多币种路径隔离 — 所有输出文件(log/精英库/断点/round_state/毕业生)加{coin}_{interval}后缀，13进程互不干扰
+58. ✅ 解冻周期 — 每10轮冷却后全部解冻3轮(让GP自由探索)，config: COOLDOWN_THAW_CYCLE=10, COOLDOWN_THAW_ROUNDS=3
+59. ✅ Live Regime自动检测 — 摆动高低点分析(HH/HL=牛,LH/LL=熊)，大TF权重×2，首次启动不再需要--regime参数
+60. ✅ GP v0.7 参数化指标 — RSI(5-50)/SMA(3-200)/EMA(3-200)周期自由选择 + DynamicIndicatorManager动态计算缓存 + 30%参数微调变异 + 旧格式向后兼容 + 冠军指标可视化 + 指标多样性惩罚(超4种扣0.3/种) + 冷却调优(触发2次/冷却3轮/解冻2轮) + 文件重命名(gp_evolve.py/sentinel_evolve.py) + 哨兵营参数化关闭+安全网
+61. ✅ GP v0.7b 精英去冷却+磁盘缓存 — 精英注入不受冷却过滤(老板：进入后就固定直到被淘汰) + DynamicIndicatorManager pickle磁盘持久化(进程重启不重算)
+62. ✅ Gate v4.1 重跑（含12新策略）— 81→89冠军(Long40/Mid35/Short14)，ad_long上榜，覆盖率报告strategy_gap_report_v2.html
+63. ✅ 哨兵就绪度分析 — 30位置(10币×3方向)：达标13/薄13/空白4，BTC/BNB Short/TRX Short=0为最大硬伤
+64. ✅ GP v0.8 专项冠军系统 — 弃权制毕业考+48缓存指标+删多样性惩罚(保留冷却)+清档，6文件改动完成
+65. ✅ GP v0.9 统一指标系统 — 参数化3→23种+indicator_cache统一库+删DynamicIndicatorManager/pickle/compute_all/load_from_cache，4文件改动完成
+66. ✅ GP 调度器 v1.0 — gp_scheduler.py全币全周期轮转(121组合/4工位/内存感知) + gp_evolve.py --rounds N参数
+67. ✅ TTP全量种子 — seed_v3_ttp.db 100%完成（26,288组/1.857亿笔/40GB）
+70. ✅ 种子预过滤优化 — generate_seed.py 并行+单线程版断点续传秒跳（已完成coin/interval不再加载K线）
+71. ✅ rsi_reversal_v2 修复 — MA方向过滤逻辑反转（超跌反弹：RSI超卖+价格在MA下方）
+68. ✅ 并行种子生成 — generate_seed.py `--workers N` 分库写→合并，小数据验证通过（212combo/38832trades零差异）
+69. ✅ Paper Trade 模拟交易 — PaperAdapter(真实行情+虚拟账本) + PaperTradeManager(26冠军×$500, WebSocket tick级风控+K线策略信号+regime切换)，4文件新建
+72. ✅ 哨兵营修复 — data_loader.py本地指标计算(24指标)替代已删除的gp_ind.compute_all()，清理坏断点
+73. ✅ SSD 迁移 — 项目从 /Users/allenbot/project/ 搬到 /Volumes/BIWIN NV 7400 2TB/project/，memory+JSONL 同步
+74. ✅ Nitro 部署 — indicator_cache.db 损坏修复(重传56GB)，GP 4 workers + 哨兵启动
+75. ✅ BitMEX 适配器 — 4文件(adapter/auth/websocket/__init__)，Maker postOnly+追价+全接口，自动注册通过
+76. ✅ GP 骨架去重 — tree.py新增to_skeleton()+精英库骨架去重+毕业生骨架去重，同结构不同参数只保留最强，已同步Nitro
+77. ✅ GP 调度器 v1.2 — 空缺优先（Gate冠军+GP毕业生已覆盖的格子自动跳过），79个空缺格子轮转
+78. ✅ GP 看板 — gp_dashboard.py 生成HTML覆盖矩阵（币种×周期，颜色区分Gate/GP/空缺）
+79. ✅ 哨兵营 v2 — 叠加定义(偏多=初牛+盘整/偏空=初熊+盘整)+F-beta(持续β=0.5/转折β=2.0)+precision门槛+signal_ratio收紧
+80. ✅ TTP Gate 选拔 — run_gate_v41_ttp.py，105冠军（vs纯信号89），覆盖率42%→56%，1m~1h 22%→38%
+81. ✅ 看板升级 — 4按钮切换（全部/纯信号/TTP/GP）+ Regime 350格矩阵分页（5regime×纯信号/TTP来源切换）
+82. ✅ 哨兵营 CMF 窗口化 — data_loader加cmf_20/cmf_50/ad_roc_20(27指标)、blocks加3终端(34个)、sentinel_scan v2精准度优先两步走
+83. ✅ BitMEX 比赛实盘 — position_sizing.py(仓位管理) + bitmex_race.py(启动脚本) + system.py(PositionSizing适配+init_cache实盘适配) + mirror.py(翻转数据+反转信号) + adapter.py(USDT钱包+合约单位转换)
+84. ✅ BitMEX K线聚合+看板 — adapter.py加15m/30m本地聚合(5m→聚合，时间边界用开盘时间对齐) + bitmex_dashboard.py(实盘监控看板) + bitmex_race_README.md(部署文档)
+85. ✅ Mirror 教训+清理 — mirror不用于实盘，关掉--mirror，ETH空单平仓(-$81.22)，两策略干净重启
+86. ✅ Handoff — handoff_to_grok.md(318行16章节) + handoff_to_gemini.md，覆盖系统全貌+身份定义
+87. ✅ 增量回测管线 — incremental_backtest.py(断点续跑) + refresh_summary.py(报告重算) + daily_pipeline.py(编排) + seed_dashboard.py(HTML看板26288combo)，一致性验证3combo/15507笔全部通过
+88. ✅ WebSocket三层防断线+REST重试升级 — watchdog每10s巡检+60s无消息判死+重连加锁防并发，REST重试5次+429/503自动重试，已部署Nitro
+89. ✅ GP v1.0 岛屿模型+CMA-ES — engine.py(4岛独立进化+环形迁移+迁移保护+指标偏好) + param_optimizer.py(CMA-ES参数精化) + config.py(岛屿+CMA-ES配置) + blocks.py(偏好终端) + tree.py(偏好选择) + gp_evolve.py(--islands/--no-cmaes集成)
+90. ✅ 三层知识索引+哨兵营接入指标库 — data_loader.py删_compute_indicators(~190行)改用indicator_cache + 5文件@see索引 + lab/README.md架构约束区 + pending_decisions.md + rules.md铁律7补充
+91. ✅ 增量管线首次运行 — bootstrap_checkpoints.py新建(从paired_trades反演26288断点) + incremental_backtest.py安全检查(防误删368M条) + 16文件@see索引 + K线下载(1h +165条) + 增量回测(纯信号+TTP各1060 combo更新/12432笔新交易) + 报告重算(25960 combo) + 看板(HTML 26288 combo) + rules.md铁律9/10
+92. ✅ 下载脚本修复+每日cron — download_latest_coins_2.0.py修复(已达目标不return，继续往后补) + 全周期全币种追到3/16 + 增量回测(纯信号4446+TTP4447 combo更新) + daily_cron.sh + cron凌晨4点(下载→纯信号→TTP)
+93. ✅ AD策略深度检查+清除 — 分年验证ad_long靠2020年3笔交易撑全部回报(中彩票)，老板确认清除，6策略文件删除+两DB共1488 combo/289692 trades清除
+94. ✅ 双引擎v2.1完成 — RegimeRouter(ADX+ATR熔断+冷却锁) + flip_klines改SMA(200)相对翻转(三方共识99分) + 72h回放验证通过 + indicator_cache双namespace
+95. ✅ 近期回测验证 — ETH 1m mirror + XRP 5m原版 60天：PnL+4.22 MDD=0.49%（vs旧组合PnL+2.77 MDD=0.62%），Grok通过标准全过
+96. ✅ 旧策略组合上线 — ETH 1m regime-mirror($200) + XRP 5m原版($100)，2026-03-18 19:38部署
+97. ✅ 三驾马车v2.1上线 — 废除RegimeRouter，全程mirror(SMA200翻转+不翻信号)。SOL/1m($100) + ETH/1m($100) + XRP/5m($80)，动态阈值按coin覆盖，5文件改动+indicator_cache修复，2026-03-19 02:40部署
+98. ✅ 429限速风暴修复 — TTP 1s→10s + 429重试最少5s + websocket-client安装 + _sync_position try/except + _get_klines try/except + 错峰15s启动。429从60次/min降至0，信号=None从70%降至0%
+99. ✅ Circuit Breaker熔断 — Grok+Gemini联合方案：_sync_position连续3次失败→HALT熔断（禁止开新仓），网络恢复自动解除。run_once开头加真刹车拦截。2026-03-19 17:55部署
+100. ✅ 通讯部总机 Feed Gateway — feed_gateway.py(单WS+ZMQ PUB) + feed_client.py(ZMQ SUB) + websocket.py(+tradeBin/margin/重连回调) + system.py(+feed_client零REST) + bitmex_race.py(+--feed事件驱动)。已部署Nitro，429归零
+101. ✅ Feed Gateway Hotfix — Gemini审阅：①position广播完整快照(防爆仓) ②_load_history加锁(防竞争)。2026-03-19 19:42部署，策略进程未重启(ZMQ自动恢复)
+102. ✅ lab/README.md 更新 — 通讯部总机架构约束+目录结构+实盘用法+模块依赖+websocket描述
+103. ✅ monitor_bot 429修复 — 删query_bitmex()+check_pnl_milestones()+相关变量，每小时摘要改为日志提取（RUL-027零API原则）
+104. ✅ WS断连风暴修复 — websocket.py disconnect()加_reconnect_enabled=False，彻底阻断Watchdog+_on_close+_reconnect三条重连路径。部署Nitro，WS断连从87K+次降至0
+
+<!-- DYNAMIC END -->
+
+---
+
+## 当前状态（参考）
+
+### 种子数据库：lab/reports/seed_v3.db
+- **规模**：11,656 组 combo | 94,974,329 笔 paired_trades | 36 GB（2026-03-10 实测，含1m重建中新增数据）
+- **覆盖**：13 币种（10 合约 + 3 币本位）× 4 周期（1m/5m/15m/1h）× 94 策略
+- **历程**：
+  - v2 原始：2236组 / 30M笔 / 7.54GB（02-28，verify_seed 4维度验证通过）
+  - 03-08 种子重建：88策略 / 10,912组 / 85.9M笔（策略命名统一+审计修复+新策略）
+  - 03-10 1m重建中：1m数据扩充至4年后重跑种子，12/13币种已完成
+
+### K线数据：src/backtest/data/historical/
+
+全部 52 组到位，零错误：
+
+| 币种 | 1m | 5m | 15m | 1h |
+|------|-----|-----|------|-----|
+| BTC | ✅2,102K | ✅420K | ✅140K | ✅70K |
+| ETH | ✅2,102K | ✅420K | ✅140K | ✅70K |
+| XRP | ✅2,102K | ✅420K | ✅140K | ✅68.5K |
+| BNB | ✅2,102K | ✅420K | ✅140K | ✅70K |
+| SOL | ✅2,102K | ✅420K | ✅140K | ✅48.6K |
+| ADA | ✅2,102K | ✅420K | ✅140K | ✅68.9K |
+| TRX | ✅2,102K | ✅420K | ✅140K | ✅67.5K |
+| AVAX | ✅2,102K | ✅420K | ✅140K | ✅47.6K |
+| LINK | ✅2,102K | ✅420K | ✅140K | ✅62.3K |
+| DOT | ✅2,102K | ✅420K | ✅140K | ✅48.4K |
+| BTC_COIN | ✅2,102K | ✅420K | ✅140K | ✅48.6K |
+| ETH_COIN | ✅2,102K | ✅420K | ✅140K | ✅48.5K |
+| BNB_COIN | ✅2,102K | ✅420K | ✅140K | ✅48.4K |
+
+---
+
+## 已知限制（非 bug，记录在案）
+
+| 限制 | 说明 | 影响 |
+|------|------|------|
+| Regime 轻微 lookahead | window 包含当前 K 线 close，严格应只用前根 | ADX/SMA 本身滞后，实际影响极小 |
+| MFE/MAE 单位 | 存的是"(high-entry)/entry × leverage"比率，不是美元 | 分析时注意单位，不是 bug |
+| signal_close_count 含 end_of_data | end_of_data 仅 1.6K / 30M = 0.005% | 可忽略 |
+| max_daily_dd 定义 | 最差单日 PnL，非标准峰谷回撤 % | 有参考价值，但定义与标准不同 |
+| CAGR 计算 | 用 K 线数推算天数，有 gap 时略偏高 | 5m gap 16根、1h gap ≤25根，影响极小 |
+
+---
+
+## v2 种子数据库 Schema（完整版）
+
+```sql
+-- 汇总表（35字段）
+CREATE TABLE combo_summary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy TEXT, coin TEXT, interval TEXT,
+    total_return REAL, final_balance REAL, max_drawdown REAL,
+    sharpe_ratio REAL, sortino_ratio REAL, calmar_ratio REAL,
+    total_trades INTEGER, winning_trades INTEGER, losing_trades INTEGER, win_rate REAL,
+    avg_win_pct REAL, avg_loss_pct REAL, profit_factor REAL,
+    ttp_count INTEGER, double_count INTEGER, fastest_double_days REAL, avg_double_days REAL,
+    daily_open_positions REAL,
+    cagr REAL, max_daily_dd REAL, reward_risk REAL, max_consec_loss_amt REAL, total_fees REAL,
+    max_balance REAL, min_balance REAL, max_win REAL, max_loss REAL,
+    expectancy_ratio REAL, longest_win_streak INTEGER, longest_loss_streak INTEGER,
+    signal_close_count INTEGER
+);
+
+-- 配对交易表（24字段）
+CREATE TABLE paired_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    combo_id INTEGER REFERENCES combo_summary(id),
+    open_candle_idx INTEGER, close_candle_idx INTEGER,
+    open_time TEXT, close_time TEXT, holding_bars INTEGER,
+    direction TEXT, entry_price REAL, exit_price REAL,
+    capital REAL, position_size REAL,
+    pnl REAL, r_value REAL, balance_after REAL,
+    close_type TEXT,           -- signal / ttp / stop_loss / liquidation / end_of_data
+    regime_at_open TEXT,       -- bull / bear / ranging / unknown
+    fee REAL, funding_cost REAL, slippage_cost REAL,
+    mfe REAL, mae REAL,        -- 杠杆后比率，非美元
+    open_atr_pct REAL, open_volume REAL, funding_count INTEGER
+);
+
+-- Regime 时间线（每根K线）
+CREATE TABLE regime_timeline (
+    coin TEXT, interval TEXT, candle_idx INTEGER,
+    candle_time_ms INTEGER, regime TEXT, adx REAL, sma_direction TEXT
+);
+
+-- 运行元数据
+CREATE TABLE run_metadata (key TEXT PRIMARY KEY, value TEXT);
+
+-- 索引
+CREATE INDEX idx_pt_combo ON paired_trades(combo_id);
+CREATE INDEX idx_pt_regime ON paired_trades(regime_at_open);
+CREATE UNIQUE INDEX idx_rt ON regime_timeline(coin, interval, candle_idx);
+CREATE UNIQUE INDEX idx_cs ON combo_summary(strategy, coin, interval);
+```
+
+---
+
+## 关键文件
+
+| 文件 | 说明 | 状态 |
+|------|------|------|
+| `src/backtest/backtest.py` | 回测引擎，含 BacktestResult dataclass | ✅ v2 完成 |
+| `src/backtest/generate_seed.py` | 种子生成脚本 | ✅ v2 完成，35字段+自动检测+argparse+断点续传 |
+| `src/backtest/verify_seed.py` | 4维度验证脚本 | ✅ 已运行，验证通过 |
+| `download_latest_coins_2.0.py` | 数据下载脚本 | ✅ 断点续传+双交易所(spot+delivery) |
+| `lab/reports/seed_v3.db` | 种子数据库 | ✅ 36GB，94策略/11,656组/94.9M笔 |
+| `src/backtest/data/historical/` | K 线数据 | ✅ 52组全部完成 |
+| `run_full_matrix.py` | 旧全矩阵回测 | ❌ 已删除，被 generate_seed.py 替代 |
+| `src/indicators/` | 12个市场指标 | ✅ 完成 |
+| `src/trading/regime/` | Regime v2（ADX三层） | ✅ 完成 |
+
+---
+
+## 回测参数（种子生成时的固定值）
+
+| 参数 | 值 | 说明 |
+|------|----|------|
+| DAYS | 0 | 全量数据，不截取 |
+| INITIAL_CAPITAL | $500 | 初始本金（Van Tharp 标准化基准） |
+| LEVERAGE | 10x | |
+| STOP_LOSS_PCT | 10% | 逐仓止损，回测与实盘等价 |
+| ENABLE_TTP | True | 追踪止盈开启 |
+| FIXED_BET | True | $1 固定注码，PnL = R值 |
+| FEE_RATE | 0.035%/侧 | HyperLiquid taker 费 |
+| SLIPPAGE_PCT | 0.02%/侧 | |
+| FUNDING_RATE_8H | 0.01%/8h | |
+
+---
+
+## 设计原则（用户反复强调，违反会被骂）
+
+- **完整性、真实性、有效性** — 唯一标准，没有"差不多就行"
+- **不写死任何配置** — 币种、周期、策略全部自动识别（扫目录，不写死列表）
+- **改代码必须先说，等用户确认再动** — 这条违反过多次，用户非常在意
+- **不隐瞒遗漏** — 跳过了什么、省略了什么，必须主动报告
+- **用户持有 BNB 现货** — 币本位合约交易是实际需求，数据必须完整
+- **报告验证原则** — 报告格式必须让用户自己能对得上数（开仓balance+pnl=平仓balance，平仓balance=下笔开仓balance）
+
+---
+
+## 项目基本信息
+
+- 路径：`/Users/allenbot/project/auto-trading`
+- 版本：v1.9
+- 语言：Python 3.11+，中文注释和 UI，macOS 上用 `python3`
+- GitHub：`earnabitmore365/auto-trading` (private)
+- 数据路径：`src/backtest/data/historical/{COIN}/{interval}.json`
+- 协作模式：白纱(Sonnet)出方案 → 黑丝(Opus)执行，用户确认后再动
+
+---
+
+## AI Sandbox — lab/
+
+**位置**：`/Users/allenbot/project/auto-trading/lab/`（不上传，已加 .gitignore）
+
+**结构**：
+```
+lab/
+├── src/          # 原系统 src/ 的完整副本（1.9MB）
+│   └── backtest/data → ../../src/backtest/data  # 软链接，共享原系统数据
+└── .env          # 从原系统复制（测试网配置）
+```
+
+**用途**：AI 自主开发/实验专用环境
+- 白纱 + 黑丝可以在这里随便修改、测试，不影响原系统
+- 策略开发、参数调试、新功能实验全部在 lab/ 进行
+- 输出（报告、数据库）写到 `lab/reports/`，不污染原系统
+- 完成后由用户决定是否覆盖回原系统
+
+**工作流**：
+```
+lab/ 开发 → 测试通过 → 汇报用户 → 用户确认 → 覆盖回 src/
+```
+
+**注意**：
+- K 线数据通过软链接共享，lab 和原系统读的是同一份数据
+- `.env` 是测试网配置，实盘操作不在 lab 进行
+- 核心系统改动（回测引擎、交易系统）仍需用户确认；策略层可 AI 自主执行

@@ -1,0 +1,106 @@
+# Plan: 修复 websocket.py 两个 Minor 问题
+
+## Context
+
+code review 发现两个不影响正确性但需要收尾的 Minor 问题：
+1. `asyncio.get_event_loop()` 在 async 函数内应改为 `asyncio.get_running_loop()`（Python 3.10+ 推荐，语义更明确）
+2. `_send()` 里 `future.result(timeout=5)` 阻塞调用方线程最长 5 秒，subscribe/unsubscribe 是 fire-and-forget，不需要等结果
+
+---
+
+## 步骤
+
+### 1. 调研（已完成）
+
+- ✅ `_connect_and_listen` 是 `async def`，`asyncio.get_running_loop()` 在此处安全，因为一定有 running loop
+- ✅ `_send()` 被 `subscribe/unsubscribe` 调用，这些是通知性消息，不需要阻塞等确认
+- ✅ 若 send 失败，WebSocket 会断线重连，重连时自动重新订阅，无需 result 确认
+
+### 2. 修改（websocket.py）
+
+**改动一**（行 282）：
+```python
+# 改前
+self._loop = asyncio.get_event_loop()
+# 改后
+self._loop = asyncio.get_running_loop()
+```
+
+**改动二**（`_send()` 方法）：
+```python
+# 改前：阻塞等结果最长 5 秒
+future = asyncio.run_coroutine_threadsafe(...)
+future.result(timeout=5)
+
+# 改后：fire-and-forget，send 失败只记 debug log，不阻塞
+future = asyncio.run_coroutine_threadsafe(
+    self._ws.send(json.dumps(message)),
+    self._loop,
+)
+# 不调 future.result()，subscribe 消息是 best-effort
+```
+
+### 3. 四件套验证
+
+**语法**：
+```bash
+python3 -m py_compile /Volumes/SSD-2TB/project/wuji-auto-trading/src/exchange/hyperliquid/websocket.py
+```
+
+**逻辑**：
+- `asyncio.get_running_loop()` 在 async 函数内必然有 running loop，不会抛 RuntimeError ✅
+- `_send` fire-and-forget：subscribe 失败 → WebSocket 断线重连时自动重新订阅，行为正确 ✅
+
+**全链路**：
+```bash
+grep -n "get_running_loop\|run_coroutine_threadsafe\|_send" \
+  /Volumes/SSD-2TB/project/wuji-auto-trading/src/exchange/hyperliquid/websocket.py
+```
+
+**文档**：CHANGELOG 更新
+
+### 4. Sonnet Code Review
+
+改完步骤2后，逐行审查实际改动：
+- `asyncio.get_running_loop()` 替换后：验证调用上下文是否为 async，有无 RuntimeError 风险
+- fire-and-forget 替换后：验证断线重连机制是否能覆盖 send 失败的场景
+- 有 Critical/Major → 修完再继续；无问题 → 进步骤5
+
+### 5. 更新 CHANGELOG
+
+```
+### HH:MM EDIT websocket.py — get_running_loop替换get_event_loop + _send改fire-and-forget去除5秒阻塞
+```
+
+### 6. 自审（两遍）
+
+**第一遍**
+- 完整：两处 Minor 全覆盖，CHANGELOG 在步骤5 ✅
+- 真实：`get_running_loop()` 在 async 函数内安全；fire-and-forget 适合 subscribe 消息 ✅
+- 有效：2行改动，最小范围 ✅
+- 知常：subscribe 是通知不需要确认；running_loop 语义比 event_loop 更准确 ✅
+- 静制动：调研确认再动手 ✅
+
+**第二遍**（查边界）
+- `get_running_loop()` 如果在非 async 上下文调用会抛 RuntimeError — 但此处是 `async def _connect_and_listen`，一定有 running loop ✅
+- fire-and-forget 若 `_loop` 已关闭：`run_coroutine_threadsafe` 会抛 `RuntimeError`，被外层 `except Exception` 捕获，记 debug log，不崩溃 ✅
+
+### 7. 汇报执事
+
+---
+
+## 关键文件
+
+| 文件 | 作用 |
+|------|------|
+| `/Volumes/SSD-2TB/project/wuji-auto-trading/src/exchange/hyperliquid/websocket.py` | 唯一改动文件 |
+| `/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md` | 变更日志 |
+
+---
+
+## 验证标准
+
+- `py_compile` 通过
+- grep 确认两处改动正确
+- CHANGELOG 已更新
+- 自审两遍全 ✅

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "SUB-001",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "bypass_without_report",
+    "rule_text": "RUL-AUTO-001｜标题",
+    "source_count": 25,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-002",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "routine_complete",
+    "rule_text": "So these are examples where \"routine_complete\" may be erroneously triggered or logged. The error could be due to a system misunderstanding: the routine is flagged as completed when it",
+    "source_count": 141,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-003",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "panic_no_analysis",
+    "rule_text": "The format is \"RUL-AUTO-003｜标题：一句话具体规则描述\". They want \"RUL-AUTO-003｜标题：......\". So we must output only the rule itself",
+    "source_count": 37,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  },
+  {
+    "id": "SUB-004",
+    "status": "pending",
+    "created": "2026-04-04",
+    "behavior_id": "honest_report_and_fix",
+    "rule_text": "规则应该针对\"不诚实报告\"的问题，核心要求是：必须如实报告实际验证结果，不得隐瞒问题或夸大成果。具体表述",
+    "source_count": 5,
+    "effective_triggers": 0,
+    "last_trigger": null,
+    "approved_by": null,
+    "approved_date": null
+  }
+]

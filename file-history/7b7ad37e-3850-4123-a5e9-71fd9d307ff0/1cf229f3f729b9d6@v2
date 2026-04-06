@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""
+import_memsearch.py
+从 conversations.db 提取最近 14 天对话，按天按小时生成摘要，写入 memsearch 记忆文件。
+"""
+
+import sqlite3
+import os
+import subprocess
+import sys
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+DB_PATH = os.path.expanduser("~/.claude/conversations.db")
+MEMSEARCH_DIR = os.path.expanduser("~/.memsearch/memory")
+MINIMAX_KEY_PATH = os.path.expanduser("~/.claude/.minimax_key")
+MAX_CHARS_PER_BLOCK = 3000
+SKIP_SPEAKERS = {"系统"}
+TODAY = datetime.now().strftime("%Y-%m-%d")
+
+# ─────────────────────────── 1. 读取 minimax key ───────────────────────────
+
+def load_minimax_key():
+    with open(MINIMAX_KEY_PATH, "r") as f:
+        return f.read().strip()
+
+# ─────────────────────────── 2. 从 DB 提取数据 ─────────────────────────────
+
+def fetch_messages():
+    since = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute(
+        """
+        SELECT date(time) as day, strftime('%H', time) as hour,
+               time, speaker, content
+        FROM messages
+        WHERE time >= ?
+          AND speaker NOT IN ({})
+        ORDER BY id
+        """.format(",".join("?" * len(SKIP_SPEAKERS))),
+        (since, *SKIP_SPEAKERS),
+    ).fetchall()
+    conn.close()
+    return rows
+
+# ─────────────────────────── 3. 按天/小时分组 ──────────────────────────────
+
+def group_by_day_hour(rows):
+    # days[day][hour] = [(time, speaker, content), ...]
+    days = defaultdict(lambda: defaultdict(list))
+    for day, hour, time, speaker, content in rows:
+        days[day][hour].append((time, speaker, content))
+    return days
+
+# ─────────────────────────── 4. 调用 MiniMax 生成摘要 ──────────────────────
+
+def call_minimax_summary(text, minimax_key):
+    prompt = (
+        "将以下对话压缩为要点摘要（bullet points），每个要点一行，用 - 开头。"
+        "只保留关键信息（决策、操作、结果、问题），去掉闲聊。用中文。\n\n"
+        "对话内容：\n" + text
+    )
+    env = os.environ.copy()
+    env["ANTHROPIC_BASE_URL"] = "https://api.minimax.io/anthropic"
+    env["ANTHROPIC_API_KEY"] = minimax_key
+
+    result = subprocess.run(
+        [
+            "claude",
+            "-p", prompt,
+            "--model", "MiniMax-M2.7-highspeed",
+            "--max-turns", "1",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        raise RuntimeError(f"MiniMax 调用失败: {stderr}")
+    return result.stdout.strip()
+
+# ─────────────────────────── 5. 格式化对话文本 ─────────────────────────────
+
+def format_block(messages):
+    lines = []
+    for time, speaker, content in messages:
+        # 截断过长内容
+        c = content[:500] if len(content) > 500 else content
+        lines.append(f"[{time}] {speaker}: {c}")
+    text = "\n".join(lines)
+    if len(text) > MAX_CHARS_PER_BLOCK:
+        text = text[:MAX_CHARS_PER_BLOCK]
+    return text
+
+# ─────────────────────────── 6. 写入 memsearch 文件 ────────────────────────
+
+def write_day_file(day, hour_summaries):
+    path = os.path.join(MEMSEARCH_DIR, f"{day}.md")
+    lines = []
+    for hour in sorted(hour_summaries.keys()):
+        summary = hour_summaries[hour]
+        lines.append(f"### {hour}:00")
+        lines.append(summary)
+        lines.append("")
+    content = "\n".join(lines)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"  ✓ 写入 {path}")
+
+# ─────────────────────────── 7. 重建索引 ───────────────────────────────────
+
+def rebuild_index():
+    print("\n重建 memsearch 索引...")
+    result = subprocess.run(
+        ["memsearch", "index", "--force", MEMSEARCH_DIR],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    if result.returncode != 0:
+        print(f"  索引失败: {result.stderr.strip()}")
+    else:
+        print(f"  {result.stdout.strip()}")
+
+# ─────────────────────────── 主流程 ────────────────────────────────────────
+
+def main():
+    print(f"=== import_memsearch.py 开始 ===")
+    print(f"今天：{TODAY}（不覆盖今天的文件）\n")
+
+    minimax_key = load_minimax_key()
+    rows = fetch_messages()
+    print(f"从 DB 读取到 {len(rows)} 条消息（跳过系统消息）\n")
+
+    days_data = group_by_day_hour(rows)
+
+    for day in sorted(days_data.keys()):
+        if day == TODAY:
+            print(f"[{day}] 跳过（今天已有文件）")
+            continue
+
+        hours = days_data[day]
+        total_msgs = sum(len(v) for v in hours.values())
+        print(f"[{day}] {total_msgs} 条消息，{len(hours)} 个小时块")
+
+        hour_summaries = {}
+        for hour in sorted(hours.keys()):
+            messages = hours[hour]
+            block_text = format_block(messages)
+            print(f"  小时 {hour}:00 — {len(messages)} 条，{len(block_text)} 字符 → 调用 MiniMax...")
+            try:
+                summary = call_minimax_summary(block_text, minimax_key)
+                hour_summaries[hour] = summary
+                print(f"  小时 {hour}:00 — 摘要生成成功（{len(summary)} 字符）")
+            except Exception as e:
+                print(f"  小时 {hour}:00 — 摘要失败: {e}，跳过此块")
+                hour_summaries[hour] = f"- （摘要生成失败：{e}）"
+
+        if hour_summaries:
+            write_day_file(day, hour_summaries)
+        else:
+            print(f"  [{day}] 无有效摘要，跳过文件创建")
+
+    rebuild_index()
+    print("\n=== 全部完成 ===")
+
+if __name__ == "__main__":
+    main()

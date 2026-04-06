@@ -1,0 +1,113 @@
+# Plan: generate_seed.py 分段回测融合
+
+## Context
+
+generate_seed.py 当前分段实现是"信号并行+交易全量"（绕过方案），且 `_SEGMENT_MIN_CANDLES=999_999_999` 禁用中。
+test_segment_v4.py 已验证通过真正的"4段并跑+校准匹配"方案（5m 105/105, 1m 104/105）。
+执事要求：复制到 lab → 融合 → 试跑验证 → 再更新源代码。
+
+## 修改文件
+
+| 文件 | 操作 |
+|------|------|
+| `lab/seed_fix/generate_seed_lab.py` | 新建：从源码复制 + 融合 v4 逻辑 |
+| `lab/seed_fix/test_fused.py` | 新建：试跑脚本，对比 test_seeds/ 基准 |
+
+源码路径：`/Volumes/SSD-2TB/project/wuji-auto-trading/src/backtest/generate_seed.py`
+测试种子：`/Volumes/SSD-2TB/project/wuji-auto-trading/lab/seed_fix/test_seeds/`（BTC seed_*.db, BNB bnb_seed_*.db）
+
+## 融合方案
+
+### 1. `_worker_segment`（行1320-1356）→ 改为跑信号+交易
+
+**当前**：只跑信号，返回 `signals[warmup_n:]`
+**改为**：跑信号 + 4种模式 TradeSimulator，返回 dict（跟 test_segment_v4.py 的 `_worker_v4` 一致）
+
+```python
+def _worker_segment(args: tuple) -> dict:
+    # args 新增：modes, leverage, stop_loss_pct
+    # 返回：{"trades": {mode: [tuple]}, "warmup_n": int, "global_offset": int}
+    # 交易含预热区，不过滤（由主函数负责）
+```
+
+参数从 6 个变为 9 个：`(coin, interval, candle_slice, warmup_n, global_offset, strategy_name, modes, leverage, stop_loss_pct)`
+
+### 2. `_run_strategy_segmented`（行1359-1421）→ 替换为校准匹配逻辑
+
+**当前**：信号并行 → 合并信号 → 交易全量串行
+**改为**：完整复制 test_segment_v4.py 的 `run_segmented_v4` 逻辑
+
+流程：
+1. 4段并行跑（信号+交易）→ 用传入的 executor
+2. 逐段校准匹配（串行）：
+   - 段i 有 end_of_data → 找校准点（最后完整交易）
+   - 在段i+1 找匹配 → 吻合继续
+   - 不吻合 → 调预热重跑段i+1（主进程串行，max 1次）
+   - 安全检查：段长>2倍/重跑>1次/无完整交易 → fallback
+3. 合并：seg_cutoff 去重 + end_of_data 排除 + 跨段交易保留
+4. 排序：(open_candle_idx, close_candle_idx) 双键
+5. 可选最后一关：combo_summary 对比基准 DB
+
+函数签名保持兼容：
+```python
+def _run_strategy_segmented(coin, interval, all_candles, strategy_name,
+                            seed_mode_names, leverage, stop_loss_pct,
+                            bars_per_day=1440, n_segments=4, warmup=2000,
+                            executor=None) -> dict[str, list]:
+    # 返回不变：{mode: [SimTrade]}
+    # 新增：fallback 时内部跑全量，调用者无感知
+```
+
+### 3. `_SEGMENT_MIN_CANDLES`（行1300）→ 恢复 100_000
+
+### 4. `_split_segments`（行1303-1317）→ 不改
+
+### 5. 调用处（行1553-1574）→ 不改
+
+`_run_strategy_segmented` 的签名和返回值不变，`_worker_coin_interval` 的调用处不需要改。
+
+## 关键对照：test_segment_v4.py → generate_seed.py 映射
+
+| v4 函数 | generate_seed 对应 | 差异 |
+|---------|-------------------|------|
+| `_worker_v4` | `_worker_segment` | 参数多3个，返回值改 dict |
+| `run_segmented_v4` | `_run_strategy_segmented` | 核心逻辑替换，签名兼容 |
+| `run_full` | 非分段路径（行1575-1605）| 不改 |
+| `compare` | test_fused.py 里写 | 验证用 |
+
+## 重跑机制
+
+重跑在主进程串行执行（不用子进程），因为只需跑一个段：
+```python
+_init_indicator_cache(coin, interval, new_slice, db_path=':memory:')
+eng = BacktestEngine(coin=coin, interval=interval, days=0, candles=new_slice)
+signals = eng.generate_signals(strategy_name)
+for m in modes:
+    sim = TradeSimulator(new_slice, signals, mode=m, ...)
+    new_trades[m] = [(t序列化) for t in sim.run()]
+```
+
+## 验证方案
+
+### test_fused.py
+
+1. 加载 BTC 1m K线
+2. 用 lab 版 `_run_strategy_segmented` 跑 3 策略 × 4 模式
+3. 跟 `test_seeds/seed_*.db` 的 combo_summary + paired_trades 对比
+4. 零差异 = 通过
+
+### 通过标准
+
+- BTC 1m × 3 策略（rsi_reversal, bb_squeeze, momentum_slope_long）× 4 模式 = 12 组合全部零差异
+- 特别验证 momentum_slope_long 笔数（之前旧方案 102→165 的 bug）
+
+## 执行顺序
+
+1. 复制 generate_seed.py 到 lab/seed_fix/generate_seed_lab.py
+2. 修改 `_worker_segment`：参数+返回值
+3. 修改 `_run_strategy_segmented`：替换为 v4 校准匹配逻辑
+4. 修改 `_SEGMENT_MIN_CANDLES = 100_000`
+5. 写 test_fused.py 试跑脚本
+6. 跑验证，对比 test_seeds/
+7. 通过后调 merit_gate.py --review-plan
+8. 更新源代码 + CHANGELOG

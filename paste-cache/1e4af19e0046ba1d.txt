@@ -1,0 +1,21 @@
+❯ 黑丝                                                                                  
+       
+⏺ 在。种子在跑，当前状态：                                                              
+                                                    
+⏺ Bash(ps -p 4830 -o pid,etime,pcpu 2>/dev/null || echo "进程已结束"                    
+      echo "---"…)                                  
+  ⎿    PID  ELAPSED  %CPU                                                               
+      4830 01:03:14  98.2                                                               
+     ---                                                                                
+     … +4 lines (ctrl+o to expand)                  
+                                                                                        
+⏺ 当前进度：                                
+  - 运行 1 小时 3 分                                                                    
+  - 1041/25200 combos（4.1%）                                                           
+  - 1570 万笔交易                                                
+  - 还在 ADA（第 1/24 个币种），快完成（1041/1050 = 99%）                               
+  - seed_signal.db: 1.6 GB                                                              
+                                                                                        
+  ADA 快跑完了，马上进 ADA_mirror。preload 在 1m 上拖了速度，但数据正在正确产出。       
+                                                                                        
+  老板有什么指示？       

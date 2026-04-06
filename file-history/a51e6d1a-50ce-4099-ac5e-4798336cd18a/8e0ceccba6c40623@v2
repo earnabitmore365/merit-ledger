@@ -1,0 +1,139 @@
+# Handoff → Abby：比赛实盘监控交接
+
+> 黑丝（Opus）写于 2026-03-19 22:27
+> 任务：帮老板盯着 BitMEX Crypto Olympus 比赛的实盘交易
+
+---
+
+## 当前状态（截至 22:27）
+
+### 账户
+| 项目 | 金额 |
+|------|------|
+| 余额（已实现） | $370.41 |
+| 未实现盈亏 | -$9.68 |
+| **净值** | **$360.74** |
+| 起始本金 | $398.09 |
+| 总盈亏 | -$37.35（-9.4%） |
+
+### 持仓
+| 币种 | 方向 | 入场价 | 数量 | 浮盈亏 |
+|------|------|--------|------|--------|
+| ETH | **LONG** | $2,166.78 | 0.45 | +$3.33 |
+| XRP | **LONG** | $1.4652 | 546 | -$0.52 |
+| SOL | **SHORT** | $88.80 | 11.08 | -$12.49 |
+
+### 进程
+- **Feed Gateway**：运行中（单 WS 连 BitMEX，ZMQ 广播）
+- **SOL 1m**：运行中（--feed --mirror，持仓=SHORT）
+- **ETH 1m**：运行中（--feed --mirror，持仓=LONG）
+- **XRP 5m**：运行中（--feed --mirror，持仓=LONG）
+- 429 限速：0
+- 信号=None：0
+- 全部正常
+
+---
+
+## 连接方式
+
+```bash
+# Mac 通过 SSH 隧道连 Nitro（反向隧道，从 Nitro 发起）
+# 如果断了，在 Nitro Ubuntu 终端跑：
+ssh -R 2222:localhost:22 allenbot@192.168.0.15 -N
+
+# Mac 上连 Nitro：
+ssh -p 2222 pc_heisi_claude@localhost
+```
+
+---
+
+## 监控命令
+
+### 快速检查（一行搞定）
+```bash
+ssh -p 2222 pc_heisi_claude@localhost 'ps aux | grep -E "feed_gateway|bitmex_race" | grep -v grep | wc -l; grep "信号=" /home/pc_heisi_claude/trading/logs/sol_1m_live.log | tail -1; grep "信号=" /home/pc_heisi_claude/trading/logs/eth_1m_live.log | tail -1; grep "信号=" /home/pc_heisi_claude/trading/logs/xrp_5m_live.log | tail -1'
+```
+正常输出：进程数=8，3个信号=HOLD
+
+### 查余额和持仓
+```bash
+ssh -p 2222 pc_heisi_claude@localhost 'cd /home/pc_heisi_claude/trading && PYTHONPATH=src python3 -c "
+from exchange.bitmex.adapter import BitMEXAdapter
+from dotenv import load_dotenv
+import os
+load_dotenv(\".env\")
+a=BitMEXAdapter({\"api_key\":os.getenv(\"BITMEX_API_KEY\"),\"api_secret\":os.getenv(\"BITMEX_API_SECRET\"),\"testnet\":False})
+a._ws=None;a._connected=True
+b=a.get_balance()
+print(f\"余额: \${b.get(\"usdc\",0):.4f}\")
+print(f\"未实现: \${b.get(\"unrealized_pnl\",0):.4f}\")
+for p in a.get_positions():
+    print(f\"{p.coin} {p.side} size={p.size:.4f} entry=\${p.entry_price:.4f} pnl=\${p.unrealized_pnl:.4f}\")
+"'
+```
+
+### 查 429 + 异常
+```bash
+ssh -p 2222 pc_heisi_claude@localhost 'for f in gateway sol_1m_live eth_1m_live xrp_5m_live; do echo -n "$f 429:"; tail -50 /home/pc_heisi_claude/trading/logs/$f.log | grep -c "429"; done; for f in sol_1m_live eth_1m_live xrp_5m_live; do echo -n "$f HALT:"; grep -c "HALT" /home/pc_heisi_claude/trading/logs/$f.log; done'
+```
+
+### 查最近交易（非 HOLD 信号）
+```bash
+ssh -p 2222 pc_heisi_claude@localhost 'for f in sol_1m_live eth_1m_live xrp_5m_live; do echo "=== $f ==="; grep "信号=" /home/pc_heisi_claude/trading/logs/$f.log | grep -v "HOLD" | grep -v "None" | tail -5; done'
+```
+
+---
+
+## 重启命令（进程死了用这个）
+
+```bash
+# 1. 杀旧进程
+ssh -p 2222 pc_heisi_claude@localhost "pkill -f 'feed_gateway\|bitmex_race'"
+
+# 2. 启动 Gateway（等10秒）
+ssh -p 2222 -f pc_heisi_claude@localhost "cd /home/pc_heisi_claude/trading && nohup python3 src/data/feed_gateway.py --coins SOL,ETH,XRP --intervals 1m,1m,5m >> logs/gateway.log 2>&1 &"
+sleep 10
+
+# 3. 启动 3 策略（间隔 5 秒）
+ssh -p 2222 -f pc_heisi_claude@localhost "cd /home/pc_heisi_claude/trading && nohup python3 bitmex_race.py --feed --mirror --strategy mean_reversion --coin SOL --interval 1m --min-bet 100 >> logs/sol_1m_live.log 2>&1 &"
+sleep 5
+ssh -p 2222 -f pc_heisi_claude@localhost "cd /home/pc_heisi_claude/trading && nohup python3 bitmex_race.py --feed --mirror --strategy mean_reversion --coin ETH --interval 1m --min-bet 100 >> logs/eth_1m_live.log 2>&1 &"
+sleep 5
+ssh -p 2222 -f pc_heisi_claude@localhost "cd /home/pc_heisi_claude/trading && nohup python3 bitmex_race.py --feed --mirror --strategy mean_reversion --coin XRP --interval 5m --min-bet 80 >> logs/xrp_5m_live.log 2>&1 &"
+```
+
+---
+
+## 异常处理指引
+
+| 异常 | 判断方法 | 处理 |
+|------|----------|------|
+| 进程死了 | 进程数 < 8 | 用上面的重启命令 |
+| SSH 隧道断 | `Connection refused` | 在 Nitro 重跑隧道命令 |
+| 429 限速 | 日志有 `429` | 正常情况=0，>0说明Gateway出问题 |
+| HALT 熔断 | 日志有 `HALT` | 网络问题，等恢复自动解除 |
+| 信号=None | 日志有 `None` | Gateway WS 断了，检查 gateway.log |
+| 余额突降 | 余额比上次低很多 | 检查是否触发止损/强平 |
+
+## 关键提醒
+- **不要手动平仓或开仓**，策略自动管理
+- **Gateway 必须在策略进程之前启动**，否则策略收不到数据
+- 三驾马车配置：SOL ±0.7%、ETH ±0.5%、XRP ±1.0%（动态阈值）
+- 比赛时间：2026-03-12 ~ 2026-04-12
+
+---
+
+## 今日交易历史（10 笔）
+
+| # | 时间 | 币种 | 操作 | 价格 | 余额变动 |
+|---|------|------|------|------|----------|
+| 1 | 04:25 | ETH | 开多 | $2,194.76 | — |
+| 2 | 04:40 | SOL | 开多 | $90.24 | — |
+| 3 | 05:05 | ETH | TTP平多 | ~$2,215 | +$8.76 |
+| 4 | 05:05 | ETH | 重新开多 | $2,215.18 | — |
+| 5 | 05:05 | XRP | 开多 | $1.46 | — |
+| 6 | 05:20 | ETH | 反手做空 | $2,197.22 | -$9.99 |
+| 7 | 14:25 | ETH | 反手做多 | $2,229.82 | -$15.66 |
+| 8 | 14:42 | ETH | 反手做空 | $2,207.70 | -$10.95 |
+| 9 | 18:22 | SOL | 反手做空 | $88.80 | -$16.28 |
+| 10 | 18:38 | ETH | 反手做多 | $2,166.78 | +$17.44 |

@@ -1,0 +1,91 @@
+# 方案：初熊多策略战队（Hedge Mode）
+
+## Context
+
+比赛实盘40+小时不开单。根因：mean_reversion_mirror 在初熊下只做多赚钱，SELL_ONLY 锁住做多方向 = 锁死盈利来源。
+
+老板开启了 BitMEX Hedge Mode（同一合约可同时持多仓+空仓），每个策略可以独立开仓平仓互不干扰。
+
+## 方案（极简，不改代码）
+
+### 已确认：adapter 完全兼容 Hedge Mode
+- 开仓：`side=Buy/Sell`（不加 ReduceOnly）
+- 平仓：`side` + `execInst=ReduceOnly`（已实现，adapter.py:516-517）
+- Hedge Mode 下 ReduceOnly 只平对应方向的仓，不影响另一个方向
+
+### 改动
+
+**1. REGIME_MAP 取消方向锁定**（`lab/bitmex_race.py`）
+```python
+# 改前
+'初熊': {'mode': 'normal', 'filter': 'SELL_ONLY'},
+
+# 改后
+'初熊': {'mode': 'normal', 'filter': None},  # Hedge Mode 下不需要锁方向
+```
+同理 `'熊'` 也改成 `filter: None`。
+
+**2. process_guard.sh 加策略进程**
+
+每个币种多启动1个策略进程（资金均分）：
+
+```bash
+# SOL — 策略1: mean_reversion（现有，$50）
+nohup python3 bitmex_race.py --feed --mirror --regime-bridge --strategy mean_reversion --coin SOL --interval 1m --min-bet 50
+
+# SOL — 策略2: volume_momentum（新增，双向赚，$50）
+nohup python3 bitmex_race.py --feed --regime-bridge --strategy volume_momentum --coin SOL --interval 1m --min-bet 50
+
+# ETH — 策略1: mean_reversion（现有，$50）
+nohup python3 bitmex_race.py --feed --mirror --regime-bridge --strategy mean_reversion --coin ETH --interval 1m --min-bet 50
+
+# ETH — 策略2: mass_index（新增，双向赚，$50）
+nohup python3 bitmex_race.py --feed --regime-bridge --strategy mass_index --coin ETH --interval 1m --min-bet 50
+
+# XRP — 策略1: mean_reversion（现有，$40）
+nohup python3 bitmex_race.py --feed --mirror --regime-bridge --strategy mean_reversion --coin XRP --interval 5m --min-bet 40
+
+# XRP — 策略2: atr_combo（新增，双向赚+空赚最多，$40）
+nohup python3 bitmex_race.py --feed --regime-bridge --strategy atr_combo --coin XRP --interval 1m --min-bet 40
+```
+
+### 策略选择依据（初熊1m TTP回测）
+
+| 币种 | 策略 | 方向 | 初熊PnL | 选因 |
+|------|------|------|---------|------|
+| SOL | mean_reversion_mirror | 做多 | +16.6 | 现有，做多赚 |
+| SOL | volume_momentum_mirror | 双向 | +2.4 | 双向都赚 |
+| ETH | mean_reversion_mirror | 做多 | +12.2 | 现有，做多赚 |
+| ETH | mass_index_mirror | 双向 | +1.3 | 双向都赚 |
+| XRP | mean_reversion_mirror | 做多 | +28.1 | 现有，做多赚最强 |
+| XRP | atr_combo | 双向 | +10.9 | 双向赚，空+7.8最强 |
+
+### 关键文件
+
+| 文件 | 改动 |
+|------|------|
+| `lab/bitmex_race.py` | REGIME_MAP 初熊/熊 filter 改 None |
+| Nitro `process_guard.sh` | 加3个新策略进程 |
+
+## 部署步骤
+
+1. 改 `lab/bitmex_race.py` REGIME_MAP（filter=None）
+2. py_compile
+3. SCP 到 Nitro
+4. SSH 更新 process_guard.sh（加3个新进程）
+5. 杀旧进程，让 guard 重启全部6个策略进程
+6. 验证日志：6个进程都在产信号
+
+## 验证
+
+1. 6个进程全部启动（ps grep bitmex_race）
+2. 各进程独立出信号（不再全是 HOLD）
+3. BitMEX 上 Hedge Mode 生效（可能同时有多仓+空仓）
+4. 资金分配正确（每个进程 $40-50）
+
+## 收尾
+
+1. py_compile
+2. lab/README.md 更新
+3. CHECKPOINT.md 更新
+4. process_guard.sh 记录

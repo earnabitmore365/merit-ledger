@@ -1,0 +1,71 @@
+# 分段回测验证结果
+
+> 4段并跑 + 校准点匹配 + 不吻合重跑 + fallback全量
+> 验证脚本：test_segment_v4.py
+
+---
+
+## 5m 验证（2026-04-04）
+
+### BTC 5m × 20 策略
+- **结果**：20/20 ✅ 零失败
+- **分段通过**：17 个（85%）零重跑
+- **分段+重跑**：3 个（15%）atr_combo/atr_pullback/atr_squeeze 各 rerun=1
+- **fallback**：0 个
+- **加速**：1.5-2.5x（高频策略）
+
+### ETH 5m × 105 策略（完整验证）
+- **结果**：105/105 ✅ 零失败
+- **分段通过**：94 个（90%）
+- **fallback 全量**：11 个（10%）
+  - cci_long, demandindex_long, demandindex_short, fvg_long
+  - macross_slow_long, macross_slow_short
+  - matriple_long, matriple_short
+  - momentum_slope_long, trix_long, trix_short
+- **fallback 特征**：全是 _long/_short 单方向低频策略，校准点太远触发安全检查
+
+### 5m 加速数据（ETH）
+| 策略类型 | 全量 | 分段 | 加速 |
+|---------|------|------|------|
+| 高频（bb_squeeze 13657笔）| 2.8s | 1.4s | 1.9x |
+| 高频（rsi_reversal 6641笔）| 2.0s | 1.1s | 1.8x |
+| 中频+重跑（atr_combo 634笔）| 4.5s | 3.0s | 1.5x |
+| 高频（momentum_slope 6324笔）| 10.5s | 4.3s | 2.5x |
+| 低频fallback（momentum_slope_long 78笔）| 10.5s | 19.1s | 0.5x |
+
+### 关键修复记录
+1. **seg_cutoff**：重跑后段i有效区截止到校准点，防重叠（g_open >= cutoff）
+2. **跨段去重**：cutoff 判断从 g_open 改为 g_close >= cutoff，防同一笔被两段保留
+3. **fallback 安全检查**：重跑后段长超原段2倍 → 直接 fallback
+
+---
+
+## 1m 验证（待执行）
+
+### BTC 1m × 3 策略（已完成，test_segment_v4.py）
+- **结果**：3/3 ✅（含 momentum_slope_long）
+- rsi_reversal：2.4x 加速
+- bb_squeeze：2.3x 加速
+- momentum_slope_long：0.5x（fallback，重跑3次）
+
+### 1m 完整验证
+- 待执行：用 1m 全量种子（正在后台生成）作为基准
+- 目标：BTC 1m × 105 策略 → 24 币种
+
+---
+
+## 方案总结
+
+```
+第一轮：4段并行跑（信号+交易，含预热区，不过滤）
+第二轮：逐段校准匹配
+  段i尾：找最后一笔完整交易（校准点）
+  段i+1含预热：找匹配（同direction/entry_price/exit_price/close_type/open_time）
+  吻合 → 合并（段i截止到校准点close位置，段i+1保留跨段交易）
+  不吻合 → 调预热到校准点位置重跑段i+1
+  校准点太远（重跑段长>原段2倍）→ fallback全量
+  段内无完整交易 → fallback全量
+第三轮：合并（seg_cutoff去重 + end_of_data排除 + 跨段交易保留）
+```
+
+90% 策略分段加速，10% fallback 兜底，100% 正确。

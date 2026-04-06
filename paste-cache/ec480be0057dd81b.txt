@@ -1,52 +1,0 @@
-第四：那我现有的8个GB的数据怎么搞？废了？
-————————
-回复：
-不，不废！你的 8GB seed_report.db 完全还能用，而且很可能还能继续高效用很久（SQLite 官方上限 281 TB，实际很多人用 10-50GB 都没问题）。它不是“废了”，只是体积大、可能有些碎片，需要一点维护就能保持性能。很多人处理类似规模的回测/日志/时间序列数据都用 SQLite，没必要一上来就扔掉重跑。
-下面给你实用方案，按优先级排序（从“零成本保命”到“如果真卡再升级”）：
-1. 先别慌，立即做这些免费优化（5-30 分钟搞定）
-这些操作不会改数据内容，只清理碎片、提升读写速度、回收空间。强烈推荐先做。
-    •    运行 VACUUM（最重要一步）：
-    •    原因：生成时大量 insert + commit 会产生碎片，文件膨胀（free pages 未回收）。
-    •    命令（在终端或 sqlite3 工具里）：   sqlite3 reports/seed_report.db "VACUUM;"  
-    •    预期：文件可能缩小 10-30%（甚至更多，如果有删除/更新历史），读写速度提升明显。
-    •    时间：8GB 可能 10-60 分钟（取决于 SSD/HDD），期间别中断。
-    •    高级版：VACUUM INTO 'seed_report_optimized.db'；（生成新文件，原文件不动，便于对比）。
-    •    运行 ANALYZE（更新统计信息，让查询优化器更聪明）：   sqlite3 reports/seed_report.db "ANALYZE;"  
-    •    尤其对你的 combo_summary + paired_trades GROUP BY / JOIN / AVG(r_value) 等查询有用。
-    •    检查并优化 PRAGMA 设置（读性能提升）：
-    •    打开 db 后运行：   PRAGMA journal_mode = WAL;          -- 已启用，继续保持
-    •    PRAGMA synchronous = NORMAL;        -- 平衡安全与速度
-    •    PRAGMA cache_size = -200000;        -- 200MB 缓存（调大到内存允许，e.g. -1000000 = 1GB）
-    •    PRAGMA mmap_size = 4000000000;      -- 4GB mmap（如果有 16GB+ 内存，读超快）
-    •    PRAGMA temp_store = MEMORY;  
-    •    把这些加到你的分析脚本开头（import sqlite3 后 conn.execute）。
-    •    测试读性能：
-    •    跑个简单查询看时间：   SELECT COUNT(*), AVG(r_value) FROM paired_trades GROUP BY regime_at_open;  
-    •    如果几秒内出结果，就很 OK；如果卡 1 分钟+，再考虑下面。
-2. 如果还是卡（查询慢、内存爆），再考虑分库/迁移
-    •    分表或分库（不重跑数据）：
-    •    paired_trades 最大（~850万行），可以：
-    •    按 combo_id 分成多个表（e.g. paired_trades_1 到 paired_trades_10），或按 coin/strategy 分库。
-    •    用 ATTACH DATABASE 附加多个 db 文件，跨库 query。
-    •    regime_timeline 按 coin/interval 分表。
-    •    好处：单个文件小，VACUUM 快，读写并行。
-    •    导出到更快的格式（不丢数据）：
-    •    用 pandas + sqlite 导出 paired_trades 到 Parquet（压缩 + 列式存储，读超快）：python   import pandas as pd
-    •    import sqlite3
-    •    
-    •    conn = sqlite3.connect('seed_report.db')
-    •    df = pd.read_sql("SELECT * FROM paired_trades", conn)
-    •    df.to_parquet('paired_trades.parquet', compression='zstd', engine='pyarrow')  
-    •    Parquet 文件可能只有 2-4GB，DuckDB / pandas 查询秒级。
-    •    combo_summary 和 regime_timeline 保持 SQLite（小表）。
-    •    迁移到 DuckDB（强烈推荐，如果你后续分析多）：
-    •    DuckDB 兼容 SQLite 语法，直接 attach 你的 db：   INSTALL sqlite; LOAD sqlite;
-    •    ATTACH 'seed_report.db' AS sqlite_db (TYPE SQLITE);  
-    •    然后用 DuckDB 查询（列式引擎 + 并行，8GB 数据查询快 5-20x）。
-    •    零成本迁移，性能飞起。
-3. 啥时候才考虑“重跑”？
-只有当你必须改核心计算逻辑（如 funding_count 算错、MFE/MAE 算法有 bug、regime 阈值调了）时，才值得重跑。否则：
-    •    当前 db 是“v1 baseline”，先用它分析出价值（top 策略、regime 效果）。
-    •    等你确认“这个 regime 定义/费用模型不对”时，再 v2 重跑（同时优化脚本，如 numpy MFE、动态 funding）。
-一句话：8GB db 不废，它是你的宝贵资产。先 VACUUM + ANALYZE + 调 PRAGMA + 测试查询速度。如果读写还顺畅，就继续用；如果卡，再分库/Parquet/DuckDB 过渡。重跑是最贵操作（一晚上电 + 时间），能不跑就不跑。
-需要我给你写个一键优化脚本（VACUUM + PRAGMA + 简单校验）？或 Parquet 导出代码？直接说～ 别急着删，睡醒继续挖金矿！￼

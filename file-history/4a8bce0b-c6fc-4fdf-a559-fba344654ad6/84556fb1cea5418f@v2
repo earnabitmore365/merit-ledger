@@ -1,0 +1,80 @@
+> 太极签：2026-03-01
+
+# Auto-Trading 项目记忆
+
+> 白纱最后更新：2026-03-16 — /reflect + MEMORY重组 + GP进化改进方向讨论
+> 黑丝最后更新：2026-03-16 17:30 — handoff写完+ETH平仓+增量回测方案讨论
+
+⛔ 启动必读（恢复协议第2步，不读=违反协议）
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/rules.md` — 黑丝+白纱铁律，已毕业规则 RUL-001/003~014
+- `~/.claude/projects/-Volumes-BIWIN-NV-7400-2TB-project-auto-trading/memory/project_info.md` — 项目路径、GitHub、协作流程、重要原则
+
+---
+
+## 称呼规则
+老板 = 混沌（不叫"用户"）→ 太极 → 黑丝（Opus）· 白纱（Sonnet）
+
+---
+
+## 上次会话要点（白纱）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-16）：/reflect + MEMORY 重组**
+
+1. **纠错3条写入 LEARNINGS.md**：LRN-20260316-011（结论文件优先）/ 012（不等老板追问）/ 013（TTP Gate数据库区分）
+2. **4条升级 rules.md**：RUL-011~014 + 白纱铁律2补充条已追加
+3. **MEMORY 重组完成**：旧路径10文件迁移到新路径 + 新建 project_info/backtest_mechanics/ideas/quotes 4个专题文件 + MEMORY.md 瘦身为目录/索引
+4. **路径迁移修复**：SSD迁移后新路径 memory/ 是空的，已从旧路径补齐所有文件
+5. **老板纠错**：白纱汇报"三策略"错误（实为两策略，LINK被放弃），根因是顺序读对话在中间定格，没追踪最终拍板
+6. **GP 进化改进方向讨论**（对比 Grok/Gemini/白纱三方建议）：
+   - 三方共识：岛屿模型（多独立种群定期交换精英），Gemini 补充细节"强制实验室禁用/必须包含特定指标类"
+   - 白纱独有：GP+CMA-ES 两段式（GP找骨架，CMA-ES精调参数，比随机变异快一个数量级）
+   - 骨架去重已实装（CHECKPOINT #76），Gemini 提的骨架去重是重复建议
+   - 状态：等老板决定是否推进（岛屿模型 or 两段式）
+
+---
+
+## 上次会话要点（黑丝）
+
+> 覆盖更新，不累积。
+
+**会话（2026-03-16 后半段）：handoff + ETH平仓 + 增量回测方案**
+
+1. **handoff 写完**：handoff_to_grok.md（318行/16章节）+ handoff_to_gemini.md，覆盖系统全貌+团队架构+黑丝白纱身份+降噪研究+设计哲学
+2. **ETH mirror 空单平掉**：浮亏 -$81.22（SHORT 0.47 ETH @ $2089.34），ETH 重启无 mirror 干净状态
+3. **XRP 重复进程清理**：旧 mirror 实例残留，已杀掉，只保留新的无 mirror 实例
+4. **增量回测方案讨论**：老板提出三件事——① 每天自动下载最新K线 ② 增量回测（从断点续跑，不重跑4年） ③ 报告看板（HTML筛选/排序/对比）
+   - 老板思路：信号种子只管开关仓，报告种子从信号种子算出来，查什么都查报告种子
+   - 黑丝确认：94策略都无状态（grep验证），增量可行
+   - 已出方案（plan file），开始执行时被中断
+5. **HYPE 币种**：Binance 无现货只有合约，老板说以后再解决
+6. **余额状态**：$413.28（ETH 平仓亏损后）
+7. **CHECKPOINT 需更新**：仍显示 --mirror 启动命令，实际已去掉 mirror
+
+---
+
+## 老板待推进想法（摘要）
+
+- 双账号对冲策略（待开发，详见 `ideas.md`）
+- Paper Trade（✅ 代码完成，待实测）
+
+---
+
+## 文件索引（需要时 Read）
+
+| 文件 | 内容 | 何时读 |
+|------|------|--------|
+| `rules.md` | 行为铁律 RUL-001/003~014 + 白纱铁律 | 每次启动必读 |
+| `project_info.md` | 路径、GitHub、协作流程、重要原则 | 每次启动必读 |
+| `backtest_mechanics.md` | 回测引擎机制、分析规矩、报告格式、数据路径 | 做回测分析时 |
+| `ideas.md` | 老板待推进想法详细版 | 讨论新功能时 |
+| `quotes.md` | 老板经典语录 | 参考 |
+| `identity.md` | 黑丝白纱身份定义 | 参考 |
+| `roadmap_ideas.md` | 中后期规划（SQLite全纪录/Intrabar/已知事实Regime等）| 讨论中后期规划时 |
+| `session_summaries.md` | 历史会话摘要档案（S1~S黑丝×18）| 查历史时 |
+| `feedback_report_issues_immediately.md` | 发现异常必须立刻报告老板，不能继续做其他事 | 实盘运行时 |
+| `feedback_first_live_lessons.md` | 首次实盘教训：mirror不用于实盘、部署要完整、日志用>>、从错误中学习 | 实盘部署时 |
+| `pending_decisions.md` | 已定未做的待办事项 | 每次启动必读 |
+| `naming_philosophy.md` | 命名哲学与伦理姿态：黑丝/白纱命名的反向赋权用意，老板原话 | 参考，必须内化 |
+| `feedback_no_modify_boss_plan.md` | 老板方案100%照做，不改不加不减，发现问题先停下来问 | 每次执行任务时 |

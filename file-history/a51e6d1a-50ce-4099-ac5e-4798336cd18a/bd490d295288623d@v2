@@ -1,0 +1,71 @@
+# Handoff → 白纱：监控修正 3 处（黑丝自审完毕，待执行）
+
+> 黑丝写于 2026-03-20 20:35
+> 老板发现 3 个问题，方案已审完，需要白纱确认或直接执行
+
+---
+
+## 老板发现的问题
+
+1. **TTP 百分比不对**：监控显示 -1.33%，BitMEX 显示 -11.20%（因为没乘杠杆 10x）
+2. **PnL 自己瞎算不准**：hardcode $1000 名义，但 XRP 是 $800。老板说"BitMEX 有现成的为什么不用"
+3. **开单漏推送**：只推了平仓没推开仓（bitmex_race.py 有交易时用 print 不用 logger.info → 不进日志 → monitor_bot 读不到）
+
+## 修改方案（3 文件）
+
+### 1. ttp.py — 百分比 × 10 + 去掉 PnL
+
+现在：`[TTP Probe] 🔻亏损加深! LONG profit=-1.33% PnL=$-13.25`
+改后：`[TTP Probe] 🔻亏损加深! LONG profit=-13.3%`
+
+- `profit_pct` 显示时 × 10（杠杆后，对齐 BitMEX）
+- 去掉 `PnL=$XX`（TTP 不知道真实仓位大小，算不准就不算）
+- 里程碑触发频率不变（未杠杆 0.5% = 杠杆 5%）
+
+### 2. bitmex_race.py — print 改 logger.info + `[TRADE]` 标记
+
+现在（行 860-865）：
+```python
+if action != 'NONE':
+    print(f"  交易! {action}")               # ← print 不进日志！
+    print(f"  {args.coin} @ ${...:.2f}")
+    print(f"  余额: {bal_str}")
+```
+
+改后：
+```python
+if action != 'NONE':
+    price = feed_client.get_price(args.coin) if feed_client else adapter.get_price(args.coin)
+    logger.info(
+        f"[TRADE] {args.coin} {action} @ ${price:.2f} | "
+        f"余额={bal_str} | {regime_str}")
+```
+
+`[TRADE]` 标记进日志 → monitor_bot 能读到 → 开仓平仓都推送。
+旧模式（非 feed，行 ~899）也要同步改。
+
+### 3. monitor_bot.py — 解析 `[TRADE]` + TTP 新格式
+
+```python
+# 新增 [TRADE] 解析
+if '[TRADE]' in line:
+    events.append(f"📌 {line.split('[TRADE]')[1].strip()[:80]}")
+
+# TTP Probe 去掉 PnL 解析（已无 PnL 字段）
+# 🔥/🔻 只提取百分比，不提取 PnL
+```
+
+## 推送效果对比
+
+| 推送 | 现在 | 改后 |
+|------|------|------|
+| 开仓 | ❌ 漏掉 | 📌 SOL BUY @ $88.76 \| 余额=$396 \| 盘整 |
+| 平仓 | 🔵 只有操作+余额 | 📌 ETH CLOSE_BUY @ $2130 \| 余额=$382 \| 初牛 |
+| 利润新高 | 🔥 -1.33% ($-13.25) | 🔥 -13.3%（无$金额） |
+| 亏损加深 | 🔻 -1.33% ($-13.25) | 🔻 -13.3%（无$金额） |
+
+## 自审结果（通过）
+- 不增加 REST 调用（价格/余额主循环已查）
+- 里程碑频率不变
+- 旧模式兼容
+- Nitro 改动极小（ttp.py 改显示 + bitmex_race.py print→logger）

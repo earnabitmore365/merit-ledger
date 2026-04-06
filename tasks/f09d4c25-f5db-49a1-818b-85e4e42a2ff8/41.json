@@ -1,0 +1,9 @@
+{
+  "id": "41",
+  "subject": "实现 1m 时间段拆分并行",
+  "description": "在 generate_seed.py 中实现：1. _split_candles() 拆 K 线 2. _worker_segment() 分段 worker 3. _merge_segments() 合并+吻合验证 4. 修改调度逻辑让 1m 用分段并行。预热 2000 根，3 笔吻合验证，fallback 跳 500 根。",
+  "activeForm": "实现时间段拆分",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

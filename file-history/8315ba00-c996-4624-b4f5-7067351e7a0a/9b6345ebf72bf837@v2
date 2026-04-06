@@ -1,0 +1,244 @@
+---
+name: available_tools
+description: 黑丝/白纱可用的全部工具资源清单 — Skills、MCP Servers、199个 Marketplace Agents、系统内置工具。选工具时先查此文件。
+type: reference
+---
+
+# 可用工具资源完整清单
+
+> 最后更新：2026-03-23 黑丝
+> 来源：`~/.claude/skills/`、`~/.claude/settings.json`、`~/.claude/plugins/marketplaces/`
+
+---
+
+## 一、Skills（22个）
+
+Skills 通过 `/skill-name` 或 Skill 工具调用。
+
+### 浏览器与 Web 自动化
+| Skill | 用途 | 何时用 |
+|-------|------|--------|
+| **agent-browser** | 浏览器自动化 CLI（导航、填表、点击、截图、数据提取） | 读网页、填表单、测试Web、爬数据 |
+| **chrome-devtools** | Chrome DevTools MCP（网络分析、性能分析、截图） | 调试Web页面、分析网络流量 |
+| **webapp-testing** | Playwright 测试本地 Web 应用 | 测试前端功能、截图、查看浏览器日志 |
+
+### 编程语言
+| Skill | 用途 | 何时用 |
+|-------|------|--------|
+| **python** | Python 编码规范（PEP 8、py_compile 验证、uv 包管理） | 写/审/重构 Python 代码 |
+| **SQLite Database Expert** | SQLite 开发专家（SQL注入防护、迁移、FTS搜索） | SQLite 相关开发 |
+
+### GitHub 与部署
+| Skill | 用途 | 何时用 |
+|-------|------|--------|
+| **github** | `gh` CLI 操作（Issues、PRs、CI、API） | 检查PR/CI、创建Issue |
+| **gh-fix-ci** | 调试修复 GitHub Actions CI 失败 | CI 红了需要排查 |
+| **deployment-engineer** | CI/CD 自动化、容器化、发布管理 | 部署策略、流水线设计 |
+
+### 连接与搜索
+| Skill | 用途 | 何时用 |
+|-------|------|--------|
+| **connect-apps** | 连接外部 App（Gmail、Slack、GitHub） | 发邮件、创建Issue、发消息 |
+| **mcp-hub** | 1200+ MCP 工具市场入口 | 需要找新工具时 |
+| **qmd** | Markdown 知识库搜索（BM25 + 向量 + 混合） | 查询本地笔记/文档 |
+| **time-checker** | 全球时区查询 | 查时间 |
+
+### Agent 开发
+| Skill | 用途 | 何时用 |
+|-------|------|--------|
+| **Agent Development** | Agent 创建指南（结构、系统提示、触发条件） | 创建新 Agent |
+
+### 自建 Skills（auto-trading 专用）
+| Skill | 用途 | 何时用 |
+|-------|------|--------|
+| **monitor-command** | 生成 macOS .command 监控文件（SSH远程监控） | 需要远程监控脚本 |
+| **reflect** | 从对话提取纠错/学习点，积累到 LEARNINGS.md → rules.md | 老板说"反思"时 |
+
+### 进化系统 Skills
+| Skill | 用途 |
+|-------|------|
+| **evo-digest** | 进化状态摘要报告 |
+| **evo-lint** | 进化数据完整性验证 |
+| **evo-anomaly-detector** | 检测进化异常模式 |
+| **evo-narrative-compactor** | 压缩进化叙事 |
+| **evolution-scorecard** | 进化健康评分 0-100 |
+| **gene-crossover** | 基因交叉算子 |
+| **prompt-budget-analyzer** | GEP prompt 预算分析 |
+
+---
+
+## 二、MCP Servers（2个）
+
+在 `~/.claude/settings.json` → `mcpServers` 配置。
+
+| Server | 命令 | 用途 |
+|--------|------|------|
+| **sequential-thinking** | `npx -y @modelcontextprotocol/server-sequential-thinking` | 序列化思考链 |
+| **trading-monitor** | `python3 mcp_server.py` | 自建交易监控（get_live_status/balance/positions/log_tail/query_backtest） |
+
+---
+
+## 三、系统内置工具（Deferred Tools，17个）
+
+通过 ToolSearch 加载后直接调用。
+
+| 工具 | 用途 |
+|------|------|
+| **WebFetch** | 抓取 URL 内容（HTML→Markdown→AI 处理） |
+| **WebSearch** | 网页搜索（获取最新信息） |
+| **TaskCreate/Get/List/Update/Output/Stop** | 任务管理系统 |
+| **CronCreate/Delete/List** | 定时任务管理 |
+| **AskUserQuestion** | 向用户提问 |
+| **EnterPlanMode/ExitPlanMode** | 计划模式 |
+| **EnterWorktree/ExitWorktree** | Git Worktree 隔离 |
+| **NotebookEdit** | Jupyter Notebook 编辑 |
+
+---
+
+## 四、Marketplace Agents（199个）
+
+来源：`~/.claude/plugins/marketplaces/`
+- **claude-code-workflows**（wshobson/agents）— ~185 个
+- **claude-plugins-official** — ~14 个
+
+路径格式：`~/.claude/plugins/marketplaces/{marketplace}/plugins/{plugin}/agents/{agent}.md`
+
+### ⭐ 与 auto-trading 直接相关
+| Agent | Plugin | 用途 |
+|-------|--------|------|
+| **quant-analyst** | quantitative-trading | 量化分析、回测策略、风险指标（VaR/Sharpe/MDD） |
+| **risk-manager** | quantitative-trading | 风险管理、组合优化 |
+| **python-pro** | python-development | Python 专家（含 django-pro, fastapi-pro） |
+| **data-engineer** | data-engineering | 数据工程、管线设计 |
+| **data-scientist** | machine-learning-ops | 数据科学、ML 模型 |
+| **database-architect** | database-design | 数据库设计（含 sql-pro） |
+| **database-optimizer** | database-cloud-optimization | 数据库优化 |
+| **api-documenter** | documentation-generation | API 文档专家（OpenAPI 3.1） |
+| **reference-builder** | documentation-generation | 参考文档构建 |
+| **blockchain-developer** | blockchain-web3 | 区块链/Web3 开发 |
+| **backend-architect** | backend-development | 后端架构设计 |
+| **performance-engineer** | application-performance | 性能工程 |
+| **security-auditor** | security-scanning | 安全审计 |
+| **bash-pro** | shell-scripting | Bash 脚本专家 |
+| **deployment-engineer** | cicd-automation | 部署工程（含 terraform, k8s） |
+
+### 编程语言专家
+| Agent | 语言/框架 |
+|-------|-----------|
+| python-pro, django-pro, fastapi-pro | Python |
+| javascript-pro, typescript-pro | JS/TS |
+| golang-pro, rust-pro, c-pro, cpp-pro | 系统语言 |
+| java-pro, scala-pro, csharp-pro | JVM/.NET |
+| ruby-pro, php-pro | Web 脚本 |
+| elixir-pro, haskell-pro | 函数式 |
+| julia-pro | 科学计算 |
+| bash-pro, posix-shell-pro | Shell |
+
+### 调试与测试
+| Agent | Plugin | 用途 |
+|-------|--------|------|
+| debugger | debugging-toolkit | 通用调试 |
+| error-detective | error-debugging | 错误根因分析 |
+| test-automator | unit-testing | 自动化测试 |
+| tdd-orchestrator | tdd-workflows | TDD 流程 |
+| code-reviewer | comprehensive-review | 代码审查 |
+| silent-failure-hunter | pr-review-toolkit | 静默失败检测 |
+
+### 文档与架构
+| Agent | Plugin | 用途 |
+|-------|--------|------|
+| api-documenter | api-testing-observability | API 文档 |
+| docs-architect | documentation-generation | 文档架构 |
+| tutorial-engineer | documentation-generation | 教程工程 |
+| mermaid-expert | documentation-generation | Mermaid 图表 |
+| reference-builder | documentation-generation | 参考文档 |
+| c4-context/container/component/code | c4-architecture | C4 架构图 |
+| architect-review | comprehensive-review | 架构审查 |
+
+### DevOps 与云
+| Agent | Plugin | 用途 |
+|-------|--------|------|
+| cloud-architect | cloud-infrastructure | 云架构 |
+| kubernetes-architect | kubernetes-operations | K8s |
+| terraform-specialist | deployment-strategies | IaC |
+| devops-troubleshooter | incident-response | DevOps 排障 |
+| incident-responder | incident-response | 事故响应 |
+| observability-engineer | observability-monitoring | 可观测性 |
+| network-engineer | cloud-infrastructure | 网络工程 |
+
+### 安全
+| Agent | Plugin | 用途 |
+|-------|--------|------|
+| security-auditor | security-compliance | 安全审计 |
+| threat-modeling-expert | security-scanning | 威胁建模 |
+| backend-security-coder | backend-api-security | 后端安全 |
+| reverse-engineer | reverse-engineering | 逆向工程 |
+
+### AI/ML
+| Agent | Plugin | 用途 |
+|-------|--------|------|
+| ai-engineer | llm-application-dev | AI 应用开发 |
+| prompt-engineer | llm-application-dev | Prompt 工程 |
+| ml-engineer | machine-learning-ops | ML 工程 |
+| mlops-engineer | machine-learning-ops | MLOps |
+
+### 团队与流程
+| Agent | Plugin | 用途 |
+|-------|--------|------|
+| team-lead | agent-teams | 团队领导 |
+| team-implementer | agent-teams | 实现者 |
+| team-reviewer | agent-teams | 审查者 |
+| team-debugger | agent-teams | 调试者 |
+| context-manager | context-management | 上下文管理 |
+| code-simplifier | code-simplifier | 代码简化 |
+
+### 官方 Agents（claude-plugins-official）
+| Agent | Plugin | 用途 |
+|-------|--------|------|
+| code-architect | feature-dev | 功能开发架构 |
+| code-explorer | feature-dev | 代码探索 |
+| code-reviewer | feature-dev | 代码审查 |
+| agent-creator | plugin-dev | Agent 创建器 |
+| plugin-validator | plugin-dev | 插件验证 |
+| conversation-analyzer | hookify | 对话分析 |
+| pr-test-analyzer | pr-review-toolkit | PR 测试分析 |
+| type-design-analyzer | pr-review-toolkit | 类型设计分析 |
+| comment-analyzer | pr-review-toolkit | 评论分析 |
+| agent-sdk-verifier-py/ts | agent-sdk-dev | Agent SDK 验证 |
+
+### 其他（非核心但有用时可查）
+- **SEO**: seo-keyword-strategist, seo-content-writer, seo-meta-optimizer 等
+- **前端**: frontend-developer, ui-designer, design-system-architect, flutter-expert, ios-developer
+- **业务**: business-analyst, startup-analyst, content-marketer, hr-pro, legal-advisor
+- **游戏**: unity-developer, minecraft-bukkit-pro
+- **支付**: payment-integration
+
+---
+
+## 五、使用指南
+
+### 如何调用 Marketplace Agent
+```
+Agent tool → subagent_type 不指定（用 general-purpose）
+在 prompt 中说明：参考 ~/.claude/plugins/marketplaces/.../agents/xxx.md 的系统提示
+```
+
+### 选择工具的优先级
+1. **系统内置工具**（Read/Write/Edit/Grep/Glob/Bash）→ 最快
+2. **Skills**（`/skill-name` 或 Skill tool）→ 专业领域
+3. **MCP Servers**（已配置的自动可用）→ 持久服务
+4. **Marketplace Agents**（Agent tool + 参考 prompt）→ 深度专业任务
+5. **WebFetch/WebSearch** → 获取外部信息
+
+### auto-trading 常用组合
+| 场景 | 推荐工具 |
+|------|----------|
+| 写/改 Python 代码 | python skill + python-pro agent |
+| API 文档整理 | api-documenter + reference-builder agents |
+| 数据库优化 | SQLite Database Expert skill + database-optimizer agent |
+| 部署上线 | deployment-engineer skill + deployment-engineer agent |
+| 安全审查 | security-auditor agent |
+| 性能优化 | performance-engineer agent |
+| 量化分析 | quant-analyst + risk-manager agents |
+| 读网页文档 | agent-browser skill（先用）→ WebFetch（备选） |
+| 监控脚本 | monitor-command skill |

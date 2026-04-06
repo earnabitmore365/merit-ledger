@@ -1,0 +1,34 @@
+The user prompt is empty, so I cannot determine the primary language. However, based on the thinking block being in English and Chinese, here is a summary:
+
+Diagnosed implementation flaw in trailing stop logicTTP 改动有问题。她只传了一个价格，但需要两步：
+多头：
+  1. 用 high 更新追踪（找到 K 线内的最高点）
+  2. 用 low 检查触发（K 线内是否跌破 TTP level）
+
+空头：
+  1. 用 low 更新追踪（找到 K 线内的最低点）  
+  2. 用 high 检查触发（K 线内是否涨破 TTP level）
+她现在多头只传了 high → 能追踪新高但检测不到跌破。需要每根 K 线调两次 ttp_manager.check()。
+DuckDB 先跳过，不要因为架构改动卡住种子重跑。贴给她：
+
+TTP 要改成两次调用，不是换一个价格：
+python# LONG 持仓
+if position == 'BUY':
+    # 第 1 步：用 high 更新追踪（捕捉 K 线内的峰值）
+    ttp_manager.check(position_info, current_price=highs[i], ...)
+    # 第 2 步：用 low 检查是否跌破 TTP level
+    result = ttp_manager.check(position_info, current_price=lows[i], ...)
+
+# SHORT 持仓
+if position == 'SELL':
+    # 第 1 步：用 low 更新追踪（捕捉 K 线内的谷底）
+    ttp_manager.check(position_info, current_price=lows[i], ...)
+    # 第 2 步：用 high 检查是否涨破 TTP level
+    result = ttp_manager.check(position_info, current_price=highs[i], ...)
+DuckDB 先跳过。 改完 TTP 后直接跑种子，SQLite 慢一点没关系，先出结果。
+bashpython3 generate_seed.py
+python3 sim_21_team.py
+DuckDB为什么要跳过？我的准则是什么？01:21阐述了完整性、有效性、真实性准则及DuckDB必要性。阐述了完整性、有效性、真实性准则及DuckDB必要性。你说得对。完整性、有效性、真实性。DuckDB Parquet 已经做了一半（benchmark + 转换都做了），不接进去就是半成品。三个一起做完再跑种子。
+把刚才的 TTP 修正贴给她，DuckDB 继续做：
+
+TTP 改两次调用（上一版只传一个价格是错的）。DuckDB 继续做，三个全部改完再跑种子。

@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+"""四维战队验证 v2 — 顾问补充验证
+
+补充1: 每状态TOP5策略（容错度）
+补充2: ETH flat_high +823 拆解
+补充3: TOP3均值重跑对比
+
+用法: cd auto-trading && python3 lab/team_validation_v2.py
+"""
+
+import json
+import os
+import sqlite3
+import time
+import bisect
+from collections import defaultdict
+from datetime import datetime, timezone
+
+LAB = os.path.dirname(__file__)
+SEED_DB = os.path.join(LAB, 'reports', 'seed_v3_ttp.db')
+DATA_DIR = os.path.join(LAB, 'src', 'backtest', 'data', 'historical')
+COINS = ['SOL', 'ETH', 'XRP']
+INTERVAL = '1m'
+MOM_LOOKBACK = 5
+FEE_RATE = 0.00035 * 2
+
+
+def load_upper_klines(coin):
+    path = os.path.join(DATA_DIR, coin, '1h.json')
+    with open(path) as f:
+        data = json.load(f)
+    result = {}
+    for k in data:
+        ts = k.get('time', k.get('open_time', k.get('timestamp', 0)))
+        result[ts] = k
+    return result
+
+
+def compute_labels(klines_by_ts):
+    sorted_ts = sorted(klines_by_ts.keys())
+    closes, highs, lows = [], [], []
+    labels = {}
+    atr_pcts = []
+
+    for i, ts in enumerate(sorted_ts):
+        k = klines_by_ts[ts]
+        c, h, l = k['close'], k['high'], k['low']
+        closes.append(c); highs.append(h); lows.append(l)
+
+        mom_label = 'flat'
+        if i >= MOM_LOOKBACK and closes[i - MOM_LOOKBACK] > 0:
+            mom = (c - closes[i - MOM_LOOKBACK]) / closes[i - MOM_LOOKBACK]
+            if mom > 0.01: mom_label = 'up'
+            elif mom < -0.01: mom_label = 'down'
+
+        vol_label = 'normal'
+        if i >= 14:
+            atr_sum = 0
+            for j in range(i - 13, i + 1):
+                tr = max(highs[j] - lows[j],
+                         abs(highs[j] - closes[j-1]) if j > 0 else 0,
+                         abs(lows[j] - closes[j-1]) if j > 0 else 0)
+                atr_sum += tr
+            atr_pct = (atr_sum / 14) / c if c > 0 else 0
+            atr_pcts.append(atr_pct)
+            if len(atr_pcts) >= 50:
+                atr_mean = sum(atr_pcts[-50:]) / 50
+                ratio = atr_pct / atr_mean if atr_mean > 0 else 1.0
+                if ratio > 1.5: vol_label = 'high'
+                elif ratio < 0.7: vol_label = 'low'
+
+        labels[ts] = (mom_label, vol_label)
+    return labels
+
+
+def ts_to_hour_ms(open_time_str):
+    try:
+        dt = datetime.strptime(open_time_str[:16], '%Y-%m-%d %H:%M')
+        dt = dt.replace(minute=0, second=0, tzinfo=timezone.utc)
+        return int(dt.timestamp() * 1000)
+    except:
+        return 0
+
+
+def run():
+    print("=" * 70)
+    print("四维战队验证 v2 — 补充验证（容错度 + 拆解 + TOP3均值）")
+    print("=" * 70)
+
+    conn = sqlite3.connect(SEED_DB)
+    conn.execute("PRAGMA journal_mode=WAL")
+
+    for coin in COINS:
+        print(f"\n{'=' * 60}")
+        print(f"币种: {coin} / {INTERVAL}")
+        print(f"{'=' * 60}")
+
+        upper_klines = load_upper_klines(coin)
+        labels = compute_labels(upper_klines)
+        sorted_ts_list = sorted(labels.keys())
+
+        trades = conn.execute("""
+            SELECT cs.strategy, pt.r_value, pt.open_time, pt.direction, pt.capital
+            FROM combo_summary cs
+            JOIN paired_trades pt ON pt.combo_id = cs.id
+            WHERE cs.coin = ? AND cs.interval = ?
+        """, (coin, INTERVAL)).fetchall()
+        print(f"交易: {len(trades):,} 笔")
+
+        labeled_trades = defaultdict(lambda: defaultdict(list))
+        all_trades_by_strategy = defaultdict(list)
+
+        # ETH flat_high 拆解用
+        eth_fh_trades = []
+
+        for strategy, r_value, open_time, direction, capital in trades:
+            hour_ms = ts_to_hour_ms(open_time)
+            idx = bisect.bisect_right(sorted_ts_list, hour_ms) - 1
+            if 0 <= idx < len(sorted_ts_list):
+                label_data = labels[sorted_ts_list[idx]]
+            else:
+                label_data = ('flat', 'normal')
+
+            combo_label = f"{label_data[0]}_{label_data[1]}"
+            labeled_trades[combo_label][strategy].append(r_value)
+            all_trades_by_strategy[strategy].append(r_value)
+
+            if coin == 'ETH' and combo_label == 'flat_high' and strategy == 'bb_squeeze_mirror':
+                eth_fh_trades.append({
+                    'r': r_value, 'time': open_time, 'dir': direction
+                })
+
+        # === 补充1: TOP 5 容错度 ===
+        print(f"\n--- 补充1: 每状态 TOP5 策略 ---\n")
+        team_top3 = {}  # 补充3用
+
+        for label in sorted(labeled_trades.keys()):
+            strats = labeled_trades[label]
+            ranked = []
+            for strat, pnls in strats.items():
+                if len(pnls) >= 30:
+                    total = sum(pnls)
+                    ranked.append((strat, total, len(pnls),
+                                   sum(1 for p in pnls if p > 0) / len(pnls)))
+            ranked.sort(key=lambda x: -x[1])
+
+            positive = sum(1 for r in ranked if r[1] > 0)
+            top5 = ranked[:5]
+            team_top3[label] = [r[0] for r in ranked[:3] if r[1] > 0]
+
+            print(f"  {label} ({positive}/{len(ranked)} 正收益):")
+            for i, (strat, pnl, n, wr) in enumerate(top5):
+                mark = "+" if pnl > 0 else ""
+                print(f"    #{i+1} {strat:<28} PnL={mark}{pnl:>8.1f} 笔={n:>5} 胜率={wr:.1%}")
+
+            if len(top5) >= 2:
+                gap = top5[0][1] - top5[1][1]
+                gap_pct = gap / top5[0][1] * 100 if top5[0][1] > 0 else 0
+                print(f"    → TOP1-TOP2差距: {gap:.1f} ({gap_pct:.0f}%)")
+            print()
+
+        # === 补充2: ETH flat_high 拆解 ===
+        if coin == 'ETH':
+            print(f"\n--- 补充2: ETH flat_high bb_squeeze_mirror 拆解 ---\n")
+            if eth_fh_trades:
+                total_pnl = sum(t['r'] for t in eth_fh_trades)
+                n = len(eth_fh_trades)
+                long_pnl = sum(t['r'] for t in eth_fh_trades if t['dir'] == 'long')
+                short_pnl = sum(t['r'] for t in eth_fh_trades if t['dir'] == 'short')
+                long_n = sum(1 for t in eth_fh_trades if t['dir'] == 'long')
+                short_n = sum(1 for t in eth_fh_trades if t['dir'] == 'short')
+
+                sorted_by_pnl = sorted(eth_fh_trades, key=lambda x: -x['r'])
+                max_single = sorted_by_pnl[0]['r'] if sorted_by_pnl else 0
+
+                times = [t['time'] for t in eth_fh_trades]
+                time_span = f"{min(times)} ~ {max(times)}"
+
+                # 按年分布
+                year_dist = defaultdict(lambda: {'n': 0, 'pnl': 0})
+                for t in eth_fh_trades:
+                    y = t['time'][:4]
+                    year_dist[y]['n'] += 1
+                    year_dist[y]['pnl'] += t['r']
+
+                print(f"  总笔数: {n}")
+                print(f"  总PnL: {total_pnl:+.1f}")
+                print(f"  时间跨度: {time_span}")
+                print(f"  做多: {long_n}笔 PnL={long_pnl:+.1f}")
+                print(f"  做空: {short_n}笔 PnL={short_pnl:+.1f}")
+                print(f"  最大单笔: {max_single:+.1f}")
+                top5_vals = [round(t['r'], 1) for t in sorted_by_pnl[:5]]
+                print(f"  TOP5单笔: {top5_vals}")
+                print(f"  按年分布:")
+                for y in sorted(year_dist.keys()):
+                    d = year_dist[y]
+                    print(f"    {y}: {d['n']}笔 PnL={d['pnl']:+.1f}")
+
+        # === 补充3: TOP3均值重跑 ===
+        print(f"\n--- 补充3: TOP3 均值 vs 对照组 ---\n")
+
+        best_single = max(all_trades_by_strategy.items(), key=lambda x: sum(x[1]))
+        best_single_pnl = sum(best_single[1])
+        best_single_name = best_single[0]
+
+        # 实验组v1: TOP1
+        switching_pnl_v1 = 0
+        switch_count_v1 = 0
+        prev = None
+        for label, strats in labeled_trades.items():
+            ranked = [(s, sum(p)) for s, p in strats.items() if len(p) >= 30]
+            ranked.sort(key=lambda x: -x[1])
+            if ranked and ranked[0][1] > 0:
+                top1 = ranked[0][0]
+                switching_pnl_v1 += sum(strats[top1])
+                if prev != top1:
+                    switch_count_v1 += 1
+                    prev = top1
+
+        # 实验组v2: TOP3均值
+        switching_pnl_v2 = 0
+        switch_count_v2 = 0
+        for label, strats in labeled_trades.items():
+            ranked = [(s, sum(p)) for s, p in strats.items() if len(p) >= 30 and sum(p) > 0]
+            ranked.sort(key=lambda x: -x[1])
+            top3 = ranked[:3]
+            if top3:
+                avg_pnl = sum(sum(strats[s]) for s, _ in top3) / len(top3)
+                switching_pnl_v2 += avg_pnl
+                switch_count_v2 += 1
+
+        cost_v1 = switch_count_v1 * 100 * FEE_RATE
+        cost_v2 = switch_count_v2 * 100 * FEE_RATE
+
+        print(f"对照组（全程最优）: {best_single_name} → PnL = {best_single_pnl:+.1f}")
+        print(f"实验组v1（TOP1）:   PnL = {switching_pnl_v1 - cost_v1:+.1f}")
+        print(f"实验组v2（TOP3均值）: PnL = {switching_pnl_v2 - cost_v2:+.1f}")
+
+        diff_v1 = switching_pnl_v1 - cost_v1 - best_single_pnl
+        diff_v2 = switching_pnl_v2 - cost_v2 - best_single_pnl
+        v2_verdict = "✅ 鲁棒" if diff_v2 > 0 else "❌ 过拟合风险"
+        print(f"差值v1: {diff_v1:+.1f} | 差值v2: {diff_v2:+.1f} → {v2_verdict}")
+
+    conn.close()
+    print(f"\n{'=' * 70}")
+    print("补充验证完成")
+    print(f"{'=' * 70}")
+
+
+if __name__ == '__main__':
+    run()

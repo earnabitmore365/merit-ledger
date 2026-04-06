@@ -1,0 +1,36 @@
+# Regime Detector 全面审计 — 执行计划
+
+## 已完成
+
+### Part 1: 机制报告（代码已读完，写入报告即可）
+
+关键发现摘要：
+- 核心5文件在 `lab/live_regime/`
+- 判断逻辑 = 摆动结构(HH/HL/LL/LH) + 打分制破位(50分阈值) + 量能 + MACD + 自动升级(3次)
+- 单币种独立判断，1h主周期，4h大周期（1h×4聚合）
+- 实盘每59分钟更新一次
+- 状态转换有严格路径表但代码允许超载
+- 防抖4层：打分制、结构修复、upgrade单向、哨兵确认
+- Validity Checker 检测invalid时哨兵介入，get_status返回upgrade时自动升级
+
+## 待执行
+
+### Part 2: 历史性能分析脚本
+
+写 `lab/regime_audit.py`，对 SOL/ETH/XRP 的 1h K线跑 RegimeDetector，输出：
+
+1. **2.1 时间分布表**：每个regime的总时长/占比/出现次数/平均持续/最短最长
+2. **2.2 转换频率表**：所有转换路径次数+占比，标注抖动（24h内A→B→A）
+3. **2.3 准确率表**：每段regime期间实际涨跌幅 vs 判断是否正确
+4. **2.4 切换延迟**：价格极值点 vs Detector切换时间的差
+5. **2.5 实盘验证**：从Nitro日志提取regime切换事件
+
+### 关键文件
+- 读：`lab/live_regime/regime_detector.py` + `swing_tracker.py` + `validity_checker.py`
+- 读：K线数据 `lab/src/backtest/data/historical/{SOL,ETH,XRP}/1h.json`
+- 写：`lab/regime_audit.py`（审计脚本）
+- 写：`lab/reports/regime_audit_report.md`（最终报告）
+
+### 验证
+- 脚本跑通，输出3币种完整表格
+- 数据与CHECKPOINT中记录的BTC 19/19匹配结论交叉验证

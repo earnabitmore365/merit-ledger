@@ -1,0 +1,56 @@
+# Plan: 限价单挂单价格偏移 2 tick
+
+## Context
+当前限价单直接挂 best bid/ask，波动快时容易追不上（5 次重试后市价兜底）。改成偏移 2 tick 往成交方向靠，提高成交率同时保持 Maker 费率。
+
+## 文件改动
+
+### 1. adapter.py：加 get_tick_size()
+位置：`lab/src/exchange/bitmex/adapter.py`，在 `get_instrument_info()` 旁边加。
+复用已有 `get_instrument_info()`（line 996）。
+
+```python
+def get_tick_size(self, coin: str) -> float:
+    """获取最小价格变动"""
+    if not hasattr(self, '_tick_cache'):
+        self._tick_cache = {}
+    if coin not in self._tick_cache:
+        info = self.get_instrument_info(coin)
+        self._tick_cache[coin] = float(info.get('tickSize', 0.01) or 0.01)
+    return self._tick_cache[coin]
+```
+
+### 2. limit_executor.py：改挂单价格逻辑
+位置：`lab/limit_executor.py` line 73-74
+
+```python
+# 改前：
+price = bid if side == 'BUY' else ask
+
+# 改后：
+tick_size = adapter.get_tick_size(strategy.coin)
+if side == 'BUY':
+    # 买入：从 bid 往上偏移，更积极吃单（但不越过 ask）
+    price = bid + tick_size * self.OFFSET_TICKS
+    price = min(price, ask - tick_size)  # 不越过 ask，保持 Maker
+else:
+    # 卖出：从 ask 往下偏移，更积极吃单（但不越过 bid）
+    price = ask - tick_size * self.OFFSET_TICKS
+    price = max(price, bid + tick_size)  # 不越过 bid，保持 Maker
+```
+
+常量加在 class 里：`OFFSET_TICKS = 2`
+
+## 验证
+```bash
+python3 -m py_compile lab/src/exchange/bitmex/adapter.py
+python3 -m py_compile lab/limit_executor.py
+```
+
+## 自审
+- [x] get_tick_size 用缓存，不重复调 REST
+- [x] 买 +，卖 -，方向正确
+- [x] min/max 防越界，保持 Maker
+- [x] 复用已有 get_instrument_info()
+
+✅ 自审通过（第1轮，零纰漏）

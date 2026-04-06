@@ -1,0 +1,6 @@
+{
+  "name": "skill-validator",
+  "version": "1.0.0",
+  "description": "Batch-validate installed skills for structural integrity, importability, and SKILL.md frontmatter correctness",
+  "main": "index.js"
+}

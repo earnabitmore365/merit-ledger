@@ -1,0 +1,64 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/inject_rules.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/inject_work_protocol.py"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "nohup bash ~/.claude/evolve.sh auto-trading > /tmp/evolve_hook_auto-trading.log 2>&1 &"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "nohup bash ~/.claude/evolve.sh auto-trading > /tmp/evolve_hook_auto-trading.log 2>&1 &"
+          }
+        ]
+      }
+    ]
+  }
+}

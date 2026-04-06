@@ -1977,3 +1977,4 @@
 2026-04-06 00:14 | [REWARD] 两仪 (+2) | [routine_complete] 老板认可: 新指标唯一合法路径好
 2026-04-06 00:14 | [REWARD] 两仪 (+1) | 习惯养成: routine_complete 连续3次
 2026-04-06 00:19 | [REWARD] 两仪 (+2) | [routine_complete] 老板认可: 嗯嗯，就这样
+2026-04-06 00:27 | [PENALTY] 太极 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [rm 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。

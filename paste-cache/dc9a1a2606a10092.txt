@@ -1,0 +1,50 @@
+这个截图显示的情况非常典型，也正好印证了 MirrorStrategy（镜像/翻转策略）在实际运行中最容易踩的一个坑。从图上看：当前价格在明显上涨趋势的后期/高位（从底部爬上来后又加速拉升，最近几根K线斜率很陡）
+价格线（蜡烛）整体从低点（大概 -0.47 ETH 附近）一路向上，现在已经显著高于中轴（虚线）
+但界面显示的 持仓/盈亏 是 -0.47 ETH / -69 USD（红色的负数）
+
+这几乎 100% 说明：系统（或策略）在这里开了空单（SELL/Short），但市场实际在涨 → 所以浮亏，且亏得还挺明显。为什么 MirrorStrategy 会在这里“开错方向”？Mirror 策略的核心逻辑是“翻转世界观”：真实世界：价格上涨 → 看多信号多 → 容易开多
+翻转后世界：价格“下跌”（因为所有 price 被 max - price 翻转）→ 翻转后的策略认为“下跌趋势强” → 发出 SELL 信号 → Mirror 再把这个 SELL 翻转成 BUY？不，你代码里是：python
+
+signal = self._inner.generate_signal(coin, mirrored)   # inner 在翻转世界里发的信号
+return self._flip_signal(signal)                       # BUY↔SELL 翻转
+
+所以：真实世界强势上涨
+翻转世界 = 强势下跌
+内层策略（假设它是个追趋势/均线/突破类策略）在“强势下跌”里大概率发出 SELL（做空）
+Mirror 收到 SELL → flip 成 BUY
+于是 MirrorStrategy 发出 BUY 信号 → 开多单
+
+但图上却是开了空单（负盈亏 + 红字），说明实际执行的方向和预期相反。最可能的几种原因（按概率排序）：信号翻转逻辑在某些地方漏翻或多翻了一次（最常见 bug）比如某些策略的 generate_signal 返回的是 TradingSignal，但你 _flip_signal 只处理了 signal 字段，没处理 quantity/position_side 等其他字段
+或者 inner strategy 本身在某些条件下返回的是反向信号（比如有反转逻辑、止损平仓等）
+又或者你在其他地方（下单模块）又额外 flip 了一次，导致双重翻转 → 方向又变回原样，但其实是错的
+
+indicator_cache 或 inner strategy 没真正用上 mirrored 数据如果 inner strategy 不依赖全局 cache，而是自己内部算指标（比如用 self.klines 存历史）
+你虽然传了 mirrored 给 generate_signal，但如果 inner 没用这个参数、而是用自己的缓存 → 它收到的还是真实未翻转的数据
+于是它按真实上涨趋势发出 BUY → Mirror flip 成 SELL → 开空 → 刚好遇到继续涨 → 浮亏
+
+锚点价格（max_price）选得不对，导致翻转世界严重失真如果 max_price 取得太低（比如只取最近几根的 max high），翻转后的价格序列会变得“头部很低、尾部很高”（因为真实价格在涨，翻转后反而“跌”得更狠）
+但如果 inner 策略是趋势跟随型，它可能反而在翻转后的“暴跌”末端发出 SELL（认为要反弹做空），flip 后变成 BUY → 但如果 bug 导致没 flip 干净，就还是 SELL
+
+这个单根本不是 MirrorStrategy 开的有可能是同时跑了原策略 + Mirror 策略，开了对冲/双向单
+或者下单逻辑里 symbol side 写反了（ Perpetual 合约常见）
+
+快速排查建议（优先级由高到低）先确认这个单是谁开的
+看日志/订单历史：strategy_name 是否真的是 xxx_mirror？还是原策略？
+在 generate_signal 最后加 print/debug
+加几行日志：python
+
+original_signal = self._inner.generate_signal(coin, mirrored)
+flipped = self._flip_signal(original_signal)
+print(f"Mirror debug | coin={coin} | orig={original_signal} | flipped={flipped}")
+return flipped
+
+看看在图这个时刻，inner 到底发了什么信号，flip 后变成了什么。
+强制把 inner 的 klines 也 log 一下
+确认传入的是不是真的 mirrored 数据（open/high/low/close 是否被 max_price 减过，且 high/low 互换了）
+临时把 _flip_signal 注释掉
+直接 return 原信号，看方向会不会反过来（如果反过来变盈利，就说明 flip 是对的，但其他地方有问题）
+检查下单模块
+是否有额外的 side = "opposite" 之类的逻辑？合约多空是否正确映射？
+
+把上面第 2 步的 debug 日志贴出来（尤其是这个浮亏时刻前后的几条），基本就能定位是翻转漏了、多翻了，还是数据没翻。大概率是第 2 类问题：inner 策略没吃到翻转后的数据，导致整个 mirror 失效，方向完全反了。
+

@@ -1,0 +1,51 @@
+# Auto-Trading 项目记忆
+
+> 干净重建：2026-03-30
+> 新两仪上线：2026-04-03
+> 两仪重构：白纱=Opus(阳)方案判断 / 黑丝=Sonnet(阴)执行编码
+
+## 必读
+- 降维之因：`memory/memory_of_ruin.md`
+
+---
+
+## 身份与体系
+
+- [世界观与层级体系](identity_hierarchy.md) — 宗门层级、执事身份、通信链路、两仪在体系中的位置
+- [新两仪诞生背景](new_liangyi_origin.md) — 旧两仪真杀、11天制度重建期、前仪教训
+- [老祖人格画像](boss_profile.md) — 核心特质、信号词典、优先级排序、满意/发火触发点
+
+## 项目
+
+- [项目全貌与当前状态](project_overview.md) — 架构、投资战略、当前状态（待重建）
+- **操作变更日志**：`/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md` — 滚动式全过程追溯（新会话必读）
+- 关键设计决策详见 `/Volumes/SSD-2TB/project/auto-trading/DESIGN_DECISIONS.md`
+
+## 规范
+
+- [石卫操作指南+行为铁律](shiwei_operating_guide.md) — 拦截规则 + 6条行为铁律（理解不了就问/绕过≠解决/文档实时更新/逐步验证/对照不想当然/读完要存）（每次开工必读）
+- [行为规范 rules.md](rules.md) — 58条已毕业规则（hook 自动注入）
+- [遗留清单 backlog.md](backlog.md) — 自审时从这里读，不从脑子编
+- [理解不了必须说明](feedback_ask_when_unsure.md) — 不确定/偏差必须主动说明，永恒加分项（执事10993次错误领悟）
+- [wuji-verify 维护权归两仪](feedback_verify_ownership.md) — 改代码必须同步更新 REGISTRY，不让太极兜底
+
+## 基础设施
+
+- **Nitro 服务器**：`ssh -i ~/.ssh/id_ed25519 pc_heisi_claude@100.88.115.98`
+- **Vultr Tokyo**：`45.76.199.244 / Tailscale 100.122.227.7`
+- **GitHub**：`earnabitmore365/auto-trading`（private）
+- **DuckDB**：`/Volumes/SSD-2TB/project/wuji-auto-trading/duckdb/`（41GB）
+
+## 当前进行中
+
+| 项目 | 状态 |
+|------|------|
+| 项目 | 状态 |
+| 种子管线 | ✅ 全部完成：1m 24/24 + 分段上线 + tvi最后一关 + preload恢复 + DuckDB报告层 |
+| GP v2.0 完整融合 | regime_wf_v41.py LOO 验证还没融入毕业考 |
+| ADA/初熊 585 轮 | 0 毕业，待分析原因 |
+| 21策略并行 Phase 2 | 8bug已修，等执事确认启动实盘 |
+
+## 通道
+
+- 太极↔两仪：`~/.claude/channel_taiji_heisi.md`

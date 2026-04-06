@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""
+每日摘要批处理 — launchd 凌晨 5am 触发
+
+读昨天的 markdown 日志 → ai_call 生成标签+摘要 → 写入 conversations.db
+失败 fallback：基础关键词匹配打标签，不丢数据。
+"""
+
+import json
+import os
+import sqlite3
+import sys
+from datetime import datetime, date, timedelta
+
+PROJECTS_BASE = os.path.expanduser("~/.claude/projects")
+DB_PATH = os.path.expanduser("~/.claude/conversations.db")
+MERIT_DIR = os.path.expanduser("~/.claude/merit")
+LOG_PATH = "/tmp/daily_digest.log"
+
+# 基础关键词标签（ai_call 失败时的 fallback）
+TAG_WORDS = {
+    '流程': ['初考', '专考', '组考', '照妖镜', '分班', '冠军', 'gate', '门槛'],
+    '技术': ['回测', '种子', 'wf', 'mc', '过拟合', 'bug', '修复', '部署'],
+    '市场': ['regime', '牛市', '熊市', '盘整'],
+    '数据': ['k线', '下载', 'sqlite', 'duckdb', '数据库'],
+    '决策': ['拍板', '决定', '砍掉', '保留', '就这样', '做吧'],
+    '纠错': ['不对', '错了', '你怎么', '又忘了', '漏了'],
+    '积分': ['扣分', '加分', '石卫', '天衡册', 'mission', '自审'],
+}
+
+
+def log(msg):
+    try:
+        with open(LOG_PATH, 'a') as f:
+            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
+
+
+def basic_tags(content):
+    """基础关键词匹配打标签"""
+    content_lower = content.lower()
+    matched = set()
+    for category, words in TAG_WORDS.items():
+        for word in words:
+            if word.lower() in content_lower:
+                matched.add(category)
+                break
+    return list(matched)
+
+
+def ai_tags_and_summary(content):
+    """ai_call 生成智能标签+摘要"""
+    try:
+        sys.path.insert(0, MERIT_DIR)
+        from merit_gate import ai_call_json
+        result = ai_call_json(f"""你是记忆索引引擎。用中文。
+
+以下是一天的工作记录。请：
+1. 提取 5-10 个搜索标签（中英文技术词，如：scheduler、bug修复、石卫、regime）
+2. 生成 3-5 句话的当日摘要
+
+严格输出 JSON：{{"tags": ["标签1", "标签2"], "summary": "摘要内容"}}
+
+记录：
+{content[:4000]}""", timeout=20)
+        if result and result.get("tags"):
+            return result
+    except Exception as e:
+        log(f"ai_call failed: {e}")
+    return None
+
+
+def find_all_daily_dirs():
+    """扫描所有项目的 daily 目录"""
+    dirs = []
+    try:
+        for proj in os.listdir(PROJECTS_BASE):
+            daily = os.path.join(PROJECTS_BASE, proj, 'memory', 'daily')
+            if os.path.isdir(daily):
+                dirs.append((proj, daily))
+    except Exception:
+        pass
+    return dirs
+
+
+def process_yesterday():
+    """处理所有项目昨天的 markdown → DB"""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+
+    for proj_name, daily_dir in find_all_daily_dirs():
+        md_path = os.path.join(daily_dir, f"{yesterday}.md")
+        if not os.path.exists(md_path):
+            continue
+
+        with open(md_path, encoding='utf-8') as f:
+            content = f.read()
+
+        if not content.strip():
+            continue
+
+        log(f"Processing {proj_name}/{yesterday}.md ({len(content)} chars)")
+        _process_one_day(proj_name, yesterday, content)
+
+
+def _process_one_day(proj_name, yesterday, content):
+    """处理单个项目单天的 markdown"""
+
+    # 尝试 AI 标签
+    ai_result = ai_tags_and_summary(content)
+
+    if ai_result:
+        tags = ",".join(ai_result["tags"])
+        summary = ai_result["summary"]
+        log(f"AI tags: {tags}")
+    else:
+        # fallback: 基础关键词
+        tags = ",".join(basic_tags(content))
+        # fallback 摘要：取前 200 字
+        summary = content[:200].replace("\n", " ").strip()
+        log(f"Fallback tags: {tags}")
+
+    # 写入 DB
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            "INSERT INTO messages (time, speaker, content, project, session_id, tags) VALUES (?, ?, ?, ?, ?, ?)",
+            (yesterday, "系统", f"[日摘要·{proj_name}] {summary}", "daily_digest", "", tags)
+        )
+        conn.commit()
+
+        # 确保索引存在
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_daily_digest ON messages(project, time)"
+        )
+        conn.commit()
+        conn.close()
+        log(f"DB written for {yesterday}: {len(summary)} chars, tags={tags}")
+    except Exception as e:
+        log(f"DB write failed: {e}")
+
+
+if __name__ == "__main__":
+    log("=== Daily digest started ===")
+    process_yesterday()
+    log("=== Daily digest done ===")

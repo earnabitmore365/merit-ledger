@@ -1,0 +1,6 @@
+{
+  "name": "evo-trend-tracker",
+  "version": "1.0.0",
+  "description": "Time-series analysis of evolution metrics with rolling windows and trend detection",
+  "main": "index.js"
+}

@@ -1,0 +1,269 @@
+# Minisforum 终极量化指挥中心架构蓝图
+
+> 立项时间：2026-03-19
+> 起草方：混沌（老板）+ Gemini 联合起草
+> 归档方：白纱
+> 状态：**已立项，待采购。Nitro 5 为当前前线原型机。**
+
+---
+
+## 一、物理硬件选型标准（量化满血版）
+
+### 1. 宿主机：Minisforum UM890 Pro
+
+| 参数 | 规格 |
+|------|------|
+| CPU | AMD Ryzen 9 8945HS |
+| 架构优势 | 全大核同构设计，无 Intel 大小核调度灾难 |
+| 扩展接口 | OCuLink（预留外接 RTX 4090 无损通道） |
+
+**架构选型理由**：Python `multiprocessing` 多进程回测在 Intel 大小核架构上存在致命的调度灾难。AMD 全大核同构保证"进化树"基因算法回测时所有核心火力全开，长时间满载不降频，能效比极高。
+
+**OCuLink 预留用途**：未来接入外置 RTX 4090，用于本地大语言模型推理 / 因子挖掘。
+
+---
+
+### 2. 内存（RAM）：防 OOM 护城河
+
+| 规格 | 要求 |
+|------|------|
+| 类型 | DDR5-5600 SO-DIMM |
+| 目标容量 | **96GB（48GB × 2）**，保底 64GB（32GB × 2） |
+| 推荐品牌 | Crucial（英睿达）/ Kingston FURY（金士顿） |
+
+**选型理由**：量化 Pandas 处理 Tick 级历史数据时内存膨胀极大，大内存是"进化树"跑全量回测的绝对命门。
+
+---
+
+### 3. 固态硬盘（SSD）：高频 I/O 双盘隔离策略
+
+| 插槽 | 用途 | 推荐型号 | 容量 |
+|------|------|----------|------|
+| Slot 1（系统主盘） | 宿主系统 + 核心代码 | Samsung 990 Pro / Solidigm P44 Pro | 1TB |
+| Slot 2（数据副盘） | Tick 数据库 + 实盘日志 + 回测缓存 | WD Black SN850X | 2TB 或 4TB |
+
+**Slot 1 优先级**：极致稳定。
+**Slot 2 优先级**：极致 TBW（写入寿命）+ 4K 随机读写性能。
+
+---
+
+## 二、底层虚拟化架构（Proxmox VE）
+
+> ⛔ **绝对禁止直接在物理机上跑 Ubuntu 桌面版！**
+> 必须安装 **Proxmox VE（PVE）** 作为底层虚拟机管理器。
+
+### 虚拟机拓扑切分方案
+
+| VM | 名称 | CPU | RAM | 职责 |
+|----|------|-----|-----|------|
+| VM 1 | 通讯部总机（Feed Gateway） | 2 Core | 4GB | ZMQ 单点网关，维持全网唯一 WebSocket 连接 |
+| VM 2 | 实盘执行层（Live Trading） | 4 Core | 8GB | 三驾马车等实盘策略，ZMQ SUB 监听，极低频 REST 下单 |
+| VM 3 | 哨兵营（Sentinel Camp） | 2 Core | 4GB | 全局风控监控，黑天鹅掐断 VM 2 API 授权 + Telegram 报警 |
+| VM 4 | 进化树（Evolution Tree） | 剩余全部（≈8 Core） | 剩余全部（≈80GB） | 基因算法 / 蒙特卡洛高强度回测 |
+| LXC | 时序数据库 | — | — | TimescaleDB / PostgreSQL，挂载 SN850X 数据盘，Tick 快照沉淀 |
+
+**隔离优势**：即使 VM 4 回测把内存跑爆导致死机，VM 1 和 VM 2 的实盘依然稳如老狗，毫不受影响。
+
+**VM 3 权力**：监听 ZMQ 推送的全市场行情和资金变动，一旦发现黑天鹅异动，直接通过局域网掐断 VM 2 的 API 授权。
+
+---
+
+## 三、ZMQ 跨 VM 通信拓扑图
+
+```mermaid
+graph TD
+    subgraph PVE["Proxmox VE 宿主机 — Minisforum UM890 Pro"]
+        subgraph VM1["VM 1：通讯部总机 (2C/4G)"]
+            GW["feed_gateway.py<br/>ZMQ PUB :5555<br/>ZMQ REP :5556"]
+        end
+
+        subgraph VM2["VM 2：实盘执行层 (4C/8G)"]
+            SOL["bitmex_race.py --coin SOL<br/>ZMQ SUB → 192.168.1.11:5555"]
+            ETH["bitmex_race.py --coin ETH<br/>ZMQ SUB → 192.168.1.11:5555"]
+            XRP["bitmex_race.py --coin XRP<br/>ZMQ SUB → 192.168.1.11:5555"]
+        end
+
+        subgraph VM3["VM 3：哨兵营 (2C/4G)"]
+            SNT["sentinel_camp/<br/>ZMQ SUB → 192.168.1.11:5555<br/>全品种行情监控 + 风控"]
+            KILL["API 授权掐断<br/>→ 192.168.1.12 VM2"]
+            TG["Telegram 报警"]
+        end
+
+        subgraph VM4["VM 4：进化树 (≈8C/≈80G)"]
+            GP["gp_evolve.py / gp_scheduler.py<br/>ZMQ REQ → 192.168.1.11:5556<br/>请求历史 K 线"]
+        end
+
+        subgraph LXC["LXC：时序数据库"]
+            DB["TimescaleDB / PostgreSQL<br/>挂载 SN850X<br/>Tick 快照 + 日志沉淀"]
+        end
+    end
+
+    BITMEX["BitMEX WebSocket<br/>（全网唯一一条）"] -->|"实时 Tick / K线 / 持仓"| GW
+
+    GW -->|"PUB 广播 192.168.1.x:5555"| SOL
+    GW -->|"PUB 广播 192.168.1.x:5555"| ETH
+    GW -->|"PUB 广播 192.168.1.x:5555"| XRP
+    GW -->|"PUB 广播 192.168.1.x:5555"| SNT
+    GW -->|"REP 历史K线 192.168.1.x:5556"| GP
+
+    SOL -->|"REST 下单（极低频）"| BITMEX
+    ETH -->|"REST 下单（极低频）"| BITMEX
+    XRP -->|"REST 下单（极低频）"| BITMEX
+
+    SNT -->|"黑天鹅触发"| KILL
+    SNT -->|"黑天鹅触发"| TG
+    KILL -->|"掐断 API Key"| VM2
+
+    VM2 -->|"交易日志写入"| DB
+    VM4 -->|"回测数据读取"| DB
+
+    style VM1 fill:#1a1a2e,color:#e94560,stroke:#e94560
+    style VM2 fill:#16213e,color:#0f3460,stroke:#0f3460
+    style VM3 fill:#1a1a2e,color:#e94560,stroke:#ff6b6b
+    style VM4 fill:#0f3460,color:#a8dadc,stroke:#457b9d
+    style LXC fill:#1d3557,color:#a8dadc,stroke:#457b9d
+    style BITMEX fill:#2d2d2d,color:#ffd700,stroke:#ffd700
+```
+
+---
+
+## 四、PVE 一键部署环境依赖清单
+
+### 前置：Proxmox VE 安装
+
+```bash
+# 1. 从 proxmox.com 下载 PVE ISO，刻录 U 盘安装
+# 2. 安装完成后，浏览器访问 https://<宿主机IP>:8006
+# 3. 配置网桥 vmbr0（LAN 内 VM 互通）
+```
+
+### VM 1 — 通讯部总机（Ubuntu Server 22.04 LTS）
+
+```bash
+# 系统依赖
+apt install -y python3 python3-pip python3-venv
+
+# Python 依赖
+pip3 install pyzmq websocket-client requests
+
+# 启动命令
+nohup python3 feed_gateway.py >> logs/gateway.log 2>&1 &
+
+# 开机自启（systemd）
+# 创建 /etc/systemd/system/feed-gateway.service
+```
+
+```ini
+# /etc/systemd/system/feed-gateway.service
+[Unit]
+Description=ZMQ Feed Gateway
+After=network.target
+
+[Service]
+User=trading
+WorkingDirectory=/opt/trading
+ExecStart=/usr/bin/python3 /opt/trading/src/data/feed_gateway.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### VM 2 — 实盘执行层（Ubuntu Server 22.04 LTS）
+
+```bash
+# 系统依赖
+apt install -y python3 python3-pip python3-venv
+
+# Python 依赖
+pip3 install pyzmq requests websocket-client pandas numpy
+
+# 启动命令（三驾马车，连接 VM1 的 ZMQ）
+nohup python3 bitmex_race.py --feed --coin SOL --interval 1m --min-bet 100 >> logs/sol.log 2>&1 &
+nohup python3 bitmex_race.py --feed --coin ETH --interval 1m --min-bet 100 >> logs/eth.log 2>&1 &
+nohup python3 bitmex_race.py --feed --coin XRP --interval 5m --min-bet 80  >> logs/xrp.log 2>&1 &
+
+# 环境变量（API Key 不写死在代码）
+export BITMEX_API_KEY=<your_key>
+export BITMEX_API_SECRET=<your_secret>
+export ZMQ_GATEWAY_HOST=192.168.1.11  # VM1 的局域网 IP
+```
+
+### VM 3 — 哨兵营（Ubuntu Server 22.04 LTS）
+
+```bash
+# 系统依赖
+apt install -y python3 python3-pip
+
+# Python 依赖
+pip3 install pyzmq requests pandas numpy python-telegram-bot
+
+# 环境变量
+export ZMQ_GATEWAY_HOST=192.168.1.11
+export TELEGRAM_BOT_TOKEN=<your_token>
+export TELEGRAM_CHAT_ID=<your_chat_id>
+export BITMEX_API_KEY=<admin_key>  # 用于掐断 VM2 的子 Key
+```
+
+### VM 4 — 进化树（Ubuntu Server 22.04 LTS）
+
+```bash
+# 系统依赖
+apt install -y python3 python3-pip python3-venv build-essential
+
+# Python 依赖（完整量化栈）
+pip3 install pyzmq pandas numpy scipy scikit-learn joblib tqdm
+
+# 挂载 LXC 数据库（只读，通过 PostgreSQL 连接）
+export DB_HOST=192.168.1.15  # LXC 容器 IP
+export DB_PORT=5432
+export ZMQ_GATEWAY_HOST=192.168.1.11  # 请求历史K线
+
+# 启动调度器
+nohup python3 gp_scheduler.py >> logs/gp_scheduler.log 2>&1 &
+```
+
+### LXC — 时序数据库（Debian 12）
+
+```bash
+# 安装 TimescaleDB（基于 PostgreSQL 16）
+apt install -y postgresql-16
+# 安装 TimescaleDB 扩展（参考 docs.timescale.com）
+
+# 创建量化数据库
+psql -U postgres -c "CREATE DATABASE quant_data;"
+psql -U postgres -d quant_data -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+
+# 挂载 WD SN850X 数据盘到 /var/lib/postgresql
+```
+
+---
+
+## 五、网络规划建议
+
+| 角色 | 建议 IP | 开放端口 |
+|------|---------|----------|
+| VM 1 通讯部总机 | 192.168.1.11 | 5555 (PUB) / 5556 (REP) |
+| VM 2 实盘执行层 | 192.168.1.12 | — |
+| VM 3 哨兵营 | 192.168.1.13 | — |
+| VM 4 进化树 | 192.168.1.14 | — |
+| LXC 时序数据库 | 192.168.1.15 | 5432 (PostgreSQL) |
+
+> 所有 VM 通过 PVE 内部网桥 `vmbr0` 互通，无需对外暴露端口。
+
+---
+
+## 六、里程碑计划
+
+| 阶段 | 条件 | 行动 |
+|------|------|------|
+| Phase 0（当前） | Nitro 5 前线验证 ZMQ 通讯部 | 黑丝部署 feed_gateway.py，三驾马车接入 |
+| Phase 1（采购后） | Minisforum UM890 Pro 到货 | 安装 PVE，按上方 VM 拓扑切分 |
+| Phase 2 | VM 1~4 全部上线 | 迁移代码，三驾马车迁入 VM 2，GP 迁入 VM 4 |
+| Phase 3（长期） | OCuLink + RTX 4090 | 本地 LLM 推理 / 深度因子挖掘 |
+
+---
+
+> 文档归档于 `docs/architecture/MINISFORUM_PVE_BLUEPRINT.md`
+> 下次装机时以本文档为唯一执行标准。

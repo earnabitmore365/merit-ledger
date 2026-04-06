@@ -1,0 +1,9 @@
+{
+  "id": "6",
+  "subject": "生成 coin_max_price.json（真实 ATH × 1.1）",
+  "description": "从 K 线数据拉取每币种4年最高价 × 1.1，写入 lab/config/coin_max_price.json",
+  "activeForm": "生成固定镜子配置",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

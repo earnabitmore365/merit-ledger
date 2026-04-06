@@ -1,0 +1,548 @@
+#!/usr/bin/env python3
+"""
+分钟级 Regime 标签生成器（哨兵营 v3）
+
+流程:
+  13 币种 × 1m K线 (~210万根)
+    → 聚合到 1h (标准 OHLCV)
+    → RegimeDetector.update_with_aggregation() 逐根跑 (小=1h, 大=4h 自动聚合)
+    → 映射到 1m 精度 (同一小时 60 根 1m 全标同一标签)
+    → BTC: 后验修正 (月级大方向冲突 → 强制覆盖为事实标签)
+    → 非BTC: 轻量 BTC 主导过滤 (rolling 30天 close 相关系数 < 0.6 时向 BTC 靠拢)
+    → 保存 cache/regime_labels_{coin}.pkl + cache/regime_labels_version.txt
+
+Look-ahead 安全:
+  每根 1h bar 闭合后才产生标签，映射到该小时的 60 根 1m。
+  detector 内部的 SwingTracker 也只用已闭合 bar 的 high/low/close。
+
+用法:
+  python3 lab/sentinel_camp/generate_regime_labels.py              # 全部 13 币种
+  python3 lab/sentinel_camp/generate_regime_labels.py --coins BTC  # 只跑 BTC
+  python3 lab/sentinel_camp/generate_regime_labels.py --validate BTC  # 验证 BTC
+"""
+import os
+import sys
+import json
+import pickle
+import argparse
+import numpy as np
+from datetime import datetime, timezone
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_LAB_DIR = os.path.dirname(_THIS_DIR)
+
+# 导入 live_regime 模块（相对导入需要包结构）
+sys.path.insert(0, _LAB_DIR)
+from live_regime.regime_detector import RegimeDetector
+
+# 数据路径
+_BASE = os.path.dirname(_LAB_DIR)
+DATA_DIR = os.path.join(_BASE, 'src', 'backtest', 'data', 'historical')
+CACHE_DIR = os.path.join(_THIS_DIR, 'cache')
+VERSION_FILE = os.path.join(CACHE_DIR, 'regime_labels_version.txt')
+
+# BTC 已知事实时间表（21段，混沌确认 2026-03-03）
+TIMELINE = [
+    ('2017-12', '2018-01', '初熊'),
+    ('2018-02', '2018-12', '熊'),
+    ('2019-01', '2019-03', '初牛'),
+    ('2019-04', '2019-06', '牛'),
+    ('2019-07', '2019-08', '初熊'),
+    ('2019-09', '2020-03', '熊'),
+    ('2020-04', '2020-09', '初牛'),
+    ('2020-10', '2021-04', '牛'),
+    ('2021-05', '2021-07', '初熊'),
+    ('2021-08', '2021-11', '牛'),
+    ('2021-12', '2022-01', '初熊'),
+    ('2022-02', '2022-11', '熊'),
+    ('2022-12', '2023-03', '初牛'),
+    ('2023-04', '2023-09', '盘整'),
+    ('2023-10', '2024-03', '牛'),
+    ('2024-04', '2024-09', '盘整'),
+    ('2024-10', '2025-01', '牛'),
+    ('2025-02', '2025-03', '初熊'),
+    ('2025-04', '2025-10', '牛'),
+    ('2025-11', '2025-12', '初熊'),
+    ('2026-01', '2026-03', '熊'),
+]
+
+# Regime 数值映射（用于非 BTC 的加权混合）
+REGIME_TO_NUM = {'熊': -2, '初熊': -1, '盘整': 0, '初牛': 1, '牛': 2}
+NUM_TO_REGIME = {v: k for k, v in REGIME_TO_NUM.items()}
+
+# 排除的币种
+EXCLUDE_COINS = {'TRX'}
+
+
+def _build_month_regime_map():
+    """构建 年月→regime 查找表"""
+    m = {}
+    for start, end, regime in TIMELINE:
+        ym = start
+        while ym <= end:
+            m[ym] = regime
+            y, mo = int(ym[:4]), int(ym[5:7])
+            mo += 1
+            if mo > 12:
+                mo = 1
+                y += 1
+            ym = f"{y}-{mo:02d}"
+    return m
+
+
+_MONTH_REGIME = _build_month_regime_map()
+
+
+def discover_coins():
+    """扫描数据目录，找出所有有 1m.json 的币种"""
+    coins = []
+    for name in sorted(os.listdir(DATA_DIR)):
+        if name in EXCLUDE_COINS:
+            continue
+        path = os.path.join(DATA_DIR, name, '1m.json')
+        if os.path.isfile(path):
+            coins.append(name)
+    return coins
+
+
+def load_1m(coin):
+    """加载 1m K线，返回 list of dict"""
+    path = os.path.join(DATA_DIR, coin, '1m.json')
+    with open(path) as f:
+        return json.load(f)
+
+
+def aggregate_1m_to_1h(bars_1m):
+    """
+    将 1m K线聚合到 1h。
+
+    按小时分组（timestamp_ms // 3600000），标准 OHLCV 聚合。
+    返回: list of dict (1h bars), list of (start_idx, end_idx) 映射回 1m 索引
+    """
+    if not bars_1m:
+        return [], []
+
+    bars_1h = []
+    mapping = []  # 每个 1h bar 对应的 1m 索引范围 [start, end)
+
+    current_hour = bars_1m[0]['time'] // 3600000
+    group_start = 0
+
+    for i, bar in enumerate(bars_1m):
+        hour = bar['time'] // 3600000
+        if hour != current_hour:
+            # 闭合上一个小时
+            group = bars_1m[group_start:i]
+            bars_1h.append({
+                'open': group[0]['open'],
+                'high': max(b['high'] for b in group),
+                'low': min(b['low'] for b in group),
+                'close': group[-1]['close'],
+                'volume': sum(b['volume'] for b in group),
+                'time': group[0]['time'],
+            })
+            mapping.append((group_start, i))
+            current_hour = hour
+            group_start = i
+
+    # 最后一组
+    if group_start < len(bars_1m):
+        group = bars_1m[group_start:]
+        bars_1h.append({
+            'open': group[0]['open'],
+            'high': max(b['high'] for b in group),
+            'low': min(b['low'] for b in group),
+            'close': group[-1]['close'],
+            'volume': sum(b['volume'] for b in group),
+            'time': group[0]['time'],
+        })
+        mapping.append((group_start, len(bars_1m)))
+
+    return bars_1h, mapping
+
+
+def get_initial_regime(coin, first_time_ms):
+    """获取币种的初始 regime（查 BTC 时间表）"""
+    dt = datetime.fromtimestamp(first_time_ms / 1000, tz=timezone.utc)
+    ym = f"{dt.year}-{dt.month:02d}"
+    return _MONTH_REGIME.get(ym, '盘整')
+
+
+def generate_labels_for_coin(coin, bars_1m, btc_labels_1h=None,
+                              btc_close_1h=None, btc_time_1h=None):
+    """
+    为单个币种生成分钟级 regime 标签。
+
+    Args:
+        coin: 币种名
+        bars_1m: 1m K线 list
+        btc_labels_1h: BTC 的 1h regime 标签 (非 BTC 时传入)
+        btc_close_1h: BTC 的 1h close 价格 (非 BTC 时传入)
+        btc_time_1h: BTC 的 1h 时间戳 (非 BTC 时传入)
+
+    Returns:
+        labels_1m: np.array, 每根 1m K线的 regime 标签
+        labels_1h: np.array, 每根 1h K线的 regime 标签
+        regime_history: list, 转换历史
+    """
+    n_1m = len(bars_1m)
+
+    # 聚合到 1h
+    bars_1h, mapping = aggregate_1m_to_1h(bars_1m)
+    n_1h = len(bars_1h)
+
+    # 初始 regime
+    initial_regime = get_initial_regime(coin, bars_1m[0]['time'])
+    print(f"    初始 regime: {initial_regime} "
+          f"({datetime.fromtimestamp(bars_1m[0]['time']/1000, tz=timezone.utc).strftime('%Y-%m')})")
+
+    # 创建 detector（不持久化状态文件）
+    detector = RegimeDetector(initial_regime=initial_regime, state_file=None)
+
+    # 逐根 1h bar 跑 detector
+    # detector 只做升级（初牛→牛等），反向转换（牛→初熊等）需要手动处理
+    # 历史生成中：检测到 invalid 时自动做反向转换（代替哨兵确认）
+    labels_1h = np.empty(n_1h, dtype='U2')
+    for i, bar in enumerate(bars_1h):
+        result = detector.update_with_aggregation(
+            idx=i,
+            high=bar['high'],
+            low=bar['low'],
+            close=bar['close'],
+            volume=bar['volume'],
+            time_ms=bar['time'],
+            large_tf_bars=4,  # 1h → 4h
+        )
+
+        # 检测到 invalid → 自动转换（代替哨兵）
+        if result['invalid']:
+            checker = detector.checker
+            if checker._bull_swing_count >= 3:
+                # 连续看多摆动 → 转初牛
+                new = '初牛'
+            elif checker._bear_swing_count >= 3:
+                # 连续看空摆动 → 转初熊
+                new = '初熊'
+            else:
+                # 两层同时失效，按当前 regime 反向
+                if detector.regime in ('牛', '初牛'):
+                    new = '初熊'
+                elif detector.regime in ('熊', '初熊'):
+                    new = '初牛'
+                else:
+                    new = '盘整'
+            detector.confirm_transition(
+                new, idx=i, time_ms=bar['time'],
+                reason=f"历史标签自动转换: {detector.regime}→{new}"
+            )
+
+        labels_1h[i] = detector.regime
+
+    # BTC 后验修正
+    if coin == 'BTC':
+        corrected = 0
+        for i, bar in enumerate(bars_1h):
+            dt = datetime.fromtimestamp(bar['time'] / 1000, tz=timezone.utc)
+            ym = f"{dt.year}-{dt.month:02d}"
+            fact = _MONTH_REGIME.get(ym)
+            if fact and labels_1h[i] != fact:
+                labels_1h[i] = fact
+                corrected += 1
+        if corrected > 0:
+            print(f"    BTC 后验修正: {corrected}/{n_1h} 根 "
+                  f"({corrected/n_1h:.1%})")
+
+    # 非 BTC: 轻量 BTC 主导过滤
+    if coin != 'BTC' and btc_labels_1h is not None:
+        labels_1h = _apply_btc_dominance(
+            coin, bars_1h, labels_1h,
+            btc_labels_1h, btc_close_1h, btc_time_1h
+        )
+
+    # 映射到 1m 精度：同一小时 60 根 1m 全标同一标签
+    labels_1m = np.empty(n_1m, dtype='U2')
+    for i, (start, end) in enumerate(mapping):
+        labels_1m[start:end] = labels_1h[i]
+
+    return labels_1m, labels_1h, detector.regime_history
+
+
+def _apply_btc_dominance(coin, bars_1h, labels_1h,
+                          btc_labels_1h, btc_close_1h, btc_time_1h):
+    """
+    非 BTC 币种的 BTC 主导过滤。
+
+    rolling 30 天 close 相关系数 < 0.6 时，
+    regime 向 BTC 靠拢 (0.7×本币 + 0.3×BTC)。
+
+    对 categorical labels 的处理：转成数值 → 加权 → 四舍五入回 categorical。
+    """
+    n = len(bars_1h)
+
+    # 构建时间对齐的 BTC 标签查找表 (hour_key → label)
+    btc_lookup = {}
+    for i in range(len(btc_time_1h)):
+        hour_key = btc_time_1h[i] // 3600000
+        btc_lookup[hour_key] = btc_labels_1h[i]
+
+    # 本币 close 和对齐的 BTC close
+    coin_close = np.array([b['close'] for b in bars_1h])
+    coin_times = np.array([b['time'] for b in bars_1h])
+
+    # 对齐 BTC close（按小时匹配）
+    btc_close_lookup = {}
+    for i in range(len(btc_time_1h)):
+        hour_key = btc_time_1h[i] // 3600000
+        btc_close_lookup[hour_key] = btc_close_1h[i]
+
+    aligned_btc_close = np.full(n, np.nan)
+    for i in range(n):
+        hour_key = coin_times[i] // 3600000
+        if hour_key in btc_close_lookup:
+            aligned_btc_close[i] = btc_close_lookup[hour_key]
+
+    # rolling 30 天相关系数 (30 天 = 720 根 1h bar)
+    window = 720
+    overrides = 0
+
+    for i in range(window, n):
+        # 当前标签一致就不用管
+        hour_key = coin_times[i] // 3600000
+        btc_label = btc_lookup.get(hour_key)
+        if btc_label is None or labels_1h[i] == btc_label:
+            continue
+
+        # 计算 rolling 相关系数
+        coin_window = coin_close[i - window:i]
+        btc_window = aligned_btc_close[i - window:i]
+
+        # 跳过有 NaN 的窗口
+        valid = ~np.isnan(btc_window)
+        if np.sum(valid) < window * 0.8:
+            continue
+
+        c_valid = coin_window[valid]
+        b_valid = btc_window[valid]
+
+        # 标准化后算相关系数
+        c_std = np.std(c_valid)
+        b_std = np.std(b_valid)
+        if c_std < 1e-10 or b_std < 1e-10:
+            continue
+
+        corr = np.corrcoef(c_valid, b_valid)[0, 1]
+
+        # 相关系数 < 0.6 时，向 BTC 靠拢
+        if corr < 0.6:
+            coin_num = REGIME_TO_NUM.get(labels_1h[i], 0)
+            btc_num = REGIME_TO_NUM.get(btc_label, 0)
+            blended = 0.7 * coin_num + 0.3 * btc_num
+            # 四舍五入到最近的整数 regime
+            rounded = int(round(blended))
+            rounded = max(-2, min(2, rounded))
+            new_label = NUM_TO_REGIME[rounded]
+            if new_label != labels_1h[i]:
+                labels_1h[i] = new_label
+                overrides += 1
+
+    if overrides > 0:
+        print(f"    BTC 主导过滤: {overrides}/{n} 根覆盖 "
+              f"({overrides/n:.2%})")
+
+    return labels_1h
+
+
+def validate_btc(labels_1h, bars_1h):
+    """
+    验证 BTC 标签 vs 21 段时间表的匹配率。
+
+    Returns:
+        match_rate: float
+        distribution: dict
+    """
+    n = len(labels_1h)
+    matches = 0
+    total = 0
+
+    for i, bar in enumerate(bars_1h):
+        dt = datetime.fromtimestamp(bar['time'] / 1000, tz=timezone.utc)
+        ym = f"{dt.year}-{dt.month:02d}"
+        fact = _MONTH_REGIME.get(ym)
+        if fact:
+            total += 1
+            if labels_1h[i] == fact:
+                matches += 1
+
+    match_rate = matches / total if total > 0 else 0
+
+    # 标签分布
+    unique, counts = np.unique(labels_1h, return_counts=True)
+    distribution = {u: int(c) for u, c in zip(unique, counts)}
+
+    return match_rate, distribution
+
+
+def save_labels(coin, labels_1m, timestamps_ms):
+    """保存标签到 pkl"""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cache_file = os.path.join(CACHE_DIR, f'regime_labels_{coin}.pkl')
+    data = {
+        'labels': labels_1m,
+        'timestamps_ms': timestamps_ms,
+        'version': 'v20260316_minute',
+    }
+    with open(cache_file, 'wb') as f:
+        pickle.dump(data, f)
+    print(f"    已保存: {os.path.basename(cache_file)} "
+          f"({len(labels_1m):,} 根)")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='分钟级 Regime 标签生成')
+    parser.add_argument('--coins', nargs='+', default=None,
+                        help='指定币种（默认全部）')
+    parser.add_argument('--validate', type=str, default=None,
+                        help='验证指定币种标签（仅 BTC 有事实表）')
+    args = parser.parse_args()
+
+    if args.validate:
+        # 验证模式
+        coin = args.validate
+        cache_file = os.path.join(CACHE_DIR, f'regime_labels_{coin}.pkl')
+        if not os.path.exists(cache_file):
+            print(f"缓存不存在: {cache_file}")
+            print("请先运行生成: python3 generate_regime_labels.py --coins BTC")
+            sys.exit(1)
+
+        with open(cache_file, 'rb') as f:
+            cached = pickle.load(f)
+
+        if coin == 'BTC':
+            # 需要 1h 标签来验证，从 1m 重建
+            bars_1m = load_1m(coin)
+            bars_1h, mapping = aggregate_1m_to_1h(bars_1m)
+            labels_1m = cached['labels']
+
+            # 从 1m 标签取每个 1h 的标签（取该小时第一根 1m 的标签）
+            labels_1h = np.array([labels_1m[start] for start, end in mapping])
+
+            match_rate, distribution = validate_btc(labels_1h, bars_1h)
+
+            print(f"\n{'='*50}")
+            print(f"  BTC 验证结果")
+            print(f"{'='*50}")
+            print(f"  匹配率: {match_rate:.1%} (vs 21 段时间表)")
+            print(f"  {'✅ 达标' if match_rate >= 0.9 else '❌ 未达标'} "
+                  f"(阈值 90%)")
+            print(f"\n  标签分布 ({len(labels_1h):,} 根 1h):")
+            total = sum(distribution.values())
+            for regime in ['牛', '初牛', '盘整', '初熊', '熊']:
+                n = distribution.get(regime, 0)
+                pct = n / total if total > 0 else 0
+                bar = '█' * int(pct * 40)
+                print(f"    {regime}: {n:>8,} ({pct:>5.1%}) {bar}")
+
+            # 逐段匹配明细
+            print(f"\n  逐段匹配:")
+            for start, end, fact_regime in TIMELINE:
+                # 找这段时间内的标签
+                seg_labels = []
+                for i, bar in enumerate(bars_1h):
+                    dt = datetime.fromtimestamp(
+                        bar['time'] / 1000, tz=timezone.utc)
+                    ym = f"{dt.year}-{dt.month:02d}"
+                    if start <= ym <= end:
+                        seg_labels.append(labels_1h[i])
+                if seg_labels:
+                    seg_arr = np.array(seg_labels)
+                    seg_match = np.sum(seg_arr == fact_regime) / len(seg_arr)
+                    status = '✅' if seg_match >= 0.9 else '⚠️' if seg_match >= 0.7 else '❌'
+                    print(f"    {status} {start}~{end} {fact_regime}: "
+                          f"{seg_match:.0%} ({len(seg_labels)}根)")
+        else:
+            print(f"  {coin}: 缓存已加载 ({len(cached['labels']):,} 根)")
+            labels = cached['labels']
+            unique, counts = np.unique(labels, return_counts=True)
+            total = sum(counts)
+            print(f"  分布:")
+            for u, c in zip(unique, counts):
+                print(f"    {u}: {c:,} ({c/total:.1%})")
+
+        return
+
+    # 生成模式
+    coins = args.coins if args.coins else discover_coins()
+
+    print(f"{'='*50}")
+    print(f"  分钟级 Regime 标签生成")
+    print(f"  币种: {', '.join(coins)}")
+    print(f"{'='*50}")
+
+    # 必须先跑 BTC（其他币种需要 BTC 标签做主导过滤）
+    if 'BTC' not in coins:
+        # 检查 BTC 缓存是否存在
+        btc_cache = os.path.join(CACHE_DIR, f'regime_labels_BTC.pkl')
+        if not os.path.exists(btc_cache):
+            print("\n⚠️  BTC 缓存不存在，先生成 BTC...")
+            coins = ['BTC'] + coins
+
+    # 确保 BTC 排在最前面
+    if 'BTC' in coins:
+        coins.remove('BTC')
+        coins.insert(0, 'BTC')
+
+    # BTC 数据（后续非 BTC 需要）
+    btc_labels_1h = None
+    btc_close_1h = None
+    btc_time_1h = None
+
+    for coin in coins:
+        print(f"\n  [{coin}]")
+
+        # 加载 1m K线
+        print(f"    加载 1m K线...", end=' ', flush=True)
+        bars_1m = load_1m(coin)
+        print(f"{len(bars_1m):,} 根")
+
+        # 生成标签
+        labels_1m, labels_1h, history = generate_labels_for_coin(
+            coin, bars_1m,
+            btc_labels_1h=btc_labels_1h,
+            btc_close_1h=btc_close_1h,
+            btc_time_1h=btc_time_1h,
+        )
+
+        # BTC 存下 1h 数据供后续币种使用
+        if coin == 'BTC':
+            btc_labels_1h = labels_1h
+            bars_1h, _ = aggregate_1m_to_1h(bars_1m)
+            btc_close_1h = np.array([b['close'] for b in bars_1h])
+            btc_time_1h = np.array([b['time'] for b in bars_1h])
+
+            # 验证 BTC
+            match_rate, dist = validate_btc(labels_1h, bars_1h)
+            print(f"    BTC 匹配率: {match_rate:.1%} "
+                  f"({'✅' if match_rate >= 0.9 else '❌'})")
+
+        # 标签分布
+        unique, counts = np.unique(labels_1m, return_counts=True)
+        total = sum(counts)
+        dist_str = ' | '.join(
+            f"{u}:{c/total:.0%}" for u, c in zip(unique, counts))
+        print(f"    分布: {dist_str}")
+        print(f"    转换次数: {len(history)}")
+
+        # 保存
+        timestamps_ms = np.array([b['time'] for b in bars_1m], dtype=np.int64)
+        save_labels(coin, labels_1m, timestamps_ms)
+
+    # 写版本文件
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    with open(VERSION_FILE, 'w') as f:
+        f.write('v20260316_minute\n')
+    print(f"\n版本: v20260316_minute")
+    print("完成。")
+
+
+if __name__ == '__main__':
+    main()

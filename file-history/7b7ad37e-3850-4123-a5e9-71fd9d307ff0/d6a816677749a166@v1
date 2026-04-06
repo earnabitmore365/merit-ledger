@@ -1,0 +1,221 @@
+# K线种子系统
+
+> 无极自动交易 — 回测数据管线
+> 最后更新：2026-03-28
+
+## 数据流水线
+
+```
+historical/（原始 JSON）
+    ↓  build_klines_indicators.py 阶段 1
+klines.duckdb（原始 OHLCV，24 品种 × 10 周期）
+    ↓  阶段 1（镜像）
+klines.duckdb 追加 {coin}_mirror 行
+    ↓  阶段 2
+klines.duckdb 写入 101 个指标列
+    ↓  generate_seed.py
+seed_v3*.db（combo_summary + paired_trades + regime_timeline）
+    ↓  verify_seed.py
+完整性验证报告
+```
+
+---
+
+## 目录结构
+
+```
+lab/src/backtest/
+├── backtest.py                  # 核心回测引擎（TTP / 爆仓 / 风险指标）
+├── batch_backtest.py            # 交互式菜单批量回测入口
+├── build_klines_indicators.py   # 两阶段：生成镜像 K线 + 批量写入 101 个指标列
+├── generate_seed.py             # 种子生成器：全量回测 → SQLite
+├── verify_seed.py               # 种子数据库完整性验证（4 个维度）
+└── data/
+    ├── klines.duckdb            # 主数据库（~26 GB，6500 万行，109 列）
+    ├── indicator_col_map.json   # 101 个指标列的映射配置
+    └── historical/              # 原始 OHLCV JSON（按币种/周期分目录）
+
+lab/reports/
+├── seed_v3.db                   # 标准模式种子
+├── seed_v3_ttp.db               # TTP 追踪止盈模式
+├── seed_v3_ttp_highlow.db       # TTP High/Low 触发模式
+└── seed_v3_inverse.db           # 币本位反向合约模式
+
+lab/src/core/
+└── indicator_cache.py           # 统一指标计算 + 缓存（45 种指标，REGISTRY）
+```
+
+---
+
+## klines.duckdb
+
+**路径**：`lab/src/backtest/data/klines.duckdb`
+
+**唯一表**：`klines`，6500 万行，109 列
+
+**数据范围**：
+- 12 个原始币种：ADA AVAX BNB BNB_COIN BTC BTC_COIN DOT ETH ETH_COIN LINK SOL XRP
+- 12 个镜像币种：{coin}_mirror（价格翻转，牛变熊）
+- 10 个周期：1m 5m 15m 30m 1h 2h 4h 8h 12h 1d
+
+### 基础列（8 列）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| coin | VARCHAR | 币种（BTC、BTC_mirror 等） |
+| interval | VARCHAR | 周期（1h、4h 等） |
+| time | BIGINT | 时间戳（毫秒） |
+| open | DOUBLE | 开盘价 |
+| high | DOUBLE | 最高价 |
+| low | DOUBLE | 最低价 |
+| close | DOUBLE | 收盘价 |
+| volume | DOUBLE | 成交量 |
+
+### 指标列（101 列，均为 DOUBLE）
+
+命名规则：`{指标名}_p{参数}` 或 `{指标名}_p{参数}__{子键}`
+
+| 列名 | 说明 |
+|------|------|
+| rsi_p14 | RSI(14) |
+| sma_p20 | SMA(20) |
+| macd_f12_s9_s26__macd / signal / histogram | MACD(12,26,9) |
+| bb_p20_s2.0__upper / middle / lower | 布林带(20, 2.0σ) |
+| adx_p14__adx / plus_di / minus_di | ADX(14) |
+| supertrend_m3.0_p10__direction | 超级趋势方向 |
+| vwap_p20 | 滚动 VWAP(20) |
+
+完整 101 列映射见 `data/indicator_col_map.json`。
+
+---
+
+## 各脚本说明
+
+### build_klines_indicators.py
+
+两阶段构建脚本：
+
+**阶段 1 — 生成镜像 K线**：翻转每组 OHLCV 价格，存为 {coin}_mirror 行。
+
+**阶段 2 — 计算指标**：按 indicator_col_map.json 批量计算 101 个指标列，一次 UPDATE FROM 写入。
+
+```bash
+cd lab/src/backtest && python3 build_klines_indicators.py
+```
+
+**关键设计**：
+- 预过滤：SQL 直接只返回未完成的组，已完成的不进循环
+- 每组 commit：断点续传保障，中途崩溃不丢已完成数据
+- DataFrame 一次性构建：消除 pandas PerformanceWarning
+- 连接复用：两阶段共用一个 DuckDB 连接
+- UPDATE FROM 参数化：防 SQL 注入
+
+### generate_seed.py
+
+全量回测所有策略，输出到 SQLite 种子数据库。
+
+```bash
+cd lab && python3 src/backtest/generate_seed.py [OPTIONS]
+```
+
+| 参数 | 说明 |
+|------|------|
+| --coins BTC ETH | 指定币种 |
+| --intervals 1h 4h | 指定周期 |
+| --strategy bb_squeeze | 指定策略 |
+| --workers 4 | 并行 worker 数 |
+| --mirror | 镜像模式 |
+| --ttp | 追踪止盈模式 |
+| --ttp-close | TTP 用 high/low 触发 |
+| --inverse | 币本位反向合约 |
+
+**固定回测参数**：$500 本金、10x 杠杆、10% 止损、$1 注码、0.035% 手续费、0.02% 滑点、0.01%/8h 资金费
+
+**断点续传**：两层预过滤 — 外层排除全部策略已完成的 coin/interval，内层排除单个已完成策略。
+
+### backtest.py
+
+核心回测引擎。信号反转反手，移动止盈（VWAP TTP），爆仓检测，完整风险指标（夏普、索提诺、卡玛）。
+
+### verify_seed.py
+
+4 维验证：重跑对比、内部一致性、逻辑合理性、Regime 一致性。
+
+---
+
+## 种子数据库（SQLite）
+
+| 文件 | 模式 | combo 数 |
+|------|------|----------|
+| seed_v3.db | 标准（无 TTP） | 23,940 |
+| seed_v3_ttp.db | TTP（close 触发） | 23,940 |
+| seed_v3_ttp_highlow.db | TTP（high/low 触发） | 23,205 |
+| seed_v3_inverse.db | 币本位反向 | 7,035 |
+
+### 表结构
+
+**combo_summary**（36 列）：strategy, coin, interval, total_return, max_drawdown, sharpe_ratio, sortino_ratio, calmar_ratio, total_trades, win_rate, profit_factor, ttp_count, fastest_double_days...
+
+**paired_trades**（25 列）：combo_id, direction, entry_price, exit_price, pnl, r_value, close_type, regime_at_open, mfe, mae, holding_bars...
+
+**regime_timeline**（7 列）：coin, interval, candle_idx, candle_time_ms, regime, adx, sma_direction
+
+**run_metadata**（KV 对）：initial_capital, leverage, stop_loss 等运行配置
+
+---
+
+## 指标系统
+
+**核心文件**：`lab/src/core/indicator_cache.py`
+
+```python
+from core.indicator_cache import get_indicator, init_cache
+
+init_cache(coin='BTC', interval='1h', candles=all_candles)
+rsi = get_indicator('rsi', period=14)
+macd = get_indicator('macd', fast=12, slow=26, signal=9)
+trend_4h = get_indicator('sma', interval='4h', period=50)  # 跨周期
+```
+
+**45 种指标**：rsi, atr, sma, ema, macd, bb, vwap, stochastic, fvg, ad, adx, aroon, ao, bop, cci, cmf, cmo, roc, chaikin_osc, connors_rsi, coppock, dema, tema, demand_index, emv, ehlers_itl, fisher_transform, hma, kama, klinger, linreg_slope, mass_index, obv, parabolic_sar, rvi, supertrend, trix, tvi, ulcer_index, ultimate_oscillator, volume_momentum, vortex, vpt, vroc, williams_r, zscore
+
+注册新指标：写 `compute_xxx(klines, **params)` → 加入 REGISTRY → 策略 REQUIRES 写 `'xxx'`
+
+---
+
+## indicator_col_map.json
+
+101 个条目。key = DuckDB 列名，value = `[函数名, 参数 JSON, 子键]`：
+
+```json
+{
+  "adx_p14__adx":      ["adx",   "{\"period\": 14}",  "adx"],
+  "rsi_p14":           ["rsi",   "{\"period\": 14}",  null],
+  "sma_p20":           ["sma",   "{\"period\": 20}",  null],
+  "macd_f12_s9_s26__macd": ["macd", "{\"fast\":12,\"slow\":26,\"signal\":9}", "macd"]
+}
+```
+
+---
+
+## 已知问题
+
+### DuckDB 反模式
+
+1. **executemany 大数据** → 内存爆炸。用 read_json_auto 或 CTAS
+2. **ATTACH SQLite 直接查** → 150 倍慢。先 CTAS 到原生格式
+3. **大表建索引** → Python 崩溃 + WAL 损坏。不建索引，靠列式扫描
+4. **Python nan/inf** → DuckDB 报错。写入前 _sanitize_series 清洗
+5. **多进程写入** → 不支持。多进程读用 read_only=True
+
+详见 `/Volumes/SSD-2TB/文档/duckdb.md`
+
+### 指标库污染（2026-03-28 发现）
+
+旧 indicator_cache.db 97.4% 被镜像数据覆盖（flipped namespace 2026-03-17 才加入）。已废弃，指标全部存 klines.duckdb。
+
+### 断点续传设计原则
+
+- **预过滤**：SQL 直接只返回未完成的组
+- **单一数据源**：查数据本身（IS NULL），不用独立记录表，避免不一致
+- **每组 commit**：中途崩溃不丢已完成数据

@@ -1,0 +1,39 @@
+---
+name: 排查问题的三律二法方法论
+description: 执事确认的正确排查流程——逐层追踪、实际验证、不猜不跳，以 Stop hook 通道消息排查为范例
+type: feedback
+---
+
+排查问题必须按三律二法：逐层追踪代码路径，每一步实际验证，不靠记忆不猜。
+
+**Why:** 执事在 Stop hook 通道消息排查后确认："这才是排查问题的三律二法"。之前的排查经常靠猜、跳步骤、凭印象。
+
+**How to apply:**
+
+### 排查流程（以 Stop hook 通道消息为范例）
+
+1. **完整（不跳层）**：
+   - 先看配置（hooks 有哪些 → Stop 跑什么脚本）
+   - 再看入口（handle_stop → 调了 check_channel）
+   - 再看函数（check_channel → mtime 比较逻辑）
+   - 再看状态（channel_check.json 的 last_mtime vs 文件 mtime）
+   - 再看日志（shiwei_log 有没有 CHANNEL 记录）
+   - 每一层都看，不跳
+
+2. **真实（不猜）**：
+   - 不说"可能是XX"，而是实际查：`cat channel_check.json`、`stat channel_taiji_heisi.md`
+   - 不说"应该触发了"，而是查日志：`grep Stop shiwei_log`
+   - 每个结论都有实际输出支撑
+
+3. **有效（直指根因）**：
+   - 初始假设"Stop hook 没触发" → 查日志发现触发了 → 修正为"触发了但消息没显示"
+   - 继续追：为什么没显示 → check_channel 消费了消息（更新 last_mtime）但 stdout 可能没回传
+   - 不在错误假设上浪费时间
+
+4. **知常（问本质）**：
+   - 不是"怎么修"，先问"为什么会这样"
+   - Stop hook stdout 跟 SessionStart stdout 的回传机制不同 → 这是平台层面的问题
+
+5. **静制动（不急着下结论）**：
+   - 每查一层确认一层，不急着说"找到了"
+   - 第一个发现（mtime 相等）不是最终答案，继续追到 stdout 被丢弃才是根因

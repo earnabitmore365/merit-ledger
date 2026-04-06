@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""
+通讯部客户端 — 策略进程用来接收 Gateway 推送
+
+线程安全：所有缓存操作加锁（主线程 run_once + TTP 线程共用）。
+
+用法:
+    from data.feed_client import FeedClient
+
+    client = FeedClient()
+    client.subscribe('ETH', '1m')
+    history = client.request_history('ETH', '1m')  # 启动时一次性
+
+    # 事件驱动主循环
+    while True:
+        client.wait_for_kline(timeout=120)
+        klines = client.get_klines('ETH', '1m')  # 完整 200+ 根窗口
+        price = client.get_price('ETH')           # 最新 tick 价格
+
+@see CHECKPOINT.md#100 — 通讯部总机 Feed Gateway
+"""
+
+import json
+import time
+import threading
+import logging
+from typing import Dict, List, Optional
+from collections import deque
+
+import zmq
+
+
+logger = logging.getLogger('FeedClient')
+
+
+class FeedClient:
+    """ZMQ 订阅客户端 — 线程安全"""
+
+    def __init__(self, pub_endpoint='tcp://127.0.0.1:5555',
+                 req_endpoint='tcp://127.0.0.1:5556'):
+        """
+        Args:
+            pub_endpoint: Gateway ZMQ PUB 地址
+            req_endpoint: Gateway ZMQ REP 地址（REQ/REP 历史请求）
+        """
+        self._ctx = zmq.Context()
+
+        # SUB socket（接收实时推送）
+        self._sub = self._ctx.socket(zmq.SUB)
+        self._sub.connect(pub_endpoint)
+
+        # REQ socket（启动时请求历史 K 线）
+        self._req = self._ctx.socket(zmq.REQ)
+        self._req.connect(req_endpoint)
+        self._req.setsockopt(zmq.RCVTIMEO, 10000)  # 10 秒超时
+
+        # 内部缓存（线程安全）
+        self._lock = threading.Lock()
+        self._kline_windows: Dict[str, deque] = {}   # "{coin}_{interval}" → deque
+        self._last_price: Dict[str, float] = {}       # coin → price
+        self._positions: Dict[str, dict] = {}          # coin → position dict
+        self._balance: dict = {}                       # 最新余额
+        self._last_heartbeat: float = time.time()
+
+        # K 线事件信号（事件驱动主循环用）
+        self._kline_event = threading.Event()
+
+        # 后台接收线程
+        self._running = True
+        self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
+        self._recv_thread.start()
+
+    # ==================== 订阅 ====================
+
+    def subscribe(self, coin: str, interval: str):
+        """订阅指定 coin 的所有频道"""
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, f'KLINE.{coin}.{interval}')
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, f'TICK.{coin}')
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, f'POS.{coin}')
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, 'BALANCE')
+        self._sub.setsockopt_string(zmq.SUBSCRIBE, 'HEARTBEAT')
+
+        key = f"{coin}_{interval}"
+        with self._lock:
+            if key not in self._kline_windows:
+                self._kline_windows[key] = deque(maxlen=250)
+
+        logger.info(f"已订阅: {coin}/{interval}")
+
+    # ==================== 历史请求 ====================
+
+    def request_history(self, coin: str, interval: str) -> List[Dict]:
+        """向 Gateway 请求历史 K 线（启动时一次性调用）
+
+        Returns:
+            List[Dict]: K 线列表（空列表 = Gateway 无响应）
+        """
+        try:
+            self._req.send_string(f"KLINES {coin} {interval}")
+            reply = self._req.recv_string()
+            klines = json.loads(reply)
+            key = f"{coin}_{interval}"
+            with self._lock:
+                self._kline_windows[key] = deque(klines, maxlen=250)
+            logger.info(f"历史 K 线: {coin}/{interval} = {len(klines)} 根")
+            return klines
+        except zmq.Again:
+            logger.error("请求历史 K 线超时（Gateway 无响应，检查是否运行）")
+            return []
+        except Exception as e:
+            logger.error(f"请求历史 K 线异常: {e}")
+            return []
+
+    # ==================== 事件驱动 ====================
+
+    def wait_for_kline(self, timeout: float = 120) -> bool:
+        """阻塞等待 K 线事件
+
+        Args:
+            timeout: 超时秒数
+
+        Returns:
+            bool: True = 收到 K 线, False = 超时
+        """
+        got = self._kline_event.wait(timeout=timeout)
+        self._kline_event.clear()
+        return got
+
+    # ==================== 缓存读取（线程安全） ====================
+
+    def get_klines(self, coin: str, interval: str) -> List[Dict]:
+        """获取 K 线窗口（完整 200+ 根）"""
+        key = f"{coin}_{interval}"
+        with self._lock:
+            window = self._kline_windows.get(key, deque())
+            return list(window)
+
+    def get_price(self, coin: str) -> float:
+        """获取最新 tick 价格"""
+        with self._lock:
+            return self._last_price.get(coin, 0.0)
+
+    def get_position(self, coin: str) -> Optional[dict]:
+        """获取最新持仓数据（原始 BitMEX WS 格式）"""
+        with self._lock:
+            return self._positions.get(coin)
+
+    def get_balance(self) -> dict:
+        """获取最新余额数据（原始 BitMEX WS margin 格式）"""
+        with self._lock:
+            return dict(self._balance)
+
+    def is_gateway_alive(self) -> bool:
+        """Gateway 心跳是否正常（30 秒内有心跳 = 活着）"""
+        return (time.time() - self._last_heartbeat) < 30
+
+    # ==================== 后台接收 ====================
+
+    def _recv_loop(self):
+        """后台线程：持续接收 ZMQ 消息并更新缓存"""
+        poller = zmq.Poller()
+        poller.register(self._sub, zmq.POLLIN)
+
+        while self._running:
+            socks = dict(poller.poll(1000))
+            if self._sub not in socks:
+                continue
+
+            try:
+                msg = self._sub.recv_string()
+                space_idx = msg.index(' ')
+                topic = msg[:space_idx]
+                payload = msg[space_idx + 1:]
+            except (ValueError, zmq.ZMQError) as e:
+                logger.warning(f"消息解析失败: {e}")
+                continue
+
+            try:
+                if topic.startswith('KLINE.'):
+                    # KLINE.SOL.1m {json}
+                    parts = topic.split('.')
+                    coin, interval = parts[1], parts[2]
+                    kline = json.loads(payload)
+                    key = f"{coin}_{interval}"
+                    with self._lock:
+                        window = self._kline_windows.get(key)
+                        if window is not None:
+                            # 防重复：检查时间戳
+                            if not window or window[-1]['timestamp'] != kline['timestamp']:
+                                window.append(kline)
+                    self._kline_event.set()  # 通知主循环
+
+                elif topic.startswith('TICK.'):
+                    coin = topic.split('.')[1]
+                    price = float(payload)
+                    with self._lock:
+                        self._last_price[coin] = price
+
+                elif topic.startswith('POS.'):
+                    coin = topic.split('.')[1]
+                    data = json.loads(payload)
+                    with self._lock:
+                        self._positions[coin] = data
+
+                elif topic == 'BALANCE':
+                    data = json.loads(payload)
+                    with self._lock:
+                        self._balance.update(data)
+
+                elif topic == 'HEARTBEAT':
+                    self._last_heartbeat = float(payload)
+
+            except Exception as e:
+                logger.warning(f"处理消息异常 [{topic}]: {e}")
+
+    # ==================== 清理 ====================
+
+    def close(self):
+        """关闭客户端"""
+        self._running = False
+        self._sub.close()
+        self._req.close()
+        self._ctx.term()
+        logger.info("FeedClient 已关闭")

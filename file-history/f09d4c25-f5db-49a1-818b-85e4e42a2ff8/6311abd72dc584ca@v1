@@ -1,0 +1,126 @@
+"""21 策略并行交易系统 — 策略配置表
+
+每个策略的完整定义：币种、策略名、周期、是否mirror。
+由 Gate v4.1 选人 + 相关性约束 + A型筛选 确定。
+
+用法:
+    from team_config import TEAM, TOTAL_STRATEGIES
+
+关联:
+    - unified_trader.py 读取此配置初始化 StrategyRunner
+    - strategy_runner.py 用 mirror 标志决定是否翻转K线
+"""
+
+from dataclasses import dataclass
+from typing import List
+
+
+@dataclass(frozen=True)
+class StrategyConfig:
+    """单个策略的配置"""
+    coin: str           # 币种（BTC/ETH/SOL/...）
+    strategy: str       # 策略名（不含 _mirror 后缀）
+    interval: str       # K线周期（1m/5m/15m/30m/1h）
+    mirror: bool        # 是否翻转K线
+
+
+# 21 个 A 型策略（经顾问选人 + 老板确认）
+# 排序：1m 策略放最前面（验证模式优先跑最快出信号的）
+TEAM: List[StrategyConfig] = [
+    # --- 1m 策略（4个，最快出信号）---
+    StrategyConfig('ETH', 'mean_reversion', '1m', mirror=True),
+    StrategyConfig('XRP', 'mean_reversion', '1m', mirror=True),
+    StrategyConfig('SOL', 'mean_reversion', '1m', mirror=True),
+    StrategyConfig('AVAX', 'mean_reversion', '1m', mirror=True),
+
+    # --- 5m 策略（3个）---
+    StrategyConfig('ADA', 'mean_reversion', '5m', mirror=True),
+    StrategyConfig('LINK', 'order_block', '5m', mirror=True),
+    StrategyConfig('DOT', 'bb_squeeze', '5m', mirror=True),
+
+    # --- 15m 策略（1个）---
+    StrategyConfig('LINK', 'mean_reversion', '15m', mirror=True),
+
+    # --- 30m 策略（4个）---
+    StrategyConfig('BTC', 'bb_squeeze', '30m', mirror=True),
+    StrategyConfig('ETH', 'proc', '30m', mirror=True),
+    StrategyConfig('BNB', 'mean_reversion', '30m', mirror=True),
+    StrategyConfig('DOT', 'bb_squeeze', '30m', mirror=True),
+
+    # --- 1h 策略（9个）---
+    StrategyConfig('ETH', 'advanced_kline_echo', '1h', mirror=True),
+    StrategyConfig('XRP', 'rsi_reversal', '1h', mirror=True),
+    StrategyConfig('SOL', 'bb_squeeze', '1h', mirror=False),
+    StrategyConfig('SOL', 'williams_fast', '1h', mirror=True),
+    StrategyConfig('ADA', 'mean_reversion', '1h', mirror=True),
+    StrategyConfig('AVAX', 'bb_squeeze', '1h', mirror=False),
+    StrategyConfig('AVAX', 'smc_real', '1h', mirror=False),
+    StrategyConfig('LINK', 'bb_squeeze', '1h', mirror=False),
+    StrategyConfig('DOT', 'bb_squeeze', '1h', mirror=False),
+]
+
+TOTAL_STRATEGIES = len(TEAM)  # 21
+
+# 验证模式：只启用前 N 个策略（分步验证用）
+VERIFY_MODE = True
+VERIFY_COUNT = 4  # 4 个 1m 策略
+
+
+def get_active_team():
+    """返回当前启用的策略列表（验证模式下只返回前 N 个）"""
+    if VERIFY_MODE:
+        return TEAM[:VERIFY_COUNT]
+    return TEAM
+
+
+# 资金管理常量
+LEVERAGE = 10
+CIRCUIT_BREAKER_USD = 100  # 余额低于此值全平停战
+MIN_BET = 100              # 最低保证金
+MAX_BET = 1000             # 最高保证金 $1,000（名义 = MAX_BET × LEVERAGE = $10,000）
+
+# 提款规则
+WITHDRAW_THRESHOLD = 27000  # 余额达到此值触发提款
+WITHDRAW_AMOUNT = 6000      # 每次提款金额
+OPERATING_RESERVE = 21000   # 留存运营资金（21 × $1,000）
+
+
+def get_bet_amount(available_margin: float) -> int:
+    """返回保证金金额（不是名义）。名义 = 返回值 × LEVERAGE
+
+    保证金 = available ÷ 21，取整 $10，最低 $100，最高 $1,000
+    """
+    bet = max(MIN_BET, (int(available_margin) // TOTAL_STRATEGIES // 10) * 10)
+    return min(bet, MAX_BET)
+
+
+def get_needed_intervals() -> dict:
+    """返回每个币种需要的周期集合（用于预下载 + 聚合）"""
+    needed = {}
+    for cfg in TEAM:
+        needed.setdefault(cfg.coin, set()).add(cfg.interval)
+        needed[cfg.coin].add('1m')  # 所有币种都需要1m（聚合用）
+    return needed
+
+
+def get_strategy_map() -> dict:
+    """返回 {(coin, interval): [StrategyConfig, ...]} 映射"""
+    mapping = {}
+    for cfg in TEAM:
+        key = (cfg.coin, cfg.interval)
+        mapping.setdefault(key, []).append(cfg)
+    return mapping
+
+
+if __name__ == '__main__':
+    print(f"总策略数: {TOTAL_STRATEGIES}")
+    print(f"\n按币种:")
+    by_coin = {}
+    for cfg in TEAM:
+        by_coin.setdefault(cfg.coin, []).append(cfg)
+    for coin, cfgs in by_coin.items():
+        print(f"  {coin} ({len(cfgs)}): {', '.join(c.strategy + ('_mirror' if c.mirror else '') + ' ' + c.interval for c in cfgs)}")
+    print(f"\n需要的周期:")
+    for coin, intervals in get_needed_intervals().items():
+        print(f"  {coin}: {sorted(intervals)}")
+    print(f"\n注码示例: $398 → ${get_bet_amount(398)}, $2100 → ${get_bet_amount(2100)}, $10500 → ${get_bet_amount(10500)}")

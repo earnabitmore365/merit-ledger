@@ -1,0 +1,35 @@
+⏺ 进程还活着（CPU 6243 分钟），balance_after 仍在跑，但 1
+  小时没有新的进度输出。代码里进度打印条件是 (ci + 1) % 10000 == 0，可能卡在第一批 10000
+   个里某个超大 combo。           
+                                                           
+  让我检查是否真的在工作：                                   
+                                                             
+⏺ Bash(# 看 DuckDB 文件大小是否在变化                     
+      ls -la /Volumes/SSD-2TB/project/wuji-auto-trading/reports/seed_report.duckdb
+      2>/dev/null | awk '{print $5}' && sleep 10 && ls -la /Volumes/…)                  
+  ⎿  128107425792                                            
+     128107425792                                                                       
+                                                    
+⏺ 文件大小 128GB，10 秒内没变化。但进程 CPU 在跑（RN 状态）。可能是 Python 在计算       
+  balance_after 累加，还没到 executemany 批量写入的阈值（batch_size=5000）。
+                                                                                        
+  问题是：16 亿条记录的 balance_after 逐条用 Python + executemany UPDATE，每条都要查+写
+  DuckDB，这个方案太慢了。                                        
+                                                                                        
+  执事，balance_after 这步的方案有性能问题——16 亿条逐条 Python 累加 + UPDATE            
+  可能需要很多小时。要不要 kill 掉换方案？                                              
+                                                                                        
+  替代方案：不用 UPDATE，用 DuckDB 的 CREATE TABLE AS SELECT + 窗口函数重建整个表（虽然 
+  UPDATE 不支持窗口函数，但 CTAS 支持）：                         
+                                                                                        
+  CREATE TABLE paired_trades_new AS                                                     
+  SELECT *, 500.0 + SUM(pnl_amount) OVER (                        
+      PARTITION BY seed_type, combo_id                                                  
+      ORDER BY open_candle_idx, close_candle_idx                                        
+      ROWS UNBOUNDED PRECEDING                                    
+  ) AS balance_after                                                                    
+  FROM paired_trades;                                                                   
+  DROP TABLE paired_trades;                                       
+  ALTER TABLE paired_trades_new RENAME TO paired_trades;                                
+                                                    
+  这会快很多。等执事指示。       

@@ -1,0 +1,9 @@
+{
+  "id": "9",
+  "subject": "改 bitmex_race.py（--regime-mirror + 主循环init_cache + 互斥检查）",
+  "description": "加参数、主循环双缓存初始化、CLI互斥检查、RegimeRouter加载",
+  "activeForm": "改启动脚本",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

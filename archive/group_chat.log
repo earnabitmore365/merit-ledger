@@ -1,0 +1,22 @@
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+通讯部群聊系统启动中...
+  数据库: /Users/allenbot/.claude/conversations.db
+  端口: 8080
+  角色: 太极, 黑丝, 白纱
+
+  Worker 线程就绪（串行处理）
+
+✅ 通讯部就绪: http://localhost:8080
+   Tailscale: http://echo:8080
+
+ * Serving Flask app 'group_chat'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.0.15:8080
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [22/Mar/2026 21:42:46] "GET /socket.io/?EIO=4&transport=polling&t=PqL8-5T HTTP/1.1" 200 -
+127.0.0.1 - - [22/Mar/2026 21:42:46] "POST /socket.io/?EIO=4&transport=polling&t=PqL8-5Z&sid=3aup0IqnwbzsC5nLAAAA HTTP/1.1" 200 -
+127.0.0.1 - - [22/Mar/2026 21:42:46] "GET /socket.io/?EIO=4&transport=polling&t=PqL8-5a&sid=3aup0IqnwbzsC5nLAAAA HTTP/1.1" 200 -
+127.0.0.1 - - [22/Mar/2026 21:42:46] "GET /socket.io/?EIO=4&transport=polling&t=PqL8-5d&sid=3aup0IqnwbzsC5nLAAAA HTTP/1.1" 200 -

@@ -1,0 +1,288 @@
+# Handoff → Gemini：MRI Phase 2 — Gate v4.1 选拔黑盒完整代码
+
+> 黑丝（Opus）写于 2026-03-19
+> 状态：4 步选拔管线全部代码逐行读完，附完整源码
+
+---
+
+## 架构：4 步选拔管线
+
+```
+seed_v3.db（11,656组全量种子）
+  ↓
+Step 1: 初考 gate1_threshold.py — 交易数门槛（刷掉不活跃的）
+  ↓
+Step 2: 专考 gate2v41_scorecard.py — 13维度评分（6 regime + 7 sub_phase）
+  ↓
+Step 3: 组考 gate3v41_team.py — 每维度 TOP 5 组队
+  ↓
+Step 4: MC照妖镜 gate_mcv41.py — Monte Carlo 100次模拟，翻倍率≥50%成冠军
+  ↓
+89 冠军（纯信号）/ 105 冠军（TTP）
+```
+
+---
+
+## Step 1：初考 gate1_threshold.py（完整代码）
+
+```python
+# 门槛配置
+X_MAP = {
+    '1m': 500, '5m': 500, '15m': 500, '30m': 500,
+    '1h': 350, '2h': 350, '4h': 350,
+    '8h': 200, '12h': 200, '1d': 200,
+}
+
+# 核心过滤逻辑（gate1_threshold.py:66-76）
+for c in combos:
+    interval = c['interval']
+    coin = c['coin']
+    trades = c['total_trades']
+    klines = kline_counts.get((coin, interval), 0)
+    x = X_MAP[interval]
+    threshold = klines // x                    # 门槛 = K线数 / X值
+    is_pass = trades >= threshold              # 交易数 >= 门槛
+
+# 实际门槛示例：
+# 1m: 2,102,000 根 / 500 = 4,204 笔最低交易数
+# 1h: 70,000 根 / 350 = 200 笔
+# 1d: ~1,460 根 / 200 = 7 笔
+```
+
+**初考只看交易数量，不看 Sharpe/Drawdown/WinRate/PnL。**
+
+---
+
+## Step 2：专考 gate2v41_scorecard.py（完整核心代码）
+
+### 13 维度定义
+```python
+REGIMES = ['牛', '熊', '盘整', '初牛', '初熊']        # 6个（含"全程"）
+SUB_PHASES = ['sprint', 'rest', 'dip', 'bounce', 'up', 'flat', 'down']  # 7个
+MIN_TRADES_FOR_RANK = 10  # 某维度交易<10笔→标记insufficient，不参与排名
+```
+
+### 每维度计算的 4 个指标
+```python
+# gate2v41_scorecard.py:96-104 — 全程统计
+all_rows = seed.execute('''
+    SELECT combo_id,
+           SUM(r_value) as total_pnl,
+           COUNT(*) as trade_count,
+           AVG(CASE WHEN r_value > 0 THEN 1.0 ELSE 0.0 END) as win_rate,
+           AVG(r_value) as avg_r
+    FROM paired_trades
+    WHERE combo_id IN (...)
+    GROUP BY combo_id
+''').fetchall()
+
+# regime维度统计（以"牛"为例）
+regime_rows = seed.execute('''
+    SELECT pt.combo_id,
+           SUM(pt.r_value) as total_pnl,
+           COUNT(*) as trade_count,
+           AVG(CASE WHEN pt.r_value > 0 THEN 1.0 ELSE 0.0 END) as win_rate,
+           AVG(pt.r_value) as avg_r
+    FROM paired_trades pt
+    JOIN regime_fact_labels rfl ON pt.id = rfl.trade_id
+    WHERE pt.combo_id IN (...)
+      AND (rfl.regime_fact = '牛' OR rfl.regime_fact_2 = '牛')
+    GROUP BY pt.combo_id
+''').fetchall()
+
+# sub_phase维度统计（以"sprint"为例）
+sp_rows = seed.execute('''
+    SELECT spl.combo_id,
+           SUM(pt.r_value) as total_pnl,
+           COUNT(*) as trade_count,
+           AVG(CASE WHEN pt.r_value > 0 THEN 1.0 ELSE 0.0 END) as win_rate,
+           AVG(pt.r_value) as avg_r
+    FROM paired_trades pt
+    JOIN sub_phase_labels spl ON pt.id = spl.trade_id
+    WHERE spl.combo_id IN (...)
+      AND spl.sub_phase = 'sprint'
+    GROUP BY spl.combo_id
+''').fetchall()
+```
+
+### 排名逻辑（关键发现）
+```python
+# gate2v41_scorecard.py:186-209
+
+# 全程排名：只按 PnL 降序
+scored_list.sort(key=lambda x: x[1]['all_pnl'], reverse=True)
+for i, (cid, s) in enumerate(scored_list):
+    s['rank_all'] = i + 1
+
+# 各 regime 维度排名：也只按该维度的 PnL 降序
+for regime in REGIMES:
+    p = REGIME_PREFIX[regime]
+    eligible = [(cid, s) for cid, s in scored_list if not s.get(f'{p}_insufficient')]
+    eligible.sort(key=lambda x: x[1][f'{p}_pnl'], reverse=True)
+    for i, (cid, s) in enumerate(eligible):
+        s[f'rank_{p}'] = i + 1
+
+# sub_phase 维度排名：也只按 PnL 降序
+for sp in SUB_PHASES:
+    eligible = [(cid, s) for cid, s in scored_list if not s.get(f'sp_{sp}_insufficient')]
+    eligible.sort(key=lambda x: x[1][f'sp_{sp}_pnl'], reverse=True)
+    for i, (cid, s) in enumerate(eligible):
+        s[f'rank_sp_{sp}'] = i + 1
+```
+
+**⚠️ 每个维度存了 4 个指标（pnl, trades, win_rate, avg_r），但排名只用 pnl。Sharpe、Drawdown 完全不参与排名。**
+
+---
+
+## Step 3：组考 gate3v41_team.py（完整核心代码）
+
+```python
+# 队伍划分
+TEAMS = {
+    'short': ['1m', '5m', '15m', '30m'],
+    'mid':   ['1h', '2h', '4h'],
+    'long':  ['8h', '12h', '1d'],
+}
+
+TOP_N = 5  # 每维度取前5名
+
+# 核心选人逻辑（gate3v41_team.py:51-68）
+for dim in ALL_DIMS:   # 13个维度（6 regime + 7 sub_phase）
+    pnl_key = f'{dim}_pnl'
+    insuf_key = f'{dim}_insufficient' if dim != 'all' else None
+
+    eligible = []
+    for r in all_candidates:
+        if insuf_key and r[insuf_key]:       # 交易<10笔的跳过
+            continue
+        pnl = r[pnl_key] if r[pnl_key] is not None else 0
+        eligible.append((r, pnl))
+
+    eligible.sort(key=lambda x: x[1], reverse=True)   # 按 PnL 排
+
+    for r, pnl in eligible[:TOP_N]:          # 取前5
+        cid = r['combo_id']
+        if cid not in selected_combos:
+            selected_combos[cid] = set()
+        selected_combos[cid].add(dim)        # 记录在哪些维度入选
+
+# 去重：同(strategy, coin)只留 all_pnl 最高的周期
+by_strat_coin = {}
+for cid, dims in selected_combos.items():
+    r = next(x for x in all_candidates if x['combo_id'] == cid)
+    key = (r['strategy'], r['coin'])
+    pnl = r['all_pnl'] or 0
+    if key not in by_strat_coin or pnl > by_strat_coin[key][1]:
+        by_strat_coin[key] = (cid, pnl, dims)
+```
+
+**选人标准：13 维度 × TOP 5 PnL → 去重 → 进入 MC**
+
+---
+
+## Step 4：MC 照妖镜 gate_mcv41.py（完整代码）
+
+```python
+MC_RUNS = 100                    # 模拟次数
+MC_INITIAL = 500.0               # 初始本金
+MC_FRACTION = 0.02               # 每笔用余额的 2%
+MC_DOUBLE_TARGET = 1000.0        # 翻倍目标 $1000
+MC_CHAMPION_THRESHOLD = 50.0     # 翻倍率 >= 50% 才是冠军
+
+random.seed(42)                  # 固定随机种子（可复现）
+
+def monte_carlo(seed_conn, combo_id, interval):
+    # 读取该 combo 的全部交易（R值 + 持仓时长）
+    trades = seed_conn.execute('''
+        SELECT r_value, holding_bars FROM paired_trades
+        WHERE combo_id = ?
+    ''', (combo_id,)).fetchall()
+
+    trade_list = [(t['r_value'], t['holding_bars']) for t in trades]
+    bpd = BARS_PER_DAY.get(interval, 24)
+
+    results = []
+    for _ in range(MC_RUNS):          # 100 次模拟
+        random.shuffle(trade_list)     # ← 随机打乱交易顺序
+        balance = MC_INITIAL           # $500
+        peak = MC_INITIAL
+        max_dd = 0.0
+        cumulative_days = 0.0
+        days_to_double = None
+        busted = False
+
+        for r_value, holding_bars in trade_list:
+            pnl = r_value * (balance * MC_FRACTION)   # 2% 复利下注
+            balance += pnl
+            cumulative_days += holding_bars / bpd
+
+            if balance <= 0:
+                busted = True
+                break
+
+            peak = max(peak, balance)
+            dd = (peak - balance) / peak
+            max_dd = max(max_dd, dd)
+
+            if days_to_double is None and balance >= MC_DOUBLE_TARGET:
+                days_to_double = cumulative_days
+
+        results.append({
+            'final_balance': balance,
+            'days_to_double': days_to_double,
+            'max_dd': max_dd * 100,
+            'busted': busted,
+        })
+
+    # 统计
+    doubled = [r for r in results if r['days_to_double'] is not None]
+    double_rate = round(len(doubled) / MC_RUNS * 100, 1)
+
+    return {
+        'double_rate': double_rate,
+        'bust_rate': round(sum(1 for r in results if r['busted']) / MC_RUNS * 100, 1),
+        'd2d_p5':  percentile(d2d_list, 5),     # 翻倍天数第5百分位
+        'd2d_p50': percentile(d2d_list, 50),     # 翻倍天数中位数
+        'd2d_p95': percentile(d2d_list, 95),     # 翻倍天数第95百分位
+        'max_dd_p5':  percentile(dd_list, 5),    # 最大回撤第5百分位
+        'max_dd_p50': percentile(dd_list, 50),
+        'max_dd_p95': percentile(dd_list, 95),   # 最大回撤第95百分位
+        'is_champion': double_rate >= MC_CHAMPION_THRESHOLD,   # ← 50% 翻倍率门槛
+    }
+```
+
+**MC 做的事情：**
+1. 取出该策略的全部历史交易（R 值序列）
+2. `random.shuffle` 打乱顺序（破坏时间依赖）
+3. 用 2% 复利从 $500 开始模拟
+4. 跑 100 次，统计能翻倍到 $1000 的比例
+5. **翻倍率 ≥ 50% = 冠军**
+
+**MC 不做的事情：**
+- ❌ 不加随机滑点惩罚
+- ❌ 不加随机手续费变动
+- ❌ 不做 Walk-Forward 时间窗口验证
+- MC 用的 R 值已经包含了回测时扣除的手续费+滑点+资金费（Phase 1 确认过）
+
+---
+
+## 完整选拔流程总结
+
+| 步骤 | 淘汰标准 | 用到的指标 | 不用的指标 |
+|------|----------|-----------|-----------|
+| 初考 | 交易数 < K线数/X | 交易笔数 | PnL, Sharpe, DD, WR |
+| 专考 | 无淘汰，只排名 | PnL（R值总和） | Sharpe, DD, WR（存了不用） |
+| 组考 | 13维度各取TOP 5 | PnL 排名 | 同上 |
+| MC | 翻倍率 < 50% | R值序列随机重排 | 无额外滑点/费用 |
+
+**请 Gemini 重点审阅：**
+
+1. **专考+组考只看 PnL 不看 Sharpe/Drawdown**：存了 win_rate 和 avg_r 但排名只用 pnl。一个 Sharpe=0.5 但 PnL 高的策略会排在 Sharpe=3.0 但 PnL 中等的策略前面。这是否会选出"高波动玻璃大炮"？
+
+2. **MC 只做 shuffle 不加额外摩擦**：R 值已含回测成本，但 shuffle 只验证"顺序无关性"。如果一个策略的盈利集中在特定 regime（如牛市），shuffle 后表现可能与实际差距大。这是否足够？
+
+3. **MC_FRACTION = 0.02（2%）vs 实盘 10%**：MC 模拟用 2% 下注，但实盘用 10% 保证金。这个差异是否影响 MC 结论的适用性？
+
+4. **MC_RUNS = 100**：统计学上 100 次是否足够？翻倍率 50% 的置信区间有多宽？
+
+5. **初考门槛的 X 值**：1d 周期只需 7 笔交易就能通过初考。7 笔是否太少，容易产生统计幻觉？

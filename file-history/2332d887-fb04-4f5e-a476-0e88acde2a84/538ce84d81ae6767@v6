@@ -1,0 +1,25 @@
+# 遗留清单（auto-trading 项目级）
+
+> 发现问题加进来，做完了才删。每次【自审】从这里读，不从脑子编。
+
+## 待处理
+
+- [x] **1m 种子重跑**：24/24 × 105 × 4 DB 全部完成（2026-04-05）
+- [x] **分段方案更新源代码**：已完成（2026-04-04），340/340零差异验证后上线
+- [ ] **tvi 最后一关**：正式版用 combo_summary 快速对比做最后一关，tvi 自动 fallback 全量
+- [ ] **纠错lab：preload排查**：preload_from_duckdb被禁用，根因"DuckDB指标与实时计算不匹配"待查
+- [x] **DuckDB报告层**：已完成（2026-04-05），95012 combo × 16.4亿 trades，14字段后算完毕，41.7GB
+- [ ] **generate_seed.py 低优先级纰漏×3**：id字段说明/DATA_DIR路径/默认DB名
+- [ ] **GP v2.0 完整融合**：indicator_cache flipped namespace 已接入，但 regime_wf_v41.py 的 LOO 验证还没融入毕业考
+- [ ] **ADA/初熊 585 轮 0 毕业**：需分析原因——数据量不够还是验证标准问题
+- [ ] **21策略并行系统 Phase 2**：8 bug 已修，等执事确认启动实盘
+- [ ] **MiniMax 评估积压**：27 个任务待处理
+
+## 已完成
+
+- [x] GP v2.0 regime-based 部署 Nitro（2026-04-02）
+- [x] MIN_INDICATORS = 3 指标门槛（2026-04-02）
+- [x] 压力测试 + MEMORY_ESTIMATES 修正 + WORKER_MEM_LIMIT_MB（2026-04-02）
+- [x] SMA(200) 滚动轴翻转替换 max+min 固定轴（2026-04-03）
+- [x] indicator_cache flipped namespace 接入 GP 引擎（2026-04-03）
+- [x] wuji-verify.py 项目级质检上线（2026-04-03）

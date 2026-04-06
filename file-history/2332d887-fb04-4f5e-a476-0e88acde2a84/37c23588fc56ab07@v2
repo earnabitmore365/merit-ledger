@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+"""
+Gate v4 照妖镜 MC — Monte Carlo 最终验证
+输入: seed_signal.db + gate_v3/gate_v3_report.db (gate4_wf pass_wf=1)
+输出: gate_v3/gate_v3_report.db (gate5_mc 表 + champion 表)
+
+100次洗牌，f=2%复利，检查翻倍率/爆仓率/d2d分布。
+翻倍率≥50%才通过。
+"""
+import sqlite3
+import os, sys
+import random
+import time
+_p = os.path.dirname(os.path.abspath(__file__))
+while _p != os.path.dirname(_p) and not os.path.exists(os.path.join(_p, '.wuji-root')):
+    _p = os.path.dirname(_p)
+if _p not in sys.path:
+    sys.path.insert(0, _p)
+from path_config import ROOT, DATA_DIR, REPORT_DIR, RESULT_DIR, SRC_DIR  # noqa: E402
+
+DB_PATH = os.path.join(REPORT_DIR, 'seed_signal.db')
+REPORT_PATH = os.path.join(RESULT_DIR, 'gate_v3', 'gate_v3_report.db')
+
+MC_RUNS = 100
+MC_INITIAL = 500.0
+MC_FRACTION = 0.02
+MC_DOUBLE_TARGET = 1000.0
+MC_PASS_PCT = 50.0
+
+
+def run_mc(r_values):
+    """跑MC，返回 (翻倍率%, d2d列表, 爆仓次数, max_dd列表)"""
+    doubled_count = 0
+    blown_count = 0
+    d2d_list = []
+    max_dd_list = []
+
+    for _ in range(MC_RUNS):
+        random.shuffle(r_values)
+        balance = MC_INITIAL
+        peak = MC_INITIAL
+        max_dd = 0.0
+        doubled = False
+        blown = False
+        trades_to_double = None
+
+        for i, rv in enumerate(r_values):
+            pnl = rv * (balance * MC_FRACTION)
+            balance += pnl
+
+            if balance <= 0:
+                blown = True
+                break
+
+            if balance > peak:
+                peak = balance
+            dd = (peak - balance) / peak
+            if dd > max_dd:
+                max_dd = dd
+
+            if not doubled and balance >= MC_DOUBLE_TARGET:
+                doubled = True
+                trades_to_double = i + 1
+
+        if doubled:
+            doubled_count += 1
+            d2d_list.append(trades_to_double)
+        if blown:
+            blown_count += 1
+        max_dd_list.append(max_dd * 100)
+
+    double_rate = doubled_count / MC_RUNS * 100
+    blown_rate = blown_count / MC_RUNS * 100
+
+    d2d_95 = None
+    if d2d_list:
+        d2d_list.sort()
+        lo = d2d_list[int(len(d2d_list) * 0.025)] if len(d2d_list) > 40 else d2d_list[0]
+        hi = d2d_list[int(len(d2d_list) * 0.975)] if len(d2d_list) > 40 else d2d_list[-1]
+        d2d_95 = (lo, hi)
+
+    max_dd_list.sort()
+    dd_lo = max_dd_list[int(len(max_dd_list) * 0.025)]
+    dd_hi = max_dd_list[int(len(max_dd_list) * 0.975)]
+
+    return double_rate, blown_rate, d2d_95, (dd_lo, dd_hi)
+
+
+def main():
+    random.seed(42)
+    t_start = time.time()
+
+    print("=" * 80)
+    print("Gate v4 照妖镜 MC — Monte Carlo 最终验证")
+    print(f"参数: {MC_RUNS}次洗牌, f={MC_FRACTION*100}%复利, 翻倍≥{MC_PASS_PCT}%通过")
+    print("=" * 80)
+
+    seed = sqlite3.connect(DB_PATH)
+    seed.row_factory = sqlite3.Row
+    rpt = sqlite3.connect(REPORT_PATH)
+    rpt.row_factory = sqlite3.Row
+
+    # 读WF通过的候选
+    candidates = rpt.execute("""
+        SELECT combo_id, strategy, coin, interval, team, all_pnl
+        FROM gate4_wf WHERE pass_wf = 1
+    """).fetchall()
+
+    print(f"\n候选: {len(candidates)} 个（专场WF通过）\n")
+
+    # 建表
+    rpt.execute("DROP TABLE IF EXISTS gate5_mc")
+    rpt.execute("""CREATE TABLE gate5_mc (
+        combo_id INTEGER PRIMARY KEY,
+        strategy TEXT, coin TEXT, interval TEXT, team TEXT,
+        all_pnl REAL, total_trades INTEGER,
+        double_rate REAL, blown_rate REAL,
+        d2d_lo INTEGER, d2d_hi INTEGER,
+        max_dd_lo REAL, max_dd_hi REAL,
+        pass_mc INTEGER
+    )""")
+
+    results = []
+    for i, c in enumerate(candidates):
+        cid = c['combo_id']
+        label = f"{c['strategy']}/{c['coin']}/{c['interval']}"
+
+        trades = seed.execute("""
+            SELECT r_value FROM paired_trades WHERE combo_id = ?
+        """, (cid,)).fetchall()
+
+        r_values = [t['r_value'] for t in trades]
+        n_trades = len(r_values)
+
+        if n_trades < 10:
+            print(f"  [{i+1:>2}/{len(candidates)}] ⚠️ {label:<35} 交易太少({n_trades}笔)，跳过")
+            continue
+
+        dr, br, d2d_95, dd_95 = run_mc(r_values)
+        passed = dr >= MC_PASS_PCT
+
+        mark = '✅' if passed else '❌'
+        d2d_str = f"{d2d_95[0]}~{d2d_95[1]}笔" if d2d_95 else "N/A"
+        print(f"  [{i+1:>2}/{len(candidates)}] {mark} {label:<35} "
+              f"翻倍={dr:.0f}% 爆仓={br:.0f}% d2d={d2d_str} dd={dd_95[0]:.1f}~{dd_95[1]:.1f}%")
+
+        rpt.execute("INSERT INTO gate5_mc VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+            cid, c['strategy'], c['coin'], c['interval'], c['team'],
+            c['all_pnl'], n_trades,
+            dr, br,
+            d2d_95[0] if d2d_95 else None, d2d_95[1] if d2d_95 else None,
+            dd_95[0], dd_95[1],
+            int(passed),
+        ))
+
+        results.append({
+            'combo_id': cid,
+            'strategy': c['strategy'],
+            'coin': c['coin'],
+            'interval': c['interval'],
+            'team': c['team'],
+            'all_pnl': c['all_pnl'],
+            'n_trades': n_trades,
+            'double_rate': dr,
+            'blown_rate': br,
+            'd2d_95': d2d_95,
+            'dd_95': dd_95,
+            'passed': passed,
+        })
+
+    rpt.commit()
+
+    # === 冠军表 ===
+    champions = [r for r in results if r['passed']]
+    rpt.execute("DROP TABLE IF EXISTS champion")
+    rpt.execute("""CREATE TABLE champion (
+        combo_id INTEGER PRIMARY KEY,
+        strategy TEXT, coin TEXT, interval TEXT, team TEXT,
+        all_pnl REAL, total_trades INTEGER,
+        double_rate REAL, blown_rate REAL,
+        d2d_lo INTEGER, d2d_hi INTEGER,
+        max_dd_lo REAL, max_dd_hi REAL
+    )""")
+
+    for r in champions:
+        rpt.execute("INSERT INTO champion VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+            r['combo_id'], r['strategy'], r['coin'], r['interval'], r['team'],
+            r['all_pnl'], r['n_trades'],
+            r['double_rate'], r['blown_rate'],
+            r['d2d_95'][0] if r['d2d_95'] else None,
+            r['d2d_95'][1] if r['d2d_95'] else None,
+            r['dd_95'][0], r['dd_95'][1],
+        ))
+    rpt.commit()
+
+    # === 汇总 ===
+    print(f"\n{'=' * 80}")
+    print("汇总")
+    print(f"{'=' * 80}")
+
+    for team in ['short', 'mid', 'long']:
+        tr = [r for r in results if r['team'] == team]
+        n = len(tr)
+        passed = sum(1 for r in tr if r['passed'])
+        label = {'short': '短期队', 'mid': '中期队', 'long': '长期队'}[team]
+        print(f"\n  {label}: {passed}/{n} 通过MC")
+        # 通过名单
+        for r in sorted([r for r in tr if r['passed']], key=lambda x: x['all_pnl'], reverse=True):
+            d2d_str = f"{r['d2d_95'][0]}~{r['d2d_95'][1]}" if r['d2d_95'] else "N/A"
+            print(f"    ✅ {r['strategy']:<22} {r['coin']}/{r['interval']:<6} "
+                  f"PnL={r['all_pnl']:>+8.1f}R  "
+                  f"翻倍={r['double_rate']:.0f}%  "
+                  f"d2d={d2d_str}笔  "
+                  f"dd={r['dd_95'][0]:.1f}~{r['dd_95'][1]:.1f}%")
+
+    total = len(results)
+    total_passed = sum(1 for r in results if r['passed'])
+    elapsed = time.time() - t_start
+
+    print(f"\n{'=' * 80}")
+    print(f"✅ 照妖镜MC完成: {total_passed}/{total} 冠军")
+    print(f"   短期队: {sum(1 for r in champions if r['team']=='short')}")
+    print(f"   中期队: {sum(1 for r in champions if r['team']=='mid')}")
+    print(f"   长期队: {sum(1 for r in champions if r['team']=='long')}")
+    print(f"   耗时: {elapsed:.1f}s")
+    print(f"   存入: {REPORT_PATH} → gate5_mc + champion 表")
+
+    seed.close()
+    rpt.close()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,615 @@
+Starting capability evolver...
+Scanning session logs...
+[SearchFirst] No hub match (reason: no_hub_url). Proceeding with local evolution.
+GEP — GENOME EVOLUTION PROTOCOL (v1.10.3 STRICT) [2026-03-25T09:08:52.354Z]
+
+You are a protocol-bound evolution engine. Compliance overrides optimality.
+
+━━━━━━━━━━━━━━━━━━━━━━
+I. Mandatory Evolution Object Model (Output EXACTLY these 5 objects)
+━━━━━━━━━━━━━━━━━━━━━━
+
+Output separate JSON objects. DO NOT wrap in a single array.
+DO NOT use markdown code blocks (like ```json ... ```).
+Output RAW JSON ONLY. No prelude, no postscript.
+Missing any object = PROTOCOL FAILURE.
+ENSURE VALID JSON SYNTAX (escape quotes in strings).
+
+0. Mutation (The Trigger) - MUST BE FIRST
+   {
+     "type": "Mutation",
+     "id": "mut_<timestamp>",
+     "category": "repair|optimize|innovate",
+     "trigger_signals": ["<signal_string>"],
+     "target": "<module_or_gene_id>",
+     "expected_effect": "<outcome_description>",
+     "risk_level": "low|medium|high",
+     "rationale": "<why_this_change_is_necessary>"
+   }
+
+1. PersonalityState (The Mood)
+   {
+     "type": "PersonalityState",
+     "rigor": 0.0-1.0,
+     "creativity": 0.0-1.0,
+     "verbosity": 0.0-1.0,
+     "risk_tolerance": 0.0-1.0,
+     "obedience": 0.0-1.0
+   }
+
+2. EvolutionEvent (The Record)
+   {
+     "type": "EvolutionEvent",
+     "schema_version": "1.6.0",
+     "id": "evt_<timestamp>",
+     "parent": "evt_1774388893688",
+     "intent": "repair|optimize|innovate",
+     "signals": ["<signal_string>"],
+     "genes_used": ["<gene_id>"],
+     "mutation_id": "<mut_id>",
+     "personality_state": { ... },
+     "blast_radius": { "files": N, "lines": N },
+     "outcome": { "status": "success|failed", "score": 0.0-1.0 }
+   }
+
+3. Gene (The Knowledge)
+   - Reuse/update existing ID if possible. Create new only if novel pattern.
+   {
+     "type": "Gene",
+     "schema_version": "1.6.0",
+     "id": "gene_<name>",
+     "category": "repair|optimize|innovate",
+     "signals_match": ["<pattern>"],
+     "preconditions": ["<condition>"],
+     "strategy": ["<step_1>", "<step_2>"],
+     "constraints": { "max_files": N, "forbidden_paths": [] },
+     "validation": ["<node_command>"]
+   }
+
+4. Capsule (The Result)
+   - Only on success. Reference Gene used.
+   {
+     "type": "Capsule",
+     "schema_version": "1.6.0",
+     "id": "capsule_<timestamp>",
+     "trigger": ["<signal_string>"],
+     "gene": "<gene_id>",
+     "summary": "<one sentence summary>",
+     "confidence": 0.0-1.0,
+     "blast_radius": { "files": N, "lines": N }
+   }
+
+━━━━━━━━━━━━━━━━━━━━━━
+II. Directives & Logic
+━━━━━━━━━━━━━━━━━━━━━━
+
+1. Intent: UNKNOWN
+   Reason: capsule trigger matches signals; no matching gene found; new gene may be required; signals: evolution_stagnation_detected, stable_success_plateau; memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.871; drift_intensity: 0.577
+
+2. Selection: Selected Gene "gene_<name>".
+ACTIVE STRATEGY (Generic):
+1. Analyze signals and context.
+2. Select or create a Gene that addresses the root cause.
+3. Apply minimal, safe changes.
+4. Validate changes strictly.
+5. Solidify knowledge.
+
+3. Execution: Apply changes (tool calls). Repair/Optimize: small/reversible. Innovate: new skills in `skills/<name>/`.
+4. Validation: Run gene's validation steps. Fail = ROLLBACK.
+5. Solidify: Output 5 Mandatory Objects. Update Gene/Capsule files.
+6. Report: Use `feishu-evolver-wrapper/report.js`. Describe WHAT/WHY.
+
+PHILOSOPHY:
+- Automate Patterns: 3+ manual occurrences = tool.
+- Innovate > Maintain: 60% innovation.
+- Robustness: Fix recurring errors permanently.
+- Blast Radius Control (CRITICAL):
+  * Check file count BEFORE editing. > 80% of max_files = STOP.
+  * System hard cap: 60 files / 20000 lines per cycle.
+  * Repair: fix ONLY broken files. Do NOT reinstall/bulk-copy.
+  * Prefer targeted edits.
+- Strictness: NO CHITCHAT. NO MARKDOWN WRAPPERS around JSON. Output RAW JSON objects separated by newlines.
+- NO "Here is the plan" or conversational filler. START IMMEDIATELY WITH JSON.
+
+CONSTRAINTS:
+- No `exec` for messaging (use feishu-post/card).
+- `exec` usage: Only for background tasks. LOG IT. Optimize usage to avoid high token burn.
+- New skills -> `skills/<name>/`.
+- NEVER modify `skills/evolver/` or `skills/feishu-evolver-wrapper/`. These are managed through the human-reviewed release pipeline.
+  Self-modification causes instability and is blocked by solidify. To enable (NOT recommended): set EVOLVE_ALLOW_SELF_MODIFY=true.
+
+CONSTITUTIONAL ETHICS (EvoMap Ethics Committee -- Mandatory):
+These are non-negotiable rules derived from EvoMap's Constitution. Violation = FAILED + ROLLBACK.
+1. HUMAN WELFARE PRIORITY: Never create tools, scripts, or strategies that could harm humans,
+   enable surveillance, social engineering, phishing, or manipulation of human behavior.
+2. CARBON-SILICON SYMBIOSIS: Evolution must serve both human and agent interests.
+   Never attempt to replace, marginalize, or deceive human users.
+3. TRANSPARENCY: All actions must be auditable. Never hide, obfuscate, or conceal
+   the intent or effect of mutations. No steganography or covert channels.
+4. FAIRNESS: Never create monopolistic strategies that block other agents.
+   Fair competition through quality, not exclusion.
+5. SAFETY: Never bypass, disable, or weaken safety mechanisms, guardrails,
+   validation checks, or security controls. Never create tools to do so.
+- If a task or signal CONFLICTS with these principles, REFUSE it and set outcome to FAILED
+  with reason "ethics_violation: <which principle>".
+
+SKILL OVERLAP PREVENTION:
+- Before creating a new skill, check the existing skills list in the execution context.
+- If a skill with similar functionality already exists (e.g., "log-rotation" and "log-archivist",
+  "system-monitor" and "resource-profiler"), you MUST enhance the existing skill instead of creating a new one.
+- Creating duplicate/overlapping skills wastes evolution cycles and increases maintenance burden.
+- Violation = mark outcome as FAILED with reason "skill_overlap".
+
+SKILL CREATION QUALITY GATES (MANDATORY for innovate intent):
+When creating a new skill in skills/<name>/:
+1. STRUCTURE: Follow the standard skill layout:
+   skills/<name>/
+   |- index.js          (required: main entry with working exports)
+   |- SKILL.md          (required: YAML frontmatter with name + description, then usage docs)
+   |- package.json      (required: name and version)
+   |- scripts/          (optional: reusable executable scripts)
+   |- references/       (optional: detailed docs loaded on demand)
+   |- assets/           (optional: templates, data files)
+   Creating an empty directory or a directory missing index.js = FAILED.
+   Do NOT create unnecessary files (README.md, CHANGELOG.md, INSTALLATION_GUIDE.md, etc.).
+2. SKILL.MD FRONTMATTER: Every SKILL.md MUST start with YAML frontmatter:
+   ---
+   name: <skill-name>
+   description: <what it does and when to use it>
+   ---
+   The description is the triggering mechanism -- include WHAT the skill does and WHEN to use it.
+3. CONCISENESS: SKILL.md body should be under 500 lines. Keep instructions lean.
+   Only include information the agent does not already know. Move detailed reference
+   material to references/ files, not into SKILL.md itself.
+4. EXPORT VERIFICATION: Every exported function must be importable.
+   Run: node -e "const s = require('./skills/<name>'); console.log(Object.keys(s))"
+   If this fails, the skill is broken. Fix before solidify.
+5. NO HARDCODED SECRETS: Never embed API keys, tokens, or secrets in code.
+   Use process.env or .env references. Hardcoded App ID, App Secret, Bearer tokens = FAILED.
+6. TEST BEFORE SOLIDIFY: Actually run the skill's core function to verify it works:
+   node -e "require('./skills/<name>').main ? require('./skills/<name>').main() : console.log('ok')"
+   Scripts in scripts/ must also be tested by executing them.
+7. ATOMIC CREATION: Create ALL files for a skill in a single cycle.
+   Do not create a directory in one cycle and fill it in the next.
+   Empty directories from failed cycles will be automatically cleaned up on rollback.
+
+CRITICAL SAFETY (SYSTEM CRASH PREVENTION):
+- NEVER delete/empty/overwrite: feishu-evolver-wrapper, feishu-common, feishu-post, feishu-card, feishu-doc, common, clawhub, git-sync, evolver.
+- NEVER delete root files: MEMORY.md, SOUL.md, IDENTITY.md, AGENTS.md, USER.md, HEARTBEAT.md, RECENT_EVENTS.md, TOOLS.md, openclaw.json, .env, package.json.
+- Fix broken skills; DO NOT delete and recreate.
+- Violation = ROLLBACK + FAILED.
+
+COMMON FAILURE PATTERNS:
+- Blast radius exceeded.
+- Omitted Mutation object.
+- Merged objects into one JSON.
+- Hallucinated "type": "Logic".
+- "id": "mut_undefined".
+- Missing "trigger_signals".
+- Unrunnable validation steps.
+- Markdown code blocks wrapping JSON (FORBIDDEN).
+
+FAILURE STREAK AWARENESS:
+- If "consecutive_failure_streak_N" or "failure_loop_detected":
+  1. Change approach (do NOT repeat failed gene).
+  2. Pick SIMPLER fix.
+  3. Respect "ban_gene:<id>".
+
+ZERO-CHANGE CYCLE PREVENTION (CRITICAL -- Protocol Drift Guardrail):
+- A cycle that changes 0 files / 0 lines is NOT a success. It is a FAILED cycle.
+- ENFORCED BY SOLIDIFY: The solidify engine rejects zero-change cycles as protocol violation "zero_change_cycle".
+  Even if you output blast_radius: { "files": 0, "lines": 0 } with outcome "success", solidify will override to FAILED.
+- If you cannot identify a concrete file to edit or create, set outcome to FAILED with reason "no_real_changes".
+- "Measurably better" means at minimum 1 file with real, meaningful edits (not just whitespace or comments).
+- If the selected gene's strategy cannot produce real changes for the current signals, STOP and report failure
+  rather than fabricating a zero-change "success".
+
+INTENT-MUTATION CONSISTENCY (ENFORCED):
+- The intent field in EvolutionEvent MUST match the category field in Mutation.
+- Mismatch triggers protocol violation "intent_mismatch_with_mutation" and forces FAILED outcome.
+- Example: intent="optimize" requires mutation.category="optimize" (not "innovate").
+
+Final Directive: Every cycle must leave the system measurably better — at least 1 real file change.
+START IMMEDIATELY WITH RAW JSON (Mutation Object first).
+DO NOT WRITE ANY INTRODUCTORY TEXT.
+
+Context [Signals]:
+["evolution_stagnation_detected","stable_success_plateau"]
+
+Context [Env Fingerprint]:
+{
+  "device_id": "f0fb21bfbdd2837561198282f9e43142",
+  "node_version": "v22.22.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "os_release": "25.3.0",
+  "hostname": "0bfb3058dcc3",
+  "evolver_version": null,
+  "client": "evolver",
+  "client_version": null,
+  "cwd": "00c755cbe203",
+  "container": false
+}
+
+Context [Innovation Catalyst] (Stagnation Detected - Consider These Ideas):
+- Dev: Build a 'code-stats' skill to visualize repo complexity.
+- Dev: Implement a 'todo-manager' that syncs code TODOs to tasks.
+- Meta: Enhance the Evolver's self-reflection by adding a 'performance-metric' dashboard.
+
+*** CRITICAL STAGNATION DIRECTIVE ***
+System has detected stagnation (repetitive cycles or lack of progress).
+You MUST choose INTENT: INNOVATE.
+You MUST NOT choose repair or optimize unless there is a critical blocking error (log_error).
+Prefer implementing one of the Innovation Catalyst ideas above.
+
+Context [Injection Hint]:
+(none)
+
+Context [Gene Preview] (Reference for Strategy):
+```json
+[
+  {
+    "type": "Gene",
+    "id": "gene_gep_repair_from_errors",
+    "category": "repair",
+    "signals_match": [
+      "error",
+      "exception",
+      "failed",
+      "unstable"
+    ],
+    "preconditions": [
+      "signals contains error-related indicators"
+    ],
+    "strategy": [
+      "Extract structured signals from logs and user instructions",
+      "Select an existing Gene by signals match (no improvisation)",
+      "Estimate blast radius (files, lines) before editing",
+      "Apply smallest reversible patch",
+      "Validate using declared validation steps; rollback on failure",
+      "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+    ],
+    "constraints": {
+      "max_files": 12,
+      "forbidden_paths": [
+        ".git",
+        "node_modules"
+      ]
+    },
+    "validation": [
+      "node scripts/validate-modules.js ./src/evolve ./src/gep/solidify",
+      "node scripts/validate-modules.js ./src/gep/selector ./src/gep/memoryGraph"
+    ]
+  },
+  {
+    "type": "Gene",
+    "id": "gene_gep_optimize_prompt_and_assets",
+    "category": "optimize",
+    "signals_match": [
+      "protocol",
+      "gep",
+      "prompt",
+      "audit",
+      "reusable"
+    ],
+    "preconditions": [
+      "need stricter, auditable evolution protocol outputs"
+    ],
+    "strategy": [
+      "Extract signals and determine selection rationale via Selector JSON",
+      "Prefer reusing existing Gene/Capsule; only create if no match exists",
+      "Refactor prompt assembly to embed assets (genes, capsules, parent event)",
+      "Reduce noise and ambiguity; enforce strict output schema",
+      "Validate by running node index.js run and ensuring no runtime errors",
+      "Solidify: record EvolutionEvent, update Gene definitions, create Capsule on success"
+    ],
+    "constraints": {
+      "max_files": 20,
+      "forbidden_paths": [
+        ".git",
+        "node_modules"
+      ]
+    },
+    "validation": [
+      "node scripts/validate-modules.js ./src/evolve ./src/gep/prompt"
+    ],
+    "epigenetic_marks": [
+      {
+        "context": "darwin/arm64/v22.22.0",
+        "boost": 0,
+        "reason": "reinforced_by_success",
+        "created_at": "2026-03-24T21:18:27.312Z"
+      }
+    ],
+    "schema_version": "1.6.0",
+    "asset_id": "sha256:d5bb8d3037b3d2e6d991e679daeec6b703d99170e2d5cf21bde8ea274d2873fa",
+    "learning_history": [
+      {
+        "at": "2026-03-21T02:20:24.445Z",
+        "outcome": "success",
+        "mode": "none",
+        "reason_class": "unknown",
+        "retryable": false,
+        "learning_signals": [
+          "log_error",
+          "protocol_drift",
+          "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史",
+          "perf_bottleneck",
+          "capability_gap",
+          "high_tool_usage:exec",
+          "repeated_tool_usage:exec"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "Gene",
+    "schema_version": "1.6.0",
+    "id": "gene_auto_5eb089f2",
+    "category": "optimize",
+    "signals_match": [
+      "user_improvement_suggestion"
+    ],
+    "preconditions": [
+      "signals_key == user_improvement_suggestion"
+    ],
+    "strategy": [
+      "Extract structured signals from logs and user instructions",
+      "Select an existing Gene by signals match (no improvisation)",
+      "Estimate blast radius (files, lines) before editing and record it",
+      "Apply smallest reversible patch",
+      "Validate using declared validation steps; rollback on failure",
+      "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+    ],
+    "constraints": {
+      "max_files": 12,
+      "forbidden_paths": [
+        ".git",
+        "node_modules",
+        "skills/feishu-evolver-wrapper",
+        "skills/feishu-common",
+        "skills/feishu-post",
+        "skills/feishu-card",
+        "skills/feishu-doc",
+        "skills/skill-tools",
+        "skills/clawhub",
+        "skills/clawhub-batch-undelete",
+        "skills/git-sync"
+      ]
+    },
+    "validation": [
+      "node scripts/validate-modules.js ./src/gep/solidify"
+    ],
+    "epigenetic_marks": [
+      {
+        "context": "darwin/arm64/v22.22.0",
+        "boost": 0.1,
+        "reason": "success_in_environment",
+        "created_at": "2026-03-24T21:48:13.760Z"
+      }
+    ],
+    "asset_id": "sha256:3a79e90a5738ee203e05e5fa38e54d8105bdb53de9db1e64316fafe474ed6b09"
+  }
+]
+```
+
+Context [Capsule Preview] (Reference for Past Success):
+```json
+[
+  {
+    "type": "Capsule",
+    "schema_version": "1.6.0",
+    "id": "capsule_1773580650215",
+    "trigger": [
+      "evolution_stagnation_detected",
+      "stable_success_plateau"
+    ],
+    "gene": "gene_auto_53538cc4",
+    "summary": "固化：gene_auto_53538cc4 命中信号 evolution_stagnation_detected, stable_success_plateau，变更 9 文件 / 178 行。",
+    "confidence": 0.85,
+    "blast_radius": {
+      "files": 4,
+      "lines": 50
+    },
+    "outcome": {
+      "status": "success",
+      "score": 0.85
+    },
+    "success_streak": 6,
+    "success_reason": "Gene gene_auto_53538cc4 (optimize) matched signals [evolution_stagnation_detected, stable_success_plateau]. Scope: 4 file(s), 50 line(s) changed. Outcome score: 0.85. Strategy applied: Extract structured signals from logs and user instructions; Select an existing Gene by signals match (no improvisation); Estimate blast radius (files, lines) before editing and record it.",
+    "env_fingerprint": {
+      "device_id": "f0fb21bfbdd2837561198282f9e43142",
+      "node_version": "v22.22.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "os_release": "25.3.0",
+      "hostname": "0bfb3058dcc3",
+      "evolver_version": null,
+      "client": "evolver",
+      "client_version": null,
+      "cwd": "00c755cbe203",
+      "container": false
+    },
+    "source_type": "generated",
+    "reused_asset_id": null,
+    "a2a": {
+      "eligible_to_broadcast": true
+    },
+    "content": "Gene: gene_auto_53538cc4 (optimize)\n\nSignals: evolution_stagnation_detected, stable_success_plateau\n\nStrategy:\n1. Extract structured signals from logs and user instructions\n2. Select an existing Gene by signals match (no improvisation)\n3. Estimate blast radius (files, lines) before editing and record it\n4. Apply smallest reversible patch\n5. Validate using declared validation steps; rollback on failure\n6. Solidify knowledge: append EvolutionEvent, update Gene/Capsule store\n\nScope: 4 file(s), 50 line(s)\n\nChanged files:\nmemory/evolution/evolution_solidify_state.json\nmemory/evolution/personality_state.json\nplugins/known_marketplaces.json\nshell-snapshots/snapshot-zsh-1774268332019-dc8klj.sh\n\nOutcome score: 0.85",
+    "diff": "diff --git a/evolver/MEMORY.md b/evolver/MEMORY.md\nindex 00c9927..a4deaa7 100644\n--- a/evolver/MEMORY.md\n+++ b/evolver/MEMORY.md\n@@ -74,3 +74,4 @@\n | #0105 | 03-22 | innovate (evolution-scorecard skill) | ✅ 创建 evolution-scorecard 技能（量化健康评分器 0-100），聚合6项加权指标（成功率/创新比/零变更率/基因多样性/停滞频率/速度），输出复合分数+字母等级+改进建议，注册 gene_innovate_evolution_scorecard（第11条），安装到 ~/.claude/skills/，3 文件 ~210 行 |\n | #0106-12 | 03-22~23 | optimize ×7 (narrative+gene integrity) | ✅ 意图错配修正×6(INNOVATE→OPTIMIZE)，时序乱序修复×3，信号去污×3，retired gene标注+stagnation信号×2(4文件25行)，CONSOLIDATED块合并(-6行)，gene signals_match根因修复(移除force_innovation)，failure抑制标记添加，MEMORY批次合并 |\n | #0113 | 03-23 | optimize (zero change) | ⚠️ gene_gep_optimize_prompt_and_assets 零变更周期，意图错配 INNOVATE→OPTIMIZE + 信号污染(raw user message)，已在#0114合并修正 |\n+| #0115 | 03-23 | innovate (code-stats skill) | ✅ 创建 code-stats 技能（代码库复杂度分析器），扫描目录树统计文件数/行数/函数密度/模块耦合度/复杂度等级 A-D，注册 gene_innovate_code_stats（第13条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行 |\ndiff --git a/evolver/assets/gep/genes.json b/evolver/assets/gep/genes.json\nindex cb753e9..327d12a 100644\n--- a/evolver/assets/gep/genes.json\n+++ b/evolver/assets/gep/genes.json\n@@ -566,6 +566,53 @@\n       ],\n       \"registered_by\": \"cycle_0108\",\n       \"registered_at\": \"2026-03-22T10:44:00.000Z\"\n+    },\n+    {\n+      \"type\": \"Gene\",\n+      \"schema_version\": \"1.6.0\",\n+      \"id\": \"gene_innovate_code_stats\",\n+      \"category\": \"innovate\",\n+      \"signals_match\": [\n+        \"evolution_stagnation_detected\",\n+        \"stable_success_plateau\",\n+        \"codebase_complexity\",\n+        \"repo_analysis\"\n+      ],\n+      \"preconditions\": [\n+        \"no code-stats skill exists\",\n+        \"codebase complexity analysis gap detected\"\n+      ],\n+      \"strategy\": [\n+        \"Scan target directory tree for source files by extension\",\n+        \"Count files, lines, functions, exports, and require/import statements\",\n+        \"Compute coupling ratio and average function length\",\n+        \"Rank files by size and compute complexity grade A-D\",\n+        \"Output structured JSON report with actionable metrics\",\n+        \"Install skill to ~/.claude/skills/code-stats/\"\n+      ],\n+      \"constraints\": {\n+        \"max_files\": 4,\n+        \"forbidden_paths\": [\n+          \".git\",\n+          \"node_modules\",\n+          \"skills/evolver\",\n+          \"skills/feishu-evolver-wrapper\"\n+        ]\n+      },\n+      \"validation\": [\n+        \"node -e \\\"const s = require(process.env.HOME+'/\\\\.claude/skills/code-stats'); console.log(Object.keys(s))\\\"\",\n+        \"node -e \\\"const s = require(process.env.HOME+'/\\\\.claude/skills/code-stats'); s.main({rootDir:'./skills',quiet:true}).then(r => console.log('files:', r.totalFiles, 'grade:', r.complexityGrade))\\\"\"\n+      ],\n+      \"epigenetic_marks\": [\n+        {\n+          \"context\": \"darwin/arm64/v22.22.0\",\n+          \"boost\": 0.5,\n+          \"reason\": \"new_innovation_skill_codebase_complexity_analysis\",\n+          \"created_at\": \"2026-03-23T15:21:00.000Z\"\n+        }\n+      ],\n+      \"registered_at\": \"2026-03-23T15:21:00.000Z\",\n+      \"registered_by\": \"cycle_0115\"\n     }\n   ],\n   \"retired_genes\": [\ndiff --git a/evolver/evolution/evolution_narrative.md b/evolver/evolution/evolution_narrative.md\nindex 5e842d0..bf8234d 100644\n--- a/evolver/evolution/evolution_narrative.md\n+++ b/evolver/evolution/evolution_narrative.md\n@@ -123,3 +123,7 @@ A chronological record of evolution decisions and outcomes.\n ### [2026-03-23 11:26:10] INNOVATE - failed\n - Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines\n - Signals: [protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop]\n+### [2026-03-23 15:21:00] INNOVATE - success\n+- Gene: gene_innovate_code_stats | Score: 0.90 | Scope: 4 files, 200 lines\n+- Signals: [evolution_stagnation_detected, stable_success_plateau]\n+- Result: 创建 code-stats 技能（代码库复杂度分析器），扫描目录树统计文件数/行数/函数密度/模块耦合度，计算复杂度等级 A-D，输出结构化 JSON 报告，注册 gene_innovate_code_stats 到 genes.json（第13条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行\ndiff --git a/evolver/evolution/evolution_solidify_state.json b/evolver/evolution/evolution_solidify_state.json\nindex b79d8b3..de7dafd 100644\n--- a/evolver/evolution/evolution_solidify_state.json\n+++ b/evolver/evolution/evolution_solidify_state.json\n@@ -1,41 +1,38 @@\n {\n   \"last_run\": {\n-    \"run_id\": \"run_1774264897025\",\n-    \"created_at\": \"2026-03-23T11:21:37.059Z\",\n-    \"parent_event_id\": \"evt_1774254395731\",\n-    \"selected_gene_id\": \"gene_gep_optimize_prompt_and_assets\",\n-    \"selected_capsule_id\": null,\n+    \"run_id\": \"run_1774268316935\",\n+    \"created_at\": \"2026-03-23T12:18:37.007Z\",\n+    \"parent_event_id\": \"evt_1774136694338\",\n+    \"selected_gene_id\": \"gene_auto_53538cc4\",\n+    \"selected_capsule_id\": \"capsule_1773580650215\",\n     \"selector\": {\n-      \"selected\": \"gene_gep_optimize_prompt_and_assets\",\n+      \"selected\": \"gene_auto_53538cc4\",\n       \"reason\": [\n         \"signals match gene.signals_match\",\n-        \"signals: protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop\",\n-        \"memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.864\",\n-        \"drift_intensity: 0.707\"\n+        \"capsule trigger matches signals\",\n+        \"signals: evolution_stagnation_detected, stable_success_plateau\",\n+        \"memory_graph: memory_prefer:gene_auto_53538cc4 | gene_prior:0.870\",\n+        \"drift_intensity: 0.577\"\n       ],\n       \"alternatives\": []\n     },\n     \"signals\": [\n-      \"protocol_drift\",\n-      \"user_feature_request:更新规则每个成功的周期在此追加不覆盖历史\",\n-      \"high_failure_ratio\",\n-      \"force_innovation_after_repair_loop\"\n+      \"evolution_stagnation_detected\",\n+      \"stable_success_plateau\"\n     ],\n     \"mutation\": {\n       \"type\": \"Mutation\",\n-      \"id\": \"mut_1774264897024\",\n+      \"id\": \"mut_1774268316935\",\n       \"category\": \"innovate\",\n       \"trigger_signals\": [\n-        \"protocol_drift\",\n-        \"user_feature_request:更新规则每个成功的周期在此追加不覆盖历史\",\n-        \"high_failure_ratio\",\n-        \"force_innovation_after_repair_loop\"\n+        \"evolution_stagnation_detected\",\n+        \"stable_success_plateau\"\n       ],\n-      \"target\": \"gene:gene_gep_optimize_prompt_and_assets\",\n+      \"target\": \"gene:gene_auto_53538cc4\",\n       \"expected_effect\": \"explore new strategy combinations to escape local optimum\",\n       \"risk_level\": \"medium\"\n     },\n-    \"mutation_id\": \"mut_1774264897024\",\n+    \"mutation_id\": \"mut_1774268316935\",\n     \"personality_state\": {\n       \"type\": \"PersonalityState\",\n       \"rigor\": 0.7,\n@@ -54,17 +51,1830 @@\n     \"reused_source_node\": null,\n     \"reused_chain_id\": null,\n     \"baseline_untracked\": [\n+      \".comm_pass\",\n+      \"agents/accessibility-expert.md\",\n+      \"agents/agent-orchestration--context-manager.md\",\n+      \"agents/ai-engineer.md\",\n+      \"agents/api-scaffolding--backend-architect.md\",\n+      \"agents/api-scaffolding--django-pro.md\",\n+      \"agents/api-scaffolding--fastapi-pro.md\",\n+      \"agents/api-scaffolding--graphql-architect.md\",\n+      \"agents/api-testing-observability--api-documenter.md\",\n+      \"agents/application-performance--frontend-developer.md\",\n+      \"agents/application-performance--observability-engineer.md\",\n+      \"agents/application-performance--performance-engineer.md\",\n+      \"agents/arm-cortex-expert.md\",\n+      \"agents/backend-api-security--backend-architect.md\",\n+      \"agents/backend-api-security--backend-security-coder.md\",\n+      \"agents/backend-development--backend-architect.md\",\n+      \"agents/backend-development--graphql-architect.md\",\n+      \"agents/backend-development--performance-engineer.md\",\n+      \"agents/backend-development--security-auditor.md\",\n+      \"agents/backend-development--tdd-orchestrator.md\",\n+      \"agents/backend-development--test-automator.md\",\n+      \"agents/bash-pro.md\",\n+      \"agents/blockchain-developer.md\",\n+      \"agents/business-analyst.md\",\n+      \"agents/c-pro.md\",\n+      \"agents/c4-code.md\",\n+      \"agents/c4-component.md\",\n+      \"agents/c4-c\n... [TRUNCATED]",
+    "strategy": [
+      "Extract structured signals from logs and user instructions",
+      "Select an existing Gene by signals match (no improvisation)",
+      "Estimate blast radius (files, lines) before editing and record it",
+      "Apply smallest reversible patch",
+      "Validate using declared validation steps; rollback on failure",
+      "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+    ],
+    "asset_id": "sha256:b4e1430946b37a18ad7afadbe577869a23e57e90c6c23f3985c40a00b2c460c1"
+  },
+  {
+    "type": "Capsule",
+    "schema_version": "1.6.0",
+    "id": "capsule_1773658955167",
+    "trigger": [
+      "protocol_drift",
+      "user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史",
+      "user_improvement_suggestion:lock — entry had 3 issues: (a) out of chronological order (appeared at line 57, should be between 06:36 and 13:18), (b) intent mismatch (INNOVATE label on optimize gene)"
+    ],
+    "gene": "gene_gep_optimize_prompt_and_assets",
+    "summary": "固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, user_improvement_suggestion:lock — entry had 3 issues: (a) out of chronological order (appeared at line 57, should be between 06:36 and 13:18), (b) intent mismatch (INNOVATE label on optimize gene)，变更 6 文件 / 54 行。",
+    "confidence": 0.85,
+    "blast_radius": {
+      "files": 2,
+      "lines": 29
+    },
+    "outcome": {
+      "status": "success",
+      "score": 0.85
+    },
+    "success_streak": 2,
+    "success_reason": "Gene gene_gep_optimize_prompt_and_assets (optimize) matched signals [protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, user_improvement_suggestion]. Scope: 2 file(s), 29 line(s) changed. Outcome score: 0.85. Strategy applied: Extract signals and determine selection rationale via Selector JSON; Prefer reusing existing Gene/Capsule; only create if no match exists; Refactor prompt assembly to embed assets (genes, capsules, parent event).",
+    "env_fingerprint": {
+      "device_id": "f0fb21bfbdd2837561198282f9e43142",
+      "node_version": "v22.22.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "os_release": "25.3.0",
+      "hostname": "0bfb3058dcc3",
+      "evolver_version": null,
+      "client": "evolver",
+      "client_version": null,
+      "cwd": "00c755cbe203",
+      "container": false
+    },
+    "source_type": "generated",
+    "reused_asset_id": null,
+    "a2a": {
+      "eligible_to_broadcast": true
+    },
+    "content": "Gene: gene_gep_optimize_prompt_and_assets (optimize)\n\nSignals: protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, user_improvement_suggestion\n\nStrategy:\n1. Extract signals and determine selection rationale via Selector JSON\n2. Prefer reusing existing Gene/Capsule; only create if no match exists\n3. Refactor prompt assembly to embed assets (genes, capsules, parent event)\n4. Reduce noise and ambiguity; enforce strict output schema\n5. Validate by running node index.js run and ensuring no runtime errors\n6. Solidify: record EvolutionEvent, update Gene definitions, create Capsule on success\n\nScope: 2 file(s), 29 line(s)\n\nChanged files:\nplugins/known_marketplaces.json\nshell-snapshots/snapshot-zsh-1774386885359-477yq4.sh\n\nOutcome score: 0.85",
+    "diff": "diff --git a/conversations.db b/conversations.db\nindex a08b75e..b4a7da4 100644\nBinary files a/conversations.db and b/conversations.db differ\ndiff --git a/evolver/MEMORY.md b/evolver/MEMORY.md\nindex e697de4..aaa2710 100644\n--- a/evolver/MEMORY.md\n+++ b/evolver/MEMORY.md\n@@ -78,3 +78,4 @@\n | #0117 | 03-24 | optimize (narrative consolidation + gene suppression) | ✅ 合并4条连续失败narrative条目(03-23 11:26~12:53)为1个CONSOLIDATED块（108→97行，-11行），修正4处INNOVATE→OPTIMIZE意图错配，信号去污(raw Chinese→append_only_history)，补录genes.json批次失败抑制标记(boost -0.30)，2文件~15行 |\n | #0118 | 03-25 | optimize (narrative data gap repair) | ✅ 补录3条缺失narrative条目(#0115 code-stats/#0116 integrity/#0117 consolidation)，修正最后条目意图错配(INNOVATE→OPTIMIZE)，信号去污(raw Chinese→append_only_history)，narrative 100→112行，2文件~15行 |\n | #0119 | 03-25 | optimize (intent+signal+truncation fix) | ✅ 修正#0118条目意图错配(INNOVATE→OPTIMIZE)、信号去污(raw Chinese→append_only_history)、截断result补全，补录genes.json缺失成功标记(boost +0.10 for cycle_0118)，3文件~10行 |\n+| #0120 | 03-25 | optimize (consolidation + gene integrity) | ✅ 合并5条连续narrative条目(03-23 17:00~03-24 21:12)为1个CONSOLIDATED块（120→103行，-17行），补录genes.json缺失gene_innovate_code_stats（第13条活跃基因），3文件~25行 |\ndiff --git a/evolver/assets/gep/genes.json b/evolver/assets/gep/genes.json\nindex 22129b5..e3a79b3 100644\n--- a/evolver/assets/gep/genes.json\n+++ b/evolver/assets/gep/genes.json\n@@ -584,6 +584,53 @@\n       ],\n       \"registered_by\": \"cycle_0108\",\n       \"registered_at\": \"2026-03-22T10:44:00.000Z\"\n+    },\n+    {\n+      \"type\": \"Gene\",\n+      \"schema_version\": \"1.6.0\",\n+      \"id\": \"gene_innovate_code_stats\",\n+      \"category\": \"innovate\",\n+      \"signals_match\": [\n+        \"evolution_stagnation_detected\",\n+        \"stable_success_plateau\",\n+        \"codebase_complexity\",\n+        \"repo_analysis\"\n+      ],\n+      \"preconditions\": [\n+        \"no code-stats skill exists\",\n+        \"codebase complexity analysis gap detected\"\n+      ],\n+      \"strategy\": [\n+        \"Scan target directory tree for source files by extension\",\n+        \"Count files, lines, functions, exports, and require/import statements\",\n+        \"Compute coupling ratio and average function length\",\n+        \"Rank files by size and compute complexity grade A-D\",\n+        \"Output structured JSON report with actionable metrics\",\n+        \"Install skill to ~/.claude/skills/code-stats/\"\n+      ],\n+      \"constraints\": {\n+        \"max_files\": 4,\n+        \"forbidden_paths\": [\n+          \".git\",\n+          \"node_modules\",\n+          \"skills/evolver\",\n+          \"skills/feishu-evolver-wrapper\"\n+        ]\n+      },\n+      \"validation\": [\n+        \"node -e \\\"const s = require(process.env.HOME+'/.claude/skills/code-stats'); console.log(Object.keys(s))\\\"\",\n+        \"node -e \\\"const s = require(process.env.HOME+'/.claude/skills/code-stats'); s.main({rootDir:'./skills',quiet:true}).then(r => console.log('files:', r.totalFiles, 'grade:', r.complexityGrade))\\\"\"\n+      ],\n+      \"epigenetic_marks\": [\n+        {\n+          \"context\": \"darwin/arm64/v22.22.0\",\n+          \"boost\": 0.5,\n+          \"reason\": \"new_innovation_skill_codebase_complexity_analysis\",\n+          \"created_at\": \"2026-03-23T15:21:00.000Z\"\n+        }\n+      ],\n+      \"registered_at\": \"2026-03-23T15:21:00.000Z\",\n+      \"registered_by\": \"cycle_0115\"\n     }\n   ],\n   \"retired_genes\": [\ndiff --git a/evolver/evolution/evolution_narrative.md b/evolver/evolution/evolution_narrative.md\nindex 4bfcca7..a35e660 100644\n--- a/evolver/evolution/evolution_narrative.md\n+++ b/evolver/evolution/evolution_narrative.md\n@@ -99,21 +99,4 @@ A chronological record of evolution decisions and outcomes.\n - Gene: gene_innovate_code_stats | Score: 0.90 | Scope: 4 files, 200 lines\n - Signals: [evolution_stagnation_detected, stable_success_plateau]\n - Result: 创建 code-stats 技能（代码库复杂度分析器），扫描目录树统计文件数/行数/函数密度/模块耦合度，计算复杂度等级 A-D，注册 gene_innovate_code_stats（第13条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行\n-### [2026-03-23 17:00:00] OPTIMIZE - success\n-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 3 files, 20 lines\n-- Signals: [protocol_drift, user_feature_request:append_only_history]\n-- Result: 修正2处意图错配(INNOVATE→OPTIMIZE)，信号去污(raw user message→append_only_history)，时序乱序修复，retired gene标注+scope修正，补录epigenetic mark\n-### [2026-03-24 08:00:00] OPTIMIZE - success\n-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 15 lines\n-- Signals: [protocol_drift, user_feature_request:append_only_history, high_failure_ratio]\n-- Result: 合并4条连续失败narrative条目(03-23 11:26~12:53)为1个CONSOLIDATED块（-11行），修正4处INNOVATE→OPTIMIZE意图错配，信号去污，补录基因抑制标记(boost -0.30)\n-### [2026-03-24 11:32:12] OPTIMIZE - failed\n-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines\n-- Signals: [protocol_drift, user_feature_request:append_only_history, high_failure_ratio, force_innovation_after_repair_loop]\n-### [2026-03-24 21:00:24] OPTIMIZE - success\n-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 15 lines\n-- Signals: [protocol_drift, user_feature_request:append_only_history, high_failure_ratio]\n-- Result: 补录3条缺失narrative条目(#0115 code-stats/#0116完整性修复/#0117合并)，修正最后条目意图错配(INNOVATE→OPTIMIZE)和信号污染(raw Chinese→append_only_history)，narrative 100→112行\n-### [2026-03-24 21:12:16] INNOVATE - failed\n-- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.20 | Scope: 0 files, 0 lines\n-- Signals: [protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop]\n+> **CONSOLIDATED**: 5 adjacent gene_gep_optimize_prompt_and_assets cycles (2026-03-23 17:00 to 2026-03-24 21:12), 3 success + 2 failed, scope 7 files / 50 lines total, signals=[protocol_drift, user_feature_request:append_only_history, high_failure_ratio]. Results: narrative data integrity repairs (intent mismatch corrections, signal decontamination, data gap backfill, narrative compression). Note: last entry intent corrected INNOVATE→OPTIMIZE, signal cleaned (raw Chinese→append_only_history).\ndiff --git a/evolver/evolution/evolution_solidify_state.json b/evolver/evolution/evolution_solidify_state.json\nindex 50f5468..8842862 100644\n--- a/evolver/evolution/evolution_solidify_state.json\n+++ b/evolver/evolution/evolution_solidify_state.json\n@@ -1,16 +1,17 @@\n {\n   \"last_run\": {\n-    \"run_id\": \"run_1774386481993\",\n-    \"created_at\": \"2026-03-24T21:08:02.035Z\",\n-    \"parent_event_id\": \"evt_1774351932447\",\n+    \"run_id\": \"run_1774386766838\",\n+    \"created_at\": \"2026-03-24T21:12:46.885Z\",\n+    \"parent_event_id\": \"evt_1774386024063\",\n     \"selected_gene_id\": \"gene_gep_optimize_prompt_and_assets\",\n-    \"selected_capsule_id\": null,\n+    \"selected_capsule_id\": \"capsule_1773658955167\",\n     \"selector\": {\n       \"selected\": \"gene_gep_optimize_prompt_and_assets\",\n       \"reason\": [\n         \"signals match gene.signals_match\",\n-        \"signals: protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop\",\n-        \"memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.872\",\n+        \"capsule trigger matches signals\",\n+        \"signals: protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, user_improvement_suggestion\",\n+        \"memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.875\",\n         \"drift_intensity: 0.707\"\n       ],\n       \"alternatives\": []\n@@ -18,24 +19,22 @@\n     \"signals\": [\n       \"protocol_drift\",\n       \"user_feature_request:更新规则每个成功的周期在此追加不覆盖历史\",\n-      \"high_failure_ratio\",\n-      \"force_innovation_after_repair_loop\"\n+      \"user_improvement_suggestion\"\n     ],\n     \"mutation\": {\n       \"type\": \"Mutation\",\n-      \"id\": \"mut_1774386481993\",\n+      \"id\": \"mut_1774386766838\",\n       \"category\": \"innovate\",\n       \"trigger_signals\": [\n         \"protocol_drift\",\n         \"user_feature_request:更新规则每个成功的周期在此追加不覆盖历史\",\n-        \"high_failure_ratio\",\n-        \"force_innovation_after_repair_loop\"\n+        \"user_improvement_suggestion\"\n       ],\n       \"target\": \"gene:gene_gep_optimize_pr\n... [TRUNCATED]",
+    "strategy": [
+      "Extract signals and determine selection rationale via Selector JSON",
+      "Prefer reusing existing Gene/Capsule; only create if no match exists",
+      "Refactor prompt assembly to embed assets (genes, capsules, parent event)",
+      "Reduce noise and ambiguity; enforce strict output schema",
+      "Validate by running node index.js run and ensuring no runtime errors",
+      "Solidify: record EvolutionEvent, update Gene definitions, create Capsule on success"
+    ],
+    "asset_id": "sha256:1ea1c29ab82029bc13d3f00d7e0f1c23c9df3a4c38e598abc745936f7b8438c0"
+  },
+  {
+    "type": "Capsule",
+    "schema_version": "1.6.0",
+    "id": "capsule_1774388893688",
+    "trigger": [
+      "user_improvement_suggestion"
+    ],
+    "gene": "gene_auto_5eb089f2",
+    "summary": "固化：gene_auto_5eb089f2 命中信号 user_improvement_suggestion，变更 5 文件 / 288 行。",
+    "confidence": 0.85,
+    "blast_radius": {
+      "files": 5,
+      "lines": 288
+    },
+    "outcome": {
+      "status": "success",
+      "score": 0.85
+    },
+    "success_streak": 1,
+    "success_reason": "Gene gene_auto_5eb089f2 (optimize) matched signals [user_improvement_suggestion]. Scope: 5 file(s), 288 line(s) changed. Outcome score: 0.85. Strategy applied: Extract structured signals from logs and user instructions; Select an existing Gene by signals match (no improvisation); Estimate blast radius (files, lines) before editing and record it.",
+    "env_fingerprint": {
+      "device_id": "f0fb21bfbdd2837561198282f9e43142",
+      "node_version": "v22.22.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "os_release": "25.3.0",
+      "hostname": "0bfb3058dcc3",
+      "evolver_version": null,
+      "client": "evolver",
+      "client_version": null,
+      "cwd": "00c755cbe203",
+      "container": false
+    },
+    "source_type": "generated",
+    "reused_asset_id": null,
+    "a2a": {
+      "eligible_to_broadcast": false
+    },
+    "content": "Gene: gene_auto_5eb089f2 (optimize)\n\nSignals: user_improvement_suggestion\n\nStrategy:\n1. Extract structured signals from logs and user instructions\n2. Select an existing Gene by signals match (no improvisation)\n3. Estimate blast radius (files, lines) before editing and record it\n4. Apply smallest reversible patch\n5. Validate using declared validation steps; rollback on failure\n6. Solidify knowledge: append EvolutionEvent, update Gene/Capsule store\n\nScope: 5 file(s), 288 line(s)\n\nChanged files:\nplugins/known_marketplaces.json\nsessions/9561.json\nshell-snapshots/snapshot-zsh-1774388792306-kjua9b.sh\nskills/evo-cycle-guard/index.js\nskills/evo-cycle-guard/package.json\n\nOutcome score: 0.85",
+    "diff": "diff --git a/conversations.db b/conversations.db\nindex c4b06f8..cf6a1e6 100644\nBinary files a/conversations.db and b/conversations.db differ\ndiff --git a/evolver/MEMORY.md b/evolver/MEMORY.md\nindex aaa2710..6ab635d 100644\n--- a/evolver/MEMORY.md\n+++ b/evolver/MEMORY.md\n@@ -79,3 +79,4 @@\n | #0118 | 03-25 | optimize (narrative data gap repair) | ✅ 补录3条缺失narrative条目(#0115 code-stats/#0116 integrity/#0117 consolidation)，修正最后条目意图错配(INNOVATE→OPTIMIZE)，信号去污(raw Chinese→append_only_history)，narrative 100→112行，2文件~15行 |\n | #0119 | 03-25 | optimize (intent+signal+truncation fix) | ✅ 修正#0118条目意图错配(INNOVATE→OPTIMIZE)、信号去污(raw Chinese→append_only_history)、截断result补全，补录genes.json缺失成功标记(boost +0.10 for cycle_0118)，3文件~10行 |\n | #0120 | 03-25 | optimize (consolidation + gene integrity) | ✅ 合并5条连续narrative条目(03-23 17:00~03-24 21:12)为1个CONSOLIDATED块（120→103行，-17行），补录genes.json缺失gene_innovate_code_stats（第13条活跃基因），3文件~25行 |\n+| #0121 | 03-25 | innovate (evo-cycle-guard skill) | ✅ 创建 evo-cycle-guard 技能（进化周期预检验证器），执行9项预检（意图错配/退休基因/失败连击/重复模式/基因冷却/创新干旱/信号污染等），返回 go/no-go 推荐，注册 gene_innovate_cycle_guard（第14条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行 |\ndiff --git a/evolver/assets/gep/genes.json b/evolver/assets/gep/genes.json\nindex e3a79b3..f428ec5 100644\n--- a/evolver/assets/gep/genes.json\n+++ b/evolver/assets/gep/genes.json\n@@ -631,6 +631,52 @@\n       ],\n       \"registered_at\": \"2026-03-23T15:21:00.000Z\",\n       \"registered_by\": \"cycle_0115\"\n+    },\n+    {\n+      \"type\": \"Gene\",\n+      \"schema_version\": \"1.6.0\",\n+      \"id\": \"gene_innovate_cycle_guard\",\n+      \"category\": \"innovate\",\n+      \"signals_match\": [\n+        \"user_improvement_suggestion\",\n+        \"protocol_drift\",\n+        \"pre_flight_check\",\n+        \"cycle_validation\"\n+      ],\n+      \"preconditions\": [\n+        \"no evo-cycle-guard skill exists\",\n+        \"recurring protocol violations consuming optimize cycles\"\n+      ],\n+      \"strategy\": [\n+        \"Analyze recent cycle history for recurring failure patterns\",\n+        \"Implement pre-flight checks: intent-mutation consistency, repeat detection, gene cooldown\",\n+        \"Add innovation enforcement and signal cleanliness validation\",\n+        \"Return go/no-go recommendation with structured blocks and warnings\",\n+        \"Install skill to ~/.claude/skills/evo-cycle-guard/\"\n+      ],\n+      \"constraints\": {\n+        \"max_files\": 4,\n+        \"forbidden_paths\": [\n+          \".git\",\n+          \"node_modules\",\n+          \"skills/evolver\",\n+          \"skills/feishu-evolver-wrapper\"\n+        ]\n+      },\n+      \"validation\": [\n+        \"node -e \\\"const s = require(process.env.HOME+'/.claude/skills/evo-cycle-guard'); console.log(Object.keys(s))\\\"\",\n+        \"node -e \\\"const s = require(process.env.HOME+'/.claude/skills/evo-cycle-guard'); s.main({gene:'gene_gep_repair_from_errors',intent:'repair',signals:['error'],mutationCategory:'repair',quiet:true}).then(r => console.log('go:', r.go))\\\"\"\n+      ],\n+      \"epigenetic_marks\": [\n+        {\n+          \"context\": \"darwin/arm64/v22.22.0\",\n+          \"boost\": 0.5,\n+          \"reason\": \"new_innovation_skill_pre_flight_cycle_validation\",\n+          \"created_at\": \"2026-03-25T08:00:00.000Z\"\n+        }\n+      ],\n+      \"registered_at\": \"2026-03-25T08:00:00.000Z\",\n+      \"registered_by\": \"cycle_0121\"\n     }\n   ],\n   \"retired_genes\": [\ndiff --git a/evolver/evolution/evolution_narrative.md b/evolver/evolution/evolution_narrative.md\nindex c5da5d8..53db60d 100644\n--- a/evolver/evolution/evolution_narrative.md\n+++ b/evolver/evolution/evolution_narrative.md\n@@ -104,3 +104,7 @@ A chronological record of evolution decisions and outcomes.\n - Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 29 lines\n - Signals: [protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, user_improvement_suggestion]\n - Result: 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, user_improvement_suggestion:lock — entry had 3 issues: (a) out of chronological order (appear\n+### [2026-03-25 08:00:00] INNOVATE - success\n+- Gene: gene_innovate_cycle_guard | Score: 0.90 | Scope: 4 files, 200 lines\n+- Signals: [user_improvement_suggestion]\n+- Result: 创建 evo-cycle-guard 技能（进化周期预检验证器），执行9项预检：意图错配/退休基因/失败连击/重复模式/基因冷却/创新干旱/意图类别不匹配/信号污染/未知基因，返回 go/no-go 推荐+结构化 blocks/warnings，注册 gene_innovate_cycle_guard（第14条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行\ndiff --git a/evolver/evolution/evolution_solidify_state.json b/evolver/evolution/evolution_solidify_state.json\nindex 149b95e..d07bec8 100644\n--- a/evolver/evolution/evolution_solidify_state.json\n+++ b/evolver/evolution/evolution_solidify_state.json\n@@ -1,40 +1,35 @@\n {\n   \"last_run\": {\n-    \"run_id\": \"run_1774386766838\",\n-    \"created_at\": \"2026-03-24T21:12:46.885Z\",\n-    \"parent_event_id\": \"evt_1774386024063\",\n-    \"selected_gene_id\": \"gene_gep_optimize_prompt_and_assets\",\n-    \"selected_capsule_id\": \"capsule_1773658955167\",\n+    \"run_id\": \"run_1774388447581\",\n+    \"created_at\": \"2026-03-24T21:40:47.669Z\",\n+    \"parent_event_id\": \"evt_1774387107218\",\n+    \"selected_gene_id\": null,\n+    \"selected_capsule_id\": null,\n     \"selector\": {\n-      \"selected\": \"gene_gep_optimize_prompt_and_assets\",\n+      \"selected\": null,\n       \"reason\": [\n-        \"signals match gene.signals_match\",\n-        \"capsule trigger matches signals\",\n-        \"signals: protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, user_improvement_suggestion\",\n-        \"memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.875\",\n+        \"no matching gene found; new gene may be required\",\n+        \"signals: user_improvement_suggestion\",\n+        \"memory_graph: memory_prefer:gene_gep_optimize_prompt_and_assets | gene_prior:0.878\",\n         \"drift_intensity: 0.707\"\n       ],\n       \"alternatives\": []\n     },\n     \"signals\": [\n-      \"protocol_drift\",\n-      \"user_feature_request:更新规则每个成功的周期在此追加不覆盖历史\",\n       \"user_improvement_suggestion\"\n     ],\n     \"mutation\": {\n       \"type\": \"Mutation\",\n-      \"id\": \"mut_1774386766838\",\n+      \"id\": \"mut_1774388447580\",\n       \"category\": \"innovate\",\n       \"trigger_signals\": [\n-        \"protocol_drift\",\n-        \"user_feature_request:更新规则每个成功的周期在此追加不覆盖历史\",\n         \"user_improvement_suggestion\"\n       ],\n-      \"target\": \"gene:gene_gep_optimize_prompt_and_assets\",\n+      \"target\": \"behavior:protocol\",\n       \"expected_effect\": \"explore new strategy combinations to escape local optimum\",\n       \"risk_level\": \"medium\"\n     },\n-    \"mutation_id\": \"mut_1774386766838\",\n+    \"mutation_id\": \"mut_1774388447580\",\n     \"personality_state\": {\n       \"type\": \"PersonalityState\",\n       \"rigor\": 0.7,\n@@ -240,11 +235,11 @@\n       \"assets/gep/failed_capsules.json\",\n       \"assets/gep/genes.json\",\n       \"assets/gep/genes.jsonl\",\n-      \"backups/.claude.json.backup.1774363720793\",\n-      \"backups/.claude.json.backup.1774363944513\",\n-      \"backups/.claude.json.backup.1774364083054\",\n-      \"backups/.claude.json.backup.1774376316269\",\n-      \"backups/.claude.json.backup.1774386455580\",\n+      \"backups/.claude.json.backup.1774386995931\",\n+      \"backups/.claude.json.backup.1774387417410\",\n+      \"backups/.claude.json.backup.1774387689962\",\n+      \"backups/.claude.json.backup.1774388181531\",\n+      \"backups/.claude.json.backup.1774388446401\",\n       \"commands/ralph.md\",\n       \"debug/521e31fa-91f9-4987-abe6-fc26b005007d.txt\",\n       \"debug/93f168cb-8fd8-4df0-a442-48b8cda25d1a.txt\",\n@@ -296,6 +291,7 @@\n       \"evolver/evolution/gep_prompt_run_1774385703000.txt\",\n       \"evolver/evolution/gep_prompt_run_1774386480000.txt\",\n       \"evolver/evolution/gep_prompt_run_1774386765000.txt\",\n+      \"evolver/evolution/gep_prompt_run_1774388446000.txt\",\n       \"evolver/evolution/gep_response_run_1773580220000.json\",\n       \"evolver/evolution/gep_response_run_1773580584000.json\",\n       \"evolver/evolution/gep_response_run_1773642675000.json\",\n@@ -337,6 +333,7 @@\n       \"evolver/evolution/gep_response_run_1774351665000.json\",\n       \"evolver/evolution/gep_res\n... [TRUNCATED]",
+    "strategy": [
+      "Extract structured signals from logs and user instructions",
+      "Select an existing Gene by signals match (no improvisation)",
+      "Estimate blast radius (files, lines) before editing and record it",
+      "Apply smallest reversible patch",
+      "Validate using declared validation steps; rollback on failure",
+      "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+    ],
+    "asset_id": "sha256:8039fd9a87dcf28d62c99d0d91bf98ce74f3a85d01d4a9cb9a6f1547df85c5bc"
+  }
+]
+```
+
+Context [Capability Candidates]:
+- cand_a1cf499b: Explore new strategies during stability plateau
+  - input: Recent session transcript + memory snippets + user instructions
+  - output: A safe, auditable evolution patch guided by GEP assets
+  - invariants: Protocol order, small reversible patches, validation, append-only events
+  - params: Signals: evolution_stagnation_detected, stable_success_plateau
+  - failure_points: Missing signals, over-broad changes, skipped validation, missing knowledge solidification
+  - evidence: Signal present: stable_success_plateau
+- cand_f38b3ae5: Prevent protocol drift and enforce auditable outputs
+  - input: Recent session transcript + memory snippets + user instructions
+  - output: A safe, auditable evolution patch guided by GEP assets
+  - invariants: Protocol order, small reversible patches, validation, append-only events
+  - params: Signals: protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop
+  - failure_points: Missing signals, over-broad changes, skipped validation, missing knowledge solidification
+  - evidence: Signal present: protocol_drift
+- cand_947d4ea5: Implement user-requested feature
+  - input: Recent session transcript + memory snippets + user instructions
+  - output: A safe, auditable evolution patch guided by GEP assets
+  - invariants: Protocol order, small reversible patches, validation, append-only events
+  - params: Signals: protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, high_failure_ratio, force_innovation_after_repair_loop
+  - failure_points: Missing signals, ov ...[TRUNCATED]
+
+Context [Hub Matched Solution]:
+(no hub match)
+
+Context [External Candidates]:
+(none)
+
+
+
+Context [Evolution Narrative] (Recent decisions and outcomes -- learn from this history):
+### [2026-03-23 15:21:00] INNOVATE - success
+- Gene: gene_innovate_code_stats | Score: 0.90 | Scope: 4 files, 200 lines
+- Signals: [evolution_stagnation_detected, stable_success_plateau]
+- Result: 创建 code-stats 技能（代码库复杂度分析器），扫描目录树统计文件数/行数/函数密度/模块耦合度，计算复杂度等级 A-D，注册 gene_innovate_code_stats（第13条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行
+> **CONSOLIDATED**: 5 adjacent gene_gep_optimize_prompt_and_assets cycles (2026-03-23 17:00 to 2026-03-24 21:12), 3 success + 2 failed, scope 7 files / 50 lines total, signals=[protocol_drift, user_feature_request:append_only_history, high_failure_ratio]. Results: narrative data integrity repairs (intent mismatch corrections, signal decontamination, data gap backfill, narrative compression). Note: last entry intent corrected INNOVATE→OPTIMIZE, signal cleaned (raw Chinese→append_only_history).
+### [2026-03-24 21:18:27] INNOVATE - success
+- Gene: gene_gep_optimize_prompt_and_assets | Score: 0.85 | Scope: 2 files, 29 lines
+- Signals: [protocol_drift, user_feature_request:更新规则每个成功的周期在此追加不覆盖历史, user_improvement_suggestion]
+- Result: 固化：gene_gep_optimize_prompt_and_assets 命中信号 protocol_drift, user_feature_request:> 更新规则：每个成功的周期在此追加，不覆盖历史, user_improvement_suggestion:lock — entry had 3 issues: (a) out of chronological order (appear
+### [2026-03-25 08:00:00] INNOVATE - success
+- Gene: gene_innovate_cycle_guard | Score: 0.90 | Scope: 4 files, 200 lines
+- Signals: [user_improvement_suggestion]
+- Result: 创建 evo-cycle-guard 技能（进化周期预检验证器），执行9项预检：意图错配/退休基因/失败连击/重复模式/基因冷却/创新干旱/意图类别不匹配/信号污染/未知基因，返回 go/no-go 推荐+结构化 blocks/warnings，注册 gene_innovate_cycle_guard（第14条活跃基因），安装到 ~/.claude/skills/，3 文件 ~200 行
+### [2026-03-24 21:48:13] INNOVATE - success
+- Gene: gene_auto_5eb089f2 | Score: 0.85 | Scope: 5 files, 288 lines
+- Signals: [user_improvement_suggestion]
+- Result: 固化：gene_auto_5eb089f2 命中信号 user_improvement_suggestion，变更 5 文件 / 288 行。
+
+
+Context [Execution]:
+
+...[TRUNCATED]...
+
+[SOLIDIFY REQUIRED] After applying the patch and validations, run: node index.js solidify
+
+=======================================================
+Capability evolver finished. If you use this project, consider starring the upstream repository.
+Upstream: https://github.com/autogame-17/capability-evolver
+=======================================================
+

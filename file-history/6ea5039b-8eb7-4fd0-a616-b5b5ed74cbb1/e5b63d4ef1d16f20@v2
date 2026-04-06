@@ -1,0 +1,114 @@
+#!/bin/bash
+# GP 压力测试 — 1m × 4 workers，不限内存，测真实 RAM 用量
+# 测完后用数据来设限制
+
+echo "=== 停止现有 scheduler 和 evolve ==="
+pkill -f "gp_scheduler.py" 2>/dev/null
+pkill -f "gp_evolve.py" 2>/dev/null
+sleep 3
+
+echo "=== 清理确认 ==="
+pgrep -f "gp_evolve" | wc -l
+
+echo "=== 系统基线内存 ==="
+free -m
+
+echo "=== 启动压力测试：4 个 1m evolve 进程 ==="
+# 直接启动 4 个 gp_evolve.py，每个跑不同的 1m 币种
+cd ~/trading/gp_engine
+
+# 用 4 个不同币种的 1m 数据
+nohup python3 -u gp_evolve.py --coin ADA --interval 1m --rounds 1 > /tmp/pressure_ADA.log 2>&1 &
+PID1=$!
+echo "ADA/1m PID=$PID1"
+
+nohup python3 -u gp_evolve.py --coin BTC --interval 1m --rounds 1 > /tmp/pressure_BTC.log 2>&1 &
+PID2=$!
+echo "BTC/1m PID=$PID2"
+
+nohup python3 -u gp_evolve.py --coin ETH --interval 1m --rounds 1 > /tmp/pressure_ETH.log 2>&1 &
+PID3=$!
+echo "ETH/1m PID=$PID3"
+
+nohup python3 -u gp_evolve.py --coin XRP --interval 1m --rounds 1 > /tmp/pressure_XRP.log 2>&1 &
+PID4=$!
+echo "XRP/1m PID=$PID4"
+
+echo ""
+echo "=== 4 个 1m 进程已启动 ==="
+echo "PIDs: $PID1 $PID2 $PID3 $PID4"
+echo ""
+echo "等待 60 秒让进程加载数据并开始进化..."
+sleep 60
+
+echo ""
+echo "=== 60秒后 内存快照 ==="
+free -m
+echo ""
+echo "=== 各进程 RSS (MB) ==="
+for pid in $PID1 $PID2 $PID3 $PID4; do
+    if ps -p $pid > /dev/null 2>&1; then
+        rss=$(ps -o rss= -p $pid | awk '{print int($1/1024)}')
+        vsz=$(ps -o vsz= -p $pid | awk '{print int($1/1024)}')
+        cmd=$(ps -o args= -p $pid | awk '{print $NF}')
+        echo "PID=$pid RSS=${rss}MB VSZ=${vsz}MB $cmd"
+    else
+        echo "PID=$pid 已退出！检查日志"
+    fi
+done
+
+echo ""
+echo "再等 60 秒（进化中）..."
+sleep 60
+
+echo ""
+echo "=== 120秒后 内存快照 ==="
+free -m
+echo ""
+echo "=== 各进程 RSS (MB) — 峰值接近 ==="
+for pid in $PID1 $PID2 $PID3 $PID4; do
+    if ps -p $pid > /dev/null 2>&1; then
+        rss=$(ps -o rss= -p $pid | awk '{print int($1/1024)}')
+        vsz=$(ps -o vsz= -p $pid | awk '{print int($1/1024)}')
+        cmd=$(ps -o args= -p $pid | awk '{print $NF}')
+        echo "PID=$pid RSS=${rss}MB VSZ=${vsz}MB $cmd"
+    else
+        echo "PID=$pid 已退出！检查日志"
+    fi
+done
+
+echo ""
+echo "再等 120 秒（进化中，接近峰值）..."
+sleep 120
+
+echo ""
+echo "=== 240秒后 内存快照（峰值）==="
+free -m
+echo ""
+echo "=== 各进程 RSS (MB) — 峰值 ==="
+PEAK_LOG=/tmp/pressure_peak.txt
+echo "压力测试结果 $(date)" > $PEAK_LOG
+echo "4 workers × 1m 周期" >> $PEAK_LOG
+echo "---" >> $PEAK_LOG
+for pid in $PID1 $PID2 $PID3 $PID4; do
+    if ps -p $pid > /dev/null 2>&1; then
+        rss=$(ps -o rss= -p $pid | awk '{print int($1/1024)}')
+        vsz=$(ps -o vsz= -p $pid | awk '{print int($1/1024)}')
+        cmd=$(ps -o args= -p $pid | grep -o '\-\-coin [A-Z]*' | awk '{print $2}')
+        echo "PID=$pid RSS=${rss}MB VSZ=${vsz}MB coin=$cmd"
+        echo "PID=$pid RSS=${rss}MB VSZ=${vsz}MB coin=$cmd" >> $PEAK_LOG
+    else
+        echo "PID=$pid 已退出（OOM？）检查 dmesg"
+        echo "PID=$pid KILLED (OOM?)" >> $PEAK_LOG
+    fi
+done
+
+echo "" >> $PEAK_LOG
+free -m >> $PEAK_LOG
+echo ""
+echo "=== 总内存使用 ==="
+free -m
+echo ""
+echo "峰值数据已保存到 /tmp/pressure_peak.txt"
+echo "=== 压力测试数据采集完成 ==="
+echo "进程仍在运行（--rounds 1 会跑完一轮自动退出）"

@@ -1,0 +1,46 @@
+# monitor_bot 显示策略信号
+
+## Context
+
+老板看到策略 30+ 小时没开单，但 Telegram 监控只显示进程数和余额，看不到策略在发什么信号（HOLD/BUY/SELL）和被什么 filter 挡住。需要在摘要里显示每个策略的当前信号+regime+filter 状态。
+
+## 改动
+
+**文件**：`monitor_bot.py`（项目根目录，不是 lab/）
+
+**改 1 处**：每小时摘要（第 244 行 `# Regime` 区块），把只显示 regime 改成同时显示信号+filter：
+
+```python
+# 信号 + Regime + Filter（从策略日志最新行提取）
+for sk, ln in section_map.items():
+    if ln == 'gateway':
+        continue
+    coin = COIN_MAP[ln]
+    for line in reversed(sections.get(sk, [])):
+        # 信号行格式: 信号=HOLD 操作=NONE 持仓=NO_POSITION 余额=$398.76 regime=初熊
+        sm = re.search(r'信号=(\S+).*regime=(\S+)', line)
+        if sm:
+            signal, regime = sm.group(1), sm.group(2)
+            parts.append(f"{coin}: 信号={signal} regime={regime}")
+            break
+    # filter（从 Bridge 日志提取）
+    for line in reversed(sections.get(sk, [])):
+        fm = re.search(r'filter=(\S+)', line)
+        if fm:
+            parts.append(f"  └ filter={fm.group(1)}")
+            break
+```
+
+## 验证
+
+重启 monitor_bot 后等 15 分钟摘要，确认 Telegram 显示：
+```
+📊 每小时状态 | 进程: 4/4
+余额: $398.76
+SOL: 信号=HOLD regime=初熊
+  └ filter=SELL_ONLY
+ETH: 信号=HOLD regime=初熊
+  └ filter=SELL_ONLY
+XRP: 信号=HOLD regime=初熊
+  └ filter=SELL_ONLY
+```

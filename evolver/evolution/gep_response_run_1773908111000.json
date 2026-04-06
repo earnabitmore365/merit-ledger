@@ -1,0 +1,9 @@
+All 3 files verified clean. Summary of changes:
+
+| File | Change | Lines |
+|------|--------|-------|
+| `evolution_narrative.md` | REPAIR→OPTIMIZE intent fix, signal pollution cleanup (raw HTML/user msg → clean tokens), added Result line | 3 edited, 1 inserted |
+| `MEMORY.md` | Removed 2 phantom entries (#0095/#0096 that claimed solidified success but cycleCount=94 proves they never persisted), appended real #0095 entry | -2 +1 lines |
+| `genes.json` | Fixed epigenetic mark referencing phantom "cycle_0095" → corrected to "cycle_0094_07:08" with accurate failure reason | 1 field updated |
+
+**Validation**: evo-lint → 0 issues, clean.

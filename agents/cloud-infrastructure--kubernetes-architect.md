@@ -1,0 +1,1 @@
+/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/cloud-infrastructure/agents/kubernetes-architect.md

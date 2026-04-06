@@ -1,0 +1,78 @@
+---
+name: 石卫 v7 设计：知情放行 + 押金制 + 自审强制
+description: 石卫从被动拦截改为主动参与——持有计划、预扣押金、辅助自审、自动打分
+type: project
+---
+
+## 核心改变
+
+v6 石卫 = 瞎子守门，逐条拦截，合理操作也被拦
+v7 石卫 = 知情者，持有计划，计划内放行，计划外拦截，收工辅助自审
+
+## 流程
+
+### 1. 开工前
+- AI 提交任务计划（mission）：要改/删/创建什么文件，预期结果
+- AI 自审计划一遍（自己查漏）
+- 石卫记录计划 + 预扣押金（不影响等级）
+
+### 2. 执行中
+- 计划内操作 → 石卫自动放行
+- 计划外操作 → 正常规则拦截
+- 不需要 declare-delete —— 计划里说了要删的文件自动放行
+
+### 3. 收工后
+- AI 触发自审
+- **石卫参与自审**：拿计划清单逐项核对，提醒漏项
+  - "你说要改 3 个文件，只改了 2 个，还差 XXX"
+  - "你说要删 temp.py，还没删"
+- AI 按提醒补漏 → 再次自审 → 石卫确认全绿
+- 押金归还 + 完成奖励
+
+### 4. 打分
+- 全部完成：押金归还 + 额外加分
+- 部分完成：押金按比例扣除
+- 超预期：押金归还 + 双倍奖励
+- 计划外操作：额外扣分
+
+## 数据结构
+
+### mission.json（~/.claude/mission.json）
+```json
+{
+  "mission": "修复 scheduler regime bug",
+  "agent": "两仪",
+  "started": "2026-03-31T18:00:00",
+  "status": "active",
+  "held_points": 5,
+  "items": [
+    {"type": "modify", "file": "gp_scheduler.py", "done": false},
+    {"type": "delete", "file": "temp_test.py", "done": false},
+    {"type": "create", "file": "new_helper.py", "done": false}
+  ]
+}
+```
+
+### credit.json 新增 held 字段
+```json
+{
+  "score": 50,
+  "held": 5,
+  "level": 3,
+  "title": "金丹"
+}
+```
+
+held 不影响等级计算（get_level 只看 score）
+
+## 改动文件
+1. merit_gate.py — 加载 mission.json，计划内操作跳过检查
+2. credit_manager.py — 新增 mission submit/complete 命令
+3. session_start.py — 注入当前 mission 状态
+4. 新增自审核对逻辑（石卫拿清单对比实际文件状态）
+
+## 老板原话
+- "有东西要做前，让你们先列出要做的事项给门卫看"
+- "做完了一整套后，石卫自动打分，实时+-分数"
+- "先扣出来，但是不影响等级，好了以后再加回去"
+- "石卫提醒他们漏了什么，不用我每次都提醒"

@@ -1,0 +1,24 @@
+---
+name: precompact_haiku_plan
+description: PreCompact hook Haiku 结构化摘要 — 已完成并验证通过（2026-03-27）
+type: project
+---
+
+## PreCompact Haiku 摘要方案 — ✅ 已完成
+
+**完成日期**：2026-03-27
+
+**实施内容**：
+- `pre_compact_save.py` 已改造：提取对话 → 调 `claude -p --model haiku` 生成结构化摘要 → 连同原始对话写入 compact_context.md
+- `session_start.py` 已修复：`get_project_encoded()` 加 `_→-` 编码 fallback，对话种子查询加 LIMIT 30
+- 完整管线：PreCompact 保存 → Compact 截断 → SessionStart 注入（Haiku 摘要 + 对话种子 + MEMORY.md + rules）
+
+**验证结果**：
+- conversations.db 正常查询（4612 条记录）
+- 对话种子注入 ≤30 条（LIMIT 生效）
+- Haiku 摘要正常生成和注入
+- 两套系统（Haiku 摘要 + 对话种子）并行运行，待观察后决定取舍
+
+**Why**：老板认为 30 条原始消息远不如结构化摘要有用，但决定两者并行观察再做取舍。
+
+**How to apply**：此方案已落地，无需再做。后续观察 Haiku 摘要 vs 对话种子质量，老板决定是否弃用其中一个。

@@ -1,0 +1,384 @@
+"""交易模拟器 — 信号序列 → 交易列表（4种执行模式）.
+
+信号由 BacktestEngine.generate_signals() 产出（只算1次），
+模拟器用同一套信号跑4种模式，产出4组交易记录。
+
+4种模式：
+  signal_only  — 无TTP，信号反转才平仓
+  ttp_close    — 信号反转 或 close价触发TTP
+  ttp_highlow  — 信号反转 或 high/low价触发TTP
+  dual_hold    — TTP激活期间反向信号不平原仓，另开新仓
+
+产出11字段：
+  open_candle_idx, close_candle_idx, open_time, close_time,
+  direction, entry_price, exit_price, close_type, mfe, mae
+  (combo_id 由 generate_seed 写入时赋值)
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SimTrade:
+    """模拟器产出的单笔交易。"""
+    open_candle_idx: int
+    close_candle_idx: int
+    open_time: str
+    close_time: str
+    direction: str        # 'long' / 'short'
+    entry_price: float
+    exit_price: float
+    close_type: str       # 'signal' / 'ttp' / 'stop_loss' / 'end_of_data'
+    mfe: float = 0.0      # 最大有利偏移（含杠杆）
+    mae: float = 0.0      # 最大不利偏移（含杠杆）
+
+
+class TTPTracker:
+    """简化版 TTP 追踪器（不依赖 TTPManager）。
+
+    激活条件：浮盈 >= activation_pct（默认5%，含杠杆）
+    追踪：记录最高浮盈，回撤 >= trailing_pct 触发平仓
+    """
+
+    def __init__(self, activation_pct: float = 0.05, trailing_pct: float = 0.02):
+        self.activation_pct = activation_pct  # 激活阈值（杠杆后的收益率）
+        self.trailing_pct = trailing_pct      # 回撤阈值
+        self.active = False
+        self.peak_pnl = 0.0
+
+    def reset(self) -> None:
+        self.active = False
+        self.peak_pnl = 0.0
+
+    def check(self, current_pnl_pct: float) -> bool:
+        """检查是否触发TTP平仓。
+
+        Args:
+            current_pnl_pct: 当前浮盈比例（含杠杆），正=盈利
+
+        Returns:
+            True = 触发平仓
+        """
+        if not self.active:
+            if current_pnl_pct >= self.activation_pct:
+                self.active = True
+                self.peak_pnl = current_pnl_pct
+            return False
+
+        # 已激活：更新峰值
+        if current_pnl_pct > self.peak_pnl:
+            self.peak_pnl = current_pnl_pct
+
+        # 检查回撤
+        drawdown = self.peak_pnl - current_pnl_pct
+        if drawdown >= self.trailing_pct:
+            return True  # 触发平仓
+
+        return False
+
+
+class TradeSimulator:
+    """信号序列 → 交易列表。
+
+    Args:
+        candles: K线数据 list[dict]，需含 time/open/high/low/close
+        signals: 信号序列 list[str]，每根K线一个 ('BUY'/'SELL'/'HOLD')
+        mode: 执行模式 ('signal_only'/'ttp_close'/'ttp_highlow'/'dual_hold')
+        leverage: 杠杆倍数（用于 MFE/MAE 和止损计算）
+        stop_loss_pct: 止损阈值（杠杆后），默认1.0=逐仓爆仓（100%保证金）
+        ttp_activation: TTP 激活阈值
+        ttp_trailing: TTP 回撤阈值
+    """
+
+    def __init__(
+        self,
+        candles: list[dict[str, Any]],
+        signals: list[str],
+        mode: str = "signal_only",
+        leverage: float = 10.0,
+        stop_loss_pct: float = 1.0,
+        ttp_activation: float = 0.05,
+        ttp_trailing: float = 0.02,
+    ):
+        self.candles = candles
+        self.signals = signals
+        self.mode = mode
+        self.leverage = leverage
+        self.stop_loss_pct = stop_loss_pct  # MAE >= 此值则强平
+        self.ttp_activation = ttp_activation
+        self.ttp_trailing = ttp_trailing
+
+        # 预提取价格数组
+        self.closes = [c["close"] for c in candles]
+        self.highs = [c["high"] for c in candles]
+        self.lows = [c["low"] for c in candles]
+        self.times = [str(c.get("time", "")) for c in candles]
+
+    def run(self) -> list[SimTrade]:
+        """执行模拟，返回交易列表。"""
+        if self.mode == "dual_hold":
+            return self._run_dual_hold()
+        else:
+            return self._run_single_position()
+
+    def _calc_pnl_pct(self, direction: str, entry: float, price: float) -> float:
+        """计算浮盈比例（含杠杆）。"""
+        if entry <= 0:
+            return 0.0
+        if direction == "long":
+            return (price - entry) / entry * self.leverage
+        else:
+            return (entry - price) / entry * self.leverage
+
+    def _update_mfe_mae(self, direction: str, entry: float,
+                        high: float, low: float) -> tuple[float, float]:
+        """计算单根K线的 favorable/adverse 偏移。"""
+        if entry <= 0:
+            return 0.0, 0.0
+        if direction == "long":
+            favorable = (high - entry) / entry * self.leverage
+            adverse = (entry - low) / entry * self.leverage
+        else:
+            favorable = (entry - low) / entry * self.leverage
+            adverse = (high - entry) / entry * self.leverage
+        return max(0.0, favorable), max(0.0, adverse)
+
+    def _get_ttp_price(self, i: int, direction: str) -> float:
+        """根据模式获取 TTP 检查价格。"""
+        if self.mode == "ttp_close":
+            return self.closes[i]
+        elif self.mode == "ttp_highlow":
+            # 做多看 low（回落），做空看 high（反弹）
+            return self.lows[i] if direction == "long" else self.highs[i]
+        return self.closes[i]
+
+    def _run_single_position(self) -> list[SimTrade]:
+        """单仓模式（signal_only / ttp_close / ttp_highlow）。"""
+        trades: list[SimTrade] = []
+        ttp = TTPTracker(self.ttp_activation, self.ttp_trailing)
+        enable_ttp = self.mode in ("ttp_close", "ttp_highlow")
+
+        position = ""       # "" / "long" / "short"
+        entry_price = 0.0
+        open_idx = 0
+        mfe = 0.0
+        mae = 0.0
+
+        n = min(len(self.candles), len(self.signals))
+
+        for i in range(n):
+            signal = self.signals[i]
+            close = self.closes[i]
+
+            # ── 持仓中：更新 MFE/MAE ──
+            if position:
+                fav, adv = self._update_mfe_mae(
+                    position, entry_price, self.highs[i], self.lows[i])
+                mfe = max(mfe, fav)
+                mae = max(mae, adv)
+
+                # 止损检查（逐仓爆仓：MAE >= stop_loss_pct）
+                if mae >= self.stop_loss_pct:
+                    # 止损价 = entry × (1 - stop_loss_pct/leverage) for long
+                    if position == "long":
+                        sl_price = entry_price * (1 - self.stop_loss_pct / self.leverage)
+                    else:
+                        sl_price = entry_price * (1 + self.stop_loss_pct / self.leverage)
+                    trades.append(SimTrade(
+                        open_candle_idx=open_idx, close_candle_idx=i,
+                        open_time=self.times[open_idx], close_time=self.times[i],
+                        direction=position, entry_price=entry_price,
+                        exit_price=sl_price, close_type="stop_loss",
+                        mfe=round(mfe, 6), mae=round(mae, 6),
+                    ))
+                    position = ""
+                    entry_price = 0.0
+                    mfe = mae = 0.0
+                    ttp.reset()
+                    continue
+
+                # TTP 检查
+                if enable_ttp:
+                    ttp_price = self._get_ttp_price(i, position)
+                    pnl_pct = self._calc_pnl_pct(position, entry_price, ttp_price)
+                    if ttp.check(pnl_pct):
+                        trades.append(SimTrade(
+                            open_candle_idx=open_idx, close_candle_idx=i,
+                            open_time=self.times[open_idx], close_time=self.times[i],
+                            direction=position, entry_price=entry_price,
+                            exit_price=ttp_price, close_type="ttp",
+                            mfe=round(mfe, 6), mae=round(mae, 6),
+                        ))
+                        position = ""
+                        entry_price = 0.0
+                        mfe = mae = 0.0
+                        ttp.reset()
+                        continue
+
+            # ── 信号处理 ──
+            if signal == "BUY":
+                if position == "short":
+                    # 平空
+                    trades.append(SimTrade(
+                        open_candle_idx=open_idx, close_candle_idx=i,
+                        open_time=self.times[open_idx], close_time=self.times[i],
+                        direction="short", entry_price=entry_price,
+                        exit_price=close, close_type="signal",
+                        mfe=round(mfe, 6), mae=round(mae, 6),
+                    ))
+                    ttp.reset()
+                    mfe = mae = 0.0
+                if position != "long":
+                    # 开多
+                    position = "long"
+                    entry_price = close
+                    open_idx = i
+                    mfe = mae = 0.0
+
+            elif signal == "SELL":
+                if position == "long":
+                    # 平多
+                    trades.append(SimTrade(
+                        open_candle_idx=open_idx, close_candle_idx=i,
+                        open_time=self.times[open_idx], close_time=self.times[i],
+                        direction="long", entry_price=entry_price,
+                        exit_price=close, close_type="signal",
+                        mfe=round(mfe, 6), mae=round(mae, 6),
+                    ))
+                    ttp.reset()
+                    mfe = mae = 0.0
+                if position != "short":
+                    # 开空
+                    position = "short"
+                    entry_price = close
+                    open_idx = i
+                    mfe = mae = 0.0
+
+        # 数据结束，强制平仓
+        if position:
+            trades.append(SimTrade(
+                open_candle_idx=open_idx, close_candle_idx=n - 1,
+                open_time=self.times[open_idx], close_time=self.times[n - 1],
+                direction=position, entry_price=entry_price,
+                exit_price=self.closes[n - 1], close_type="end_of_data",
+                mfe=round(mfe, 6), mae=round(mae, 6),
+            ))
+
+        return trades
+
+    def _run_dual_hold(self) -> list[SimTrade]:
+        """双持仓模式：TTP激活期间反向信号不平原仓，另开新仓。
+
+        规则：
+        - TTP 未激活时来反向信号 → 跟 ttp_highlow 一样：平仓+反手
+        - TTP 已激活追踪中来反向信号 → 保留原仓继续TTP + 另开新仓
+        - 同时最多一多一空，两个仓位独立（各自TTP/止损）
+        - 原仓TTP平了之后不做特殊处理
+        """
+        trades: list[SimTrade] = []
+
+        # 最多2个仓位
+        positions: list[dict] = []  # 每个: {direction, entry_price, open_idx, mfe, mae, ttp}
+
+        n = min(len(self.candles), len(self.signals))
+
+        for i in range(n):
+            signal = self.signals[i]
+
+            # ── 更新所有持仓的 MFE/MAE + 止损/TTP 检查 ──
+            closed_indices = []
+            for pi, pos in enumerate(positions):
+                fav, adv = self._update_mfe_mae(
+                    pos["direction"], pos["entry_price"],
+                    self.highs[i], self.lows[i])
+                pos["mfe"] = max(pos["mfe"], fav)
+                pos["mae"] = max(pos["mae"], adv)
+
+                # 止损
+                if pos["mae"] >= self.stop_loss_pct:
+                    if pos["direction"] == "long":
+                        sl_price = pos["entry_price"] * (1 - self.stop_loss_pct / self.leverage)
+                    else:
+                        sl_price = pos["entry_price"] * (1 + self.stop_loss_pct / self.leverage)
+                    trades.append(SimTrade(
+                        open_candle_idx=pos["open_idx"], close_candle_idx=i,
+                        open_time=self.times[pos["open_idx"]], close_time=self.times[i],
+                        direction=pos["direction"], entry_price=pos["entry_price"],
+                        exit_price=sl_price, close_type="stop_loss",
+                        mfe=round(pos["mfe"], 6), mae=round(pos["mae"], 6),
+                    ))
+                    closed_indices.append(pi)
+                    continue
+
+                # TTP（用 highlow 模式）
+                ttp_price = self.lows[i] if pos["direction"] == "long" else self.highs[i]
+                pnl_pct = self._calc_pnl_pct(pos["direction"], pos["entry_price"], ttp_price)
+                if pos["ttp"].check(pnl_pct):
+                    trades.append(SimTrade(
+                        open_candle_idx=pos["open_idx"], close_candle_idx=i,
+                        open_time=self.times[pos["open_idx"]], close_time=self.times[i],
+                        direction=pos["direction"], entry_price=pos["entry_price"],
+                        exit_price=ttp_price, close_type="ttp",
+                        mfe=round(pos["mfe"], 6), mae=round(pos["mae"], 6),
+                    ))
+                    closed_indices.append(pi)
+
+            # 移除已平仓位
+            for pi in sorted(closed_indices, reverse=True):
+                positions.pop(pi)
+
+            # ── 信号处理 ──
+            if signal in ("BUY", "SELL"):
+                target_dir = "long" if signal == "BUY" else "short"
+                opposite_dir = "short" if signal == "BUY" else "long"
+
+                # 已有同向仓 → 忽略
+                if any(p["direction"] == target_dir for p in positions):
+                    continue
+
+                # 有反向仓？
+                opposite_pos = [p for p in positions if p["direction"] == opposite_dir]
+                if opposite_pos:
+                    opp = opposite_pos[0]
+                    if opp["ttp"].active:
+                        # TTP 已激活 → 保留原仓，另开新仓（双持）
+                        pass  # 不平原仓，下面开新仓
+                    else:
+                        # TTP 未激活 → 平仓反手
+                        trades.append(SimTrade(
+                            open_candle_idx=opp["open_idx"], close_candle_idx=i,
+                            open_time=self.times[opp["open_idx"]], close_time=self.times[i],
+                            direction=opp["direction"], entry_price=opp["entry_price"],
+                            exit_price=self.closes[i], close_type="signal",
+                            mfe=round(opp["mfe"], 6), mae=round(opp["mae"], 6),
+                        ))
+                        positions.remove(opp)
+
+                # 开新仓（如果还没有同向仓）
+                if not any(p["direction"] == target_dir for p in positions):
+                    positions.append({
+                        "direction": target_dir,
+                        "entry_price": self.closes[i],
+                        "open_idx": i,
+                        "mfe": 0.0,
+                        "mae": 0.0,
+                        "ttp": TTPTracker(self.ttp_activation, self.ttp_trailing),
+                    })
+
+        # 数据结束，强制平所有仓位
+        for pos in positions:
+            trades.append(SimTrade(
+                open_candle_idx=pos["open_idx"], close_candle_idx=n - 1,
+                open_time=self.times[pos["open_idx"]], close_time=self.times[n - 1],
+                direction=pos["direction"], entry_price=pos["entry_price"],
+                exit_price=self.closes[n - 1], close_type="end_of_data",
+                mfe=round(pos["mfe"], 6), mae=round(pos["mae"], 6),
+            ))
+
+        return trades

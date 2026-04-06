@@ -1,0 +1,36 @@
+#!/bin/bash
+# =============================================================
+# Auto-Trading 实盘监控
+# 双击即可打开终端，SSH 到 Nitro 每 30 秒刷新一次
+# =============================================================
+
+NITRO_HOST="localhost"
+NITRO_PORT=2222
+NITRO_USER="pc_heisi_claude"
+MONITOR_SCRIPT="/home/pc_heisi_claude/trading/monitor.py"
+PYTHON="/home/pc_heisi_claude/trading-env/bin/python3"
+INTERVAL=30
+
+# 窗口标题
+printf '\033]0;Auto-Trading Monitor\007'
+
+while true; do
+    # 清屏
+    printf '\033[H\033[J'
+
+    # SSH 到 Nitro 执行监控脚本
+    ssh -p "$NITRO_PORT" "${NITRO_USER}@${NITRO_HOST}" \
+        "$PYTHON $MONITOR_SCRIPT" 2>/dev/null
+
+    # SSH 失败时显示错误
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "  ⚠ SSH 连接失败（${NITRO_USER}@${NITRO_HOST}:${NITRO_PORT}）"
+        echo "  检查 Nitro 是否开机 / SSH 端口是否开放"
+        echo ""
+    fi
+
+    echo ""
+    echo "  ${INTERVAL}秒后刷新... (Ctrl+C 退出)"
+    sleep "$INTERVAL"
+done

@@ -1,0 +1,18 @@
+# build_klines_indicators.py — UPDATE 增量优化
+
+## Context
+
+UPDATE FROM 会重写整组所有行的指标（含已有值的旧行）。追加新 K线后重算旧行是浪费。
+
+## 修改
+
+**文件**：`/Volumes/SSD-2TB/project/auto-trading/lab/src/backtest/build_klines_indicators.py` 行 254-260
+
+UPDATE WHERE 加 `AND klines."{first_col}" IS NULL`，只更新指标为空的新行。
+
+**同步更新**：`README_KLINES_SEED.md` 断点续传设计原则加"增量更新"说明。
+
+## 验证
+
+1. 跑当前 86 组确认正常（全是 NULL 行，行为不变）
+2. 追加测试：对已完成组 INSERT 1 行新 K线 → 重跑 → 只 UPDATE 这 1 行

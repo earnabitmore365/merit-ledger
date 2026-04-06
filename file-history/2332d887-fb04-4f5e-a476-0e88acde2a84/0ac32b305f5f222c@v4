@@ -1,0 +1,504 @@
+#!/usr/bin/env python3
+"""验证脚本：4段并跑 + 校准点匹配方案（v4-calibration）。
+
+设计要点：
+  - 4段并行跑信号+交易（不过滤预热区）
+  - 结合处检查：段i尾有 end_of_data → 找校准点（最后一笔完整交易）
+  - 在段i+1的交易里找匹配校准点 → 吻合则继续；不吻合 → 调预热重跑段i+1
+  - 段内无完整交易 → fallback 全量
+  - 合并：有效区交易，跨段交易按约定保留
+
+用法：
+    cd /Volumes/SSD-2TB/project/wuji-auto-trading
+    python3 lab/seed_fix/test_segment_v4.py
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import time
+from concurrent.futures import ProcessPoolExecutor
+
+# ==================== 项目路径设置 ====================
+_p = os.path.dirname(os.path.abspath(__file__))
+while _p != os.path.dirname(_p) and not os.path.exists(os.path.join(_p, '.wuji-root')):
+    _p = os.path.dirname(_p)
+if _p not in sys.path:
+    sys.path.insert(0, _p)
+sys.path.insert(0, os.path.join(_p, 'src'))
+
+# ==================== Import ====================
+from src.backtest.generate_seed import (  # noqa: E402
+    load_candles, TradeSimulator, BacktestEngine, SimTrade,
+    _split_segments, _SEGMENT_WARMUP, _SEGMENT_COUNT,
+    LEVERAGE, STOP_LOSS_PCT,
+)
+from core.indicator_cache import init_cache  # noqa: E402
+
+# ==================== 配置 ====================
+
+MODES = ['signal_only', 'ttp_close', 'ttp_highlow', 'dual_hold']
+STRATEGIES = ['rsi_reversal', 'bb_squeeze', 'momentum_slope_long']
+
+
+# ==================== Worker（top-level，必须是 top-level 函数） ====================
+
+def _worker_v4(args: tuple) -> dict:
+    """子进程：跑一段的信号 + 4种模式交易。不过滤预热区。
+
+    args: (coin, interval, candle_slice, warmup_n, global_offset,
+           strategy_name, modes, leverage, stop_loss_pct)
+
+    返回:
+        {
+            "trades": {mode: [(open_idx, close_idx, open_time, close_time,
+                               direction, entry_price, exit_price, close_type,
+                               mfe, mae), ...]},
+            "warmup_n": int,
+            "global_offset": int,
+        }
+
+    注意：交易坐标是相对于 candle_slice 的局部坐标。合并时需 + global_offset 转全局。
+    """
+    (coin, interval, candle_slice, warmup_n, global_offset,
+     strategy_name, modes, leverage, stop_loss_pct) = args
+
+    # spawn 模式下子进程重新设置 path + import
+    import os as _os, sys as _sys
+    _rp = _os.path.dirname(_os.path.abspath(__file__))
+    while _rp != _os.path.dirname(_rp) and not _os.path.exists(_os.path.join(_rp, '.wuji-root')):
+        _rp = _os.path.dirname(_rp)
+    if _rp not in _sys.path:
+        _sys.path.insert(0, _rp)
+    _src = _os.path.join(_rp, 'src')
+    if _src not in _sys.path:
+        _sys.path.insert(0, _src)
+
+    from core.indicator_cache import init_cache as _ic
+    from src.backtest.generate_seed import (
+        BacktestEngine as _BE,
+        TradeSimulator as _TS,
+    )
+
+    # 初始化指标缓存（内存模式）
+    _ic(coin, interval, candle_slice, db_path=':memory:')
+
+    # 生成信号（完整分段，含预热区）
+    engine = _BE(coin=coin, interval=interval, days=0, candles=candle_slice)
+    signals = engine.generate_signals(strategy_name)
+
+    if not signals or all(s == 'HOLD' for s in signals):
+        return {
+            "trades": {m: [] for m in modes},
+            "warmup_n": warmup_n,
+            "global_offset": global_offset,
+        }
+
+    # 4种模式各跑，返回全部交易（含预热区）序列化为 tuple
+    trades_dict = {}
+    for mode in modes:
+        sim = _TS(candle_slice, signals, mode=mode,
+                  leverage=leverage, stop_loss_pct=stop_loss_pct)
+        raw_trades = sim.run()
+        trades_dict[mode] = [
+            (t.open_candle_idx, t.close_candle_idx,
+             t.open_time, t.close_time,
+             t.direction, t.entry_price, t.exit_price,
+             t.close_type, t.mfe, t.mae)
+            for t in raw_trades
+        ]
+
+    return {
+        "trades": trades_dict,
+        "warmup_n": warmup_n,
+        "global_offset": global_offset,
+    }
+
+
+# ==================== 主函数：4段并跑 + 校准点匹配 ====================
+
+def run_segmented_v4(
+    coin: str,
+    interval: str,
+    all_candles: list,
+    strategy_name: str,
+    modes: list,
+    leverage: float,
+    stop_loss_pct: float,
+) -> tuple:
+    """4段并跑 + 校准点匹配 + 不吻合重跑/fallback全量。
+
+    Returns:
+        (mode_trades, method)
+        mode_trades: {mode: [SimTrade]}（全局坐标，排序）
+        method: "segmented" 或 "fallback"
+    """
+    N = len(all_candles)
+    # segments 是可变列表，重跑时会更新
+    segments = list(_split_segments(N, _SEGMENT_COUNT, _SEGMENT_WARMUP))
+    # 段i的有效区上界：重跑时段i的交易只取 open < cutoff
+    seg_cutoff: dict[int, int] = {}  # {seg_index: cutoff_open_idx}（全局坐标）
+
+    # ── 第一轮：4段并行 ──
+    t_par = time.time()
+    task_args = []
+    for i, (start, end, actual_start) in enumerate(segments):
+        candle_slice = all_candles[start:end]
+        warmup_n = actual_start - start
+        task_args.append((
+            coin, interval, candle_slice, warmup_n, start,
+            strategy_name, modes, leverage, stop_loss_pct,
+        ))
+
+    seg_results = [None] * len(segments)
+
+    with ProcessPoolExecutor(max_workers=4) as exc:
+        futures = [(i, exc.submit(_worker_v4, args))
+                   for i, args in enumerate(task_args)]
+        for i, f in futures:
+            try:
+                seg_results[i] = f.result()
+            except Exception as e:
+                print(f"    !! 段{i} 子进程异常: {e}")
+                import traceback; traceback.print_exc()
+
+    par_elapsed = time.time() - t_par
+    print(f"  并行耗时: {par_elapsed:.2f}s")
+
+    # ── 第二轮：逐段校准匹配 ──
+    t_calib = time.time()
+
+    need_fallback = False
+
+    i = 0
+    while i < len(segments) - 1:
+        seg_r_i = seg_results[i]
+        seg_r_i1 = seg_results[i + 1]
+
+        if seg_r_i is None or seg_r_i1 is None:
+            print(f"    段{i}-{i+1}: 段结果为空，跳过校准")
+            i += 1
+            continue
+
+        global_offset_i = seg_r_i["global_offset"]
+        actual_start_i = segments[i][2]          # 段i有效区全局起点
+
+        rerun_triggered = False  # 本轮是否触发了重跑
+
+        for mode in modes:
+            # 段i的交易（转全局坐标）
+            raw_i = seg_r_i["trades"].get(mode, [])
+            seg_i_trades_global = [
+                SimTrade(
+                    open_candle_idx=t[0] + global_offset_i,
+                    close_candle_idx=t[1] + global_offset_i,
+                    open_time=t[2], close_time=t[3],
+                    direction=t[4], entry_price=t[5], exit_price=t[6],
+                    close_type=t[7], mfe=t[8], mae=t[9],
+                )
+                for t in raw_i
+            ]
+
+            # 段i有效区的交易（open 在 actual_start_i 之后）
+            valid_i = [t for t in seg_i_trades_global if t.open_candle_idx >= actual_start_i]
+
+            if not valid_i:
+                # 段i有效区无交易，无需校准
+                continue
+
+            last_trade = valid_i[-1]
+
+            if last_trade.close_type != "end_of_data":
+                # 段i末尾没有悬空交易，无需校准
+                continue
+
+            # 段尾有未平仓（end_of_data）→ 找校准点
+            complete_trades = [t for t in valid_i if t.close_type != "end_of_data"]
+
+            if not complete_trades:
+                # 段内无完整交易 → fallback 全量
+                need_fallback = True
+                print(f"    {mode}: 段{i}无完整交易 → fallback 全量")
+                break  # 跳出 mode 循环
+
+            calibration = complete_trades[-1]  # 校准点：最后一笔完整交易
+
+            # 在段i+1的所有交易里（含预热区，转全局坐标）找匹配
+            raw_i1 = seg_r_i1["trades"].get(mode, [])
+            seg_i1_global_offset = seg_r_i1["global_offset"]
+            seg_i1_trades_global = [
+                SimTrade(
+                    open_candle_idx=t[0] + seg_i1_global_offset,
+                    close_candle_idx=t[1] + seg_i1_global_offset,
+                    open_time=t[2], close_time=t[3],
+                    direction=t[4], entry_price=t[5], exit_price=t[6],
+                    close_type=t[7], mfe=t[8], mae=t[9],
+                )
+                for t in raw_i1
+            ]
+
+            matched = False
+            for t in seg_i1_trades_global:
+                if (t.direction == calibration.direction
+                        and abs(t.entry_price - calibration.entry_price) < 1e-8
+                        and abs(t.exit_price - calibration.exit_price) < 1e-8
+                        and t.close_type == calibration.close_type
+                        and t.open_time == calibration.open_time):
+                    matched = True
+                    break
+
+            if matched:
+                print(f"    {mode}: 段{i}-{i+1} OK 校准点匹配")
+            else:
+                # 不吻合 → 调预热重跑段i+1（串行，所有模式一起）
+                new_actual_start = calibration.open_candle_idx  # 全局坐标
+                new_start = max(0, new_actual_start - _SEGMENT_WARMUP)
+                new_end = segments[i + 1][1]
+
+                # 安全检查：重跑后段长超过原段2倍 → fallback（校准点太远，重跑无意义）
+                orig_seg_len = segments[i + 1][1] - segments[i + 1][0]
+                new_seg_len = new_end - new_start
+                if new_seg_len > orig_seg_len * 2:
+                    need_fallback = True
+                    print(f"    {mode}: 段{i}-{i+1}校准点太远（{new_seg_len}>{orig_seg_len}*2）→ fallback 全量")
+                    break
+
+                print(f"    {mode}: 段{i}-{i+1}不吻合，重跑段{i+1}"
+                      f" (start={new_start}, actual={new_actual_start})")
+
+                new_slice = all_candles[new_start:new_end]
+                new_warmup_n = new_actual_start - new_start
+
+                init_cache(coin, interval, new_slice, db_path=':memory:')
+                eng = BacktestEngine(coin=coin, interval=interval, days=0, candles=new_slice)
+                new_signals = eng.generate_signals(strategy_name)
+
+                new_trades_all = {}
+                for m in modes:
+                    sim = TradeSimulator(
+                        new_slice, new_signals, mode=m,
+                        leverage=leverage, stop_loss_pct=stop_loss_pct,
+                    )
+                    new_raw = sim.run()
+                    new_trades_all[m] = [
+                        (t.open_candle_idx, t.close_candle_idx,
+                         t.open_time, t.close_time,
+                         t.direction, t.entry_price, t.exit_price,
+                         t.close_type, t.mfe, t.mae)
+                        for t in new_raw
+                    ]
+
+                # 更新 seg_results[i+1] 和 segments[i+1]
+                seg_results[i + 1] = {
+                    "trades": new_trades_all,
+                    "warmup_n": new_warmup_n,
+                    "global_offset": new_start,
+                }
+                segments[i + 1] = (new_start, new_end, new_actual_start)
+
+                # 段i的有效区截止到校准点的close位置（校准点之后的交易由段i+1接管）
+                seg_cutoff[i] = calibration.open_candle_idx
+
+                rerun_triggered = True
+                break  # 重跑后重新检查此结合处（跳出 mode 循环）
+
+        if need_fallback:
+            break
+
+        if rerun_triggered:
+            # 不推进 i，重新检查段i-段i+1结合处
+            continue
+
+        i += 1
+
+    calib_elapsed = time.time() - t_calib
+    print(f"  校准耗时: {calib_elapsed:.3f}s")
+
+    # ── fallback：全量跑 ──
+    if need_fallback:
+        print(f"  FALLBACK: 全量跑")
+        init_cache(coin, interval, all_candles, db_path=':memory:')
+        engine = BacktestEngine(coin=coin, interval=interval, days=0, candles=all_candles)
+        signals = engine.generate_signals(strategy_name)
+        result = {}
+        for m in modes:
+            sim = TradeSimulator(all_candles, signals, mode=m,
+                                 leverage=leverage, stop_loss_pct=stop_loss_pct)
+            result[m] = sim.run()
+        return result, "fallback"
+
+    # ── 第三轮：合并 ──
+    t_merge = time.time()
+    mode_trades: dict[str, list] = {m: [] for m in modes}
+
+    for i in range(len(segments)):
+        actual_start = segments[i][2]   # 全局坐标
+        global_offset = seg_results[i]["global_offset"]
+        is_last = (i == len(segments) - 1)
+
+        for mode in modes:
+            raw = seg_results[i]["trades"].get(mode, [])
+            for t_tuple in raw:
+                # 反序列化 + 转全局坐标
+                g_open = t_tuple[0] + global_offset
+                g_close = t_tuple[1] + global_offset
+
+                # 只取有效区（open >= actual_start）
+                if g_open < actual_start:
+                    # 跨段交易（open 在预热区但 close 在有效区，且 i > 0）
+                    # 对应上一段的 end_of_data，校准确认后保留
+                    if g_close >= actual_start and i > 0:
+                        pass  # 保留跨段交易
+                    else:
+                        continue
+
+                # 段i有cutoff时，校准点之后的交易由段i+1接管
+                # 用 close >= cutoff 而非 open >= cutoff，防止跨段交易被两段各保留一份
+                if i in seg_cutoff and g_close >= seg_cutoff[i]:
+                    continue
+
+                # 排除 end_of_data（非最后一段）
+                if t_tuple[7] == "end_of_data" and not is_last:
+                    continue
+
+                mode_trades[mode].append(SimTrade(
+                    open_candle_idx=g_open,
+                    close_candle_idx=g_close,
+                    open_time=t_tuple[2],
+                    close_time=t_tuple[3],
+                    direction=t_tuple[4],
+                    entry_price=t_tuple[5],
+                    exit_price=t_tuple[6],
+                    close_type=t_tuple[7],
+                    mfe=t_tuple[8],
+                    mae=t_tuple[9],
+                ))
+
+    for mode in modes:
+        mode_trades[mode].sort(key=lambda t: t.open_candle_idx)
+
+    merge_elapsed = time.time() - t_merge
+    print(f"  合并耗时: {merge_elapsed:.3f}s")
+
+    return mode_trades, "segmented"
+
+
+# ==================== 全量基准 ====================
+
+def run_full(
+    coin: str,
+    interval: str,
+    all_candles: list,
+    strategy_name: str,
+    modes: list,
+    leverage: float,
+    stop_loss_pct: float,
+) -> dict:
+    """全量基准：A 路径。"""
+    init_cache(coin, interval, all_candles, db_path=':memory:')
+    engine = BacktestEngine(coin=coin, interval=interval, days=0, candles=all_candles)
+    signals = engine.generate_signals(strategy_name)
+    result = {}
+    for m in modes:
+        sim = TradeSimulator(all_candles, signals, mode=m,
+                             leverage=leverage, stop_loss_pct=stop_loss_pct)
+        result[m] = sim.run()
+    return result
+
+
+# ==================== 对比函数 ====================
+
+def compare(
+    full_trades: list,
+    seg_trades: list,
+    strategy: str,
+    mode: str,
+    tol: float = 1e-8,
+) -> bool:
+    """逐笔对比，打印首个分叉点，返回是否一致。"""
+    ok = True
+
+    if len(full_trades) != len(seg_trades):
+        print(f"    !! [{strategy}][{mode}] 笔数不符:"
+              f" 全量={len(full_trades)}, 分段={len(seg_trades)}")
+        ok = False
+        for label, lst in [("全量", full_trades), ("分段", seg_trades)]:
+            print(f"       {label}前{min(3, len(lst))}笔:")
+            for t in lst[:3]:
+                print(f"         open={t.open_candle_idx} close={t.close_candle_idx}"
+                      f" dir={t.direction} entry={t.entry_price:.4f} type={t.close_type}")
+    else:
+        mismatch = []
+        for j, (a, b) in enumerate(zip(full_trades, seg_trades)):
+            if (a.open_candle_idx != b.open_candle_idx
+                    or a.close_candle_idx != b.close_candle_idx
+                    or a.direction != b.direction
+                    or abs(a.entry_price - b.entry_price) > tol
+                    or abs(a.exit_price - b.exit_price) > tol
+                    or a.close_type != b.close_type):
+                mismatch.append((j, a, b))
+        if mismatch:
+            ok = False
+            print(f"    !! [{strategy}][{mode}] {len(mismatch)} 笔不符"
+                  f"（共 {len(full_trades)} 笔）")
+            for j, a, b in mismatch[:5]:
+                print(f"       第{j}笔:"
+                      f" open={a.open_candle_idx}vs{b.open_candle_idx}"
+                      f" close={a.close_candle_idx}vs{b.close_candle_idx}"
+                      f" dir={a.direction}vs{b.direction}"
+                      f" entry={a.entry_price:.6f}vs{b.entry_price:.6f}"
+                      f" exit={a.exit_price:.6f}vs{b.exit_price:.6f}"
+                      f" type={a.close_type}vs{b.close_type}")
+        else:
+            print(f"    OK [{strategy}][{mode}] 共 {len(full_trades)} 笔，全部一致")
+
+    return ok
+
+
+# ==================== 主程序 ====================
+
+if __name__ == "__main__":
+    candles = load_candles('BTC', '1m')
+    print(f"K线: {len(candles):,} 根")
+
+    total_pass = 0
+    total_fail = 0
+
+    for strat in STRATEGIES:
+        print(f"\n===== {strat} =====")
+
+        # 全量基准
+        t0 = time.time()
+        full = run_full('BTC', '1m', candles, strat, MODES, LEVERAGE, STOP_LOSS_PCT)
+        full_time = time.time() - t0
+        print(f"  全量: {full_time:.1f}s")
+
+        # 分段
+        t0 = time.time()
+        seg, method = run_segmented_v4(
+            'BTC', '1m', candles, strat, MODES, LEVERAGE, STOP_LOSS_PCT)
+        seg_time = time.time() - t0
+
+        speedup = full_time / seg_time if seg_time > 0 else 0
+        print(f"  分段({method}): {seg_time:.1f}s | 加速: {speedup:.1f}x")
+
+        all_ok = True
+        for mode in MODES:
+            ok = compare(full[mode], seg[mode], strat, mode)
+            if ok:
+                total_pass += 1
+            else:
+                total_fail += 1
+                all_ok = False
+
+        status = "PASS" if all_ok else "FAIL"
+        print(f"  [{status}] {strat}")
+
+    print(f"\n{'='*60}")
+    print(f"  通过: {total_pass} | 失败: {total_fail}")
+    if total_fail == 0:
+        print("  结论: 4段并跑+校准点匹配方案与全量基准 100% 吻合")
+    else:
+        print("  结论: 存在差异，需进一步排查")
+    print('=' * 60)

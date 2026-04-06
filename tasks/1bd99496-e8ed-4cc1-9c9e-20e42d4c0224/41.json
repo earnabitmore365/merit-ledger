@@ -1,0 +1,9 @@
+{
+  "id": "41",
+  "subject": "启动 Gateway + 查 ERROR + 写监控脚本",
+  "description": "1. 只启 Gateway 不启 trader 2. 查 45 个 ERROR 是什么 3. 写 gateway_monitor.sh cron 5分钟",
+  "activeForm": "Gateway 启动+监控",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

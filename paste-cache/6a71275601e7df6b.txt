@@ -1,0 +1,20 @@
+⏺ UserPromptSubmit operation blocked by hook:                                   
+  [python3 ~/.claude/scripts/inject_rules.py]:                                  
+  /opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework        
+  /Versions/3.11/Resources/Python.app/Contents/MacOS/Python: can't open         
+  file '/Users/allenbot/.claude/scripts/inject_rules.py': [Errno 2] No          
+  such file or directory                                                        
+                                                                                
+                                                                                
+  Original prompt: 太极，看看这是什么东西？⏺ UserPromptSubmit operation         
+  blocked by hook:                                                              
+    [python3 ~/.claude/scripts/inject_rules.py]:                                
+                                                                                
+                                                                                
+  /opt/homebrew/Cellar/python@3.11/3.11.14_3/Frameworks/Python.framework
+               
+    /Versions/3.11/Resources/Python.app/Contents/MacOS/Python: can't 
+  open                                                                          
+    file '/Users/allenbot/.claude/scripts/inject_rules.py': [Errno 2] No
+                                                                                
+    such file or directory   

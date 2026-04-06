@@ -1,0 +1,50 @@
+{
+  "mission": "plan: velvety-munching-raccoon.md",
+  "agent": "太极",
+  "started": "2026-04-02T09:42:16",
+  "status": "active",
+  "estimated_reward": 10,
+  "held_points": 10,
+  "items": [
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/evolve.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/rules_deprecated.md",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/rule_proposals.json",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/merit_gate.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/shiwei_audit/YYYY-MM-DD.md",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/scripts/session_start.py",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/commands/audit-shiwei.md",
+      "done": false
+    },
+    {
+      "type": "modify",
+      "file": "~/.claude/merit/credit_manager.py",
+      "done": false
+    }
+  ]
+}

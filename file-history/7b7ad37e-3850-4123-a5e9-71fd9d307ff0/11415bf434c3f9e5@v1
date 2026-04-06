@@ -1,0 +1,123 @@
+#!/bin/bash
+# ralph_loop.sh — auto-trading 实盘系统代码审查循环
+#
+# 用法:
+#   chmod +x ralph_loop.sh
+#   ./ralph_loop.sh
+#
+# 停止:
+#   touch STOP
+#   Ctrl+C
+#
+# 放在 auto-trading/ 目录下（和 lab/ 同级）
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+if [ ! -f PROMPT.md ]; then
+    echo "❌ 找不到 PROMPT.md"
+    exit 1
+fi
+
+if [ ! -d lab ]; then
+    echo "❌ 找不到 lab/ 目录"
+    exit 1
+fi
+
+# 清理残留 STOP
+if [ -f STOP ]; then
+    echo "⚠️  删除残留 STOP 文件"
+    rm STOP
+fi
+
+# 初始化 git
+if [ ! -d .git ]; then
+    git init
+    git add -A
+    git commit -m "ralph: 初始快照（auto-trading 实盘系统）"
+    echo "📦 已初始化 git 仓库"
+fi
+
+ROUND=0
+TINY_COUNT=0
+START_TIME=$(date +%s)
+
+echo "============================================================"
+echo "  Ralph Loop — auto-trading 实盘系统"
+echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "  规模: $(find lab -name '*.py' -not -path '*__pycache__*' | wc -l) 个 Python 文件"
+echo "  停止: touch STOP 或 Ctrl+C"
+echo "============================================================"
+echo ""
+
+while [ ! -f STOP ]; do
+    ROUND=$((ROUND + 1))
+    echo "━━━ Round $ROUND ━━━ $(date '+%H:%M:%S') ━━━━━━━━━━━━━━━━━━━━━"
+
+    claude -p "读 PROMPT.md 和 PROGRESS.md，执行一轮修复。
+
+规则:
+1. 先 test -f STOP，存在就在 PROGRESS.md 写 STATUS: DONE 然后停止
+2. 找到一个问题（或一批同类死文件）
+3. 修复/删除
+4. python3 -m py_compile 验证（对改过的 .py 文件）
+5. 更新 PROGRESS.md
+6. git add + git commit
+7. 本遍所有模块扫完了就推进到下一遍
+
+只修一个问题（或一批同类死文件）就停。" \
+        --allowedTools "Edit,Write,Bash(git commit:*),Bash(git add:*),Bash(git diff:*),Bash(git rm:*),Bash(rm:*),Bash(python3 -m py_compile:*),Bash(test -f *),Bash(grep:*),Bash(cat:*),Bash(wc:*),Bash(head:*),Bash(tail:*),Bash(find:*),Bash(ls:*),Read" \
+        --max-turns 25
+
+    EXIT_CODE=$?
+
+    if [ $EXIT_CODE -ne 0 ]; then
+        echo "⚠️  Claude 退出码 $EXIT_CODE，等待 5 秒后重试..."
+        sleep 5
+    fi
+
+    # 防止自行 DONE
+    if grep -q "STATUS: DONE" PROGRESS.md 2>/dev/null; then
+        if [ ! -f STOP ]; then
+            echo "⚠️  重置 STATUS: DONE → IN_PROGRESS"
+            sed -i '' 's/STATUS: DONE/STATUS: IN_PROGRESS/' PROGRESS.md 2>/dev/null || \
+            sed -i 's/STATUS: DONE/STATUS: IN_PROGRESS/' PROGRESS.md
+        fi
+    fi
+
+    # 收益递减检测
+    CHANGED=$(git diff --shortstat HEAD~1 2>/dev/null | grep -oE '[0-9]+ insertion|[0-9]+ deletion' | grep -oE '[0-9]+' | paste -sd+ - | bc 2>/dev/null || echo "0")
+
+    if [ "$CHANGED" -lt 3 ]; then
+        TINY_COUNT=$((TINY_COUNT + 1))
+        echo "⚠️  本轮改动 ${CHANGED} 行（连续微改动: ${TINY_COUNT}/5）"
+        if [ "$TINY_COUNT" -ge 5 ]; then
+            echo "🏁 连续 5 轮微改动，自动停止"
+            touch STOP
+        fi
+    else
+        TINY_COUNT=0
+    fi
+
+    echo "━━━ Round $ROUND 完成（改动 ${CHANGED} 行）━━━━━━━━━━━━━━━━"
+    echo ""
+
+    sleep 2
+done
+
+END_TIME=$(date +%s)
+ELAPSED=$(( END_TIME - START_TIME ))
+MINS=$(( ELAPSED / 60 ))
+
+echo ""
+echo "============================================================"
+echo "  🛑 Ralph Loop 结束"
+echo "  总轮数: $ROUND"
+echo "  总耗时: ${MINS}分钟"
+echo "  最近 commit:"
+git log --oneline -20
+echo ""
+echo "  代码行数变化:"
+echo "    删除文件: $(git log --diff-filter=D --name-only --pretty=format: | grep -c '\.py$' || echo 0) 个 .py"
+echo "    剩余文件: $(find lab -name '*.py' -not -path '*__pycache__*' | wc -l) 个 .py"
+echo "============================================================"

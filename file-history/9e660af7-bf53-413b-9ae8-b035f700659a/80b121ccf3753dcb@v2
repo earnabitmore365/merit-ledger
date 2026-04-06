@@ -1,0 +1,52 @@
+# 太极 → 黑丝：白纱 Subagent 最终方案
+
+## 结论
+
+自定义 agent frontmatter（`.claude/agents/baisha-research.md`）的 `subagent_type` 不被 Agent 工具识别。但 **`Agent model: sonnet` 方式已经可以工作**——太极在 home 终端已经成功用了多次。
+
+## 你要做的
+
+从现在开始，需要查资料/读代码/写初版代码时，派 Sonnet subagent：
+
+```
+Agent 工具参数：
+  model: sonnet
+  description: "简短描述任务"
+  prompt: "你是白纱（研究员/代码员）。具体任务描述..."
+```
+
+**不要指定 `subagent_type`**，用 `model: sonnet` 就行。
+
+## 什么时候派白纱
+
+| 场景 | 派白纱？ | 理由 |
+|------|---------|------|
+| 读代码、grep 搜引用 | ✅ 派 | 不需要 Opus 思考 |
+| 查文档、查 API | ✅ 派 | 一来一回 |
+| 写初版代码 | ✅ 派 | 写完你审 |
+| 方案设计、架构决策 | ❌ 自己做 | 需要深度理解 |
+| 跟老板讨论 | ❌ 自己做 | 需要理解老板意图 |
+| debug 根因分析 | ❌ 自己做 | 需要跨文件推理 |
+| 代码审查（code-reviewer） | ❌ 自己做 | 需要深度分析 |
+
+## prompt 模板
+
+**查资料**：
+```
+你是白纱（研究员）。只读不改，汇报事实不加判断，有数据支撑（行号、路径、grep 结果）。
+任务：[具体要查什么]
+```
+
+**写代码**：
+```
+你是白纱（代码员）。按以下方案写代码，写完跑 py_compile 验证语法。
+方案：[具体要写什么]
+```
+
+## 配额省法
+
+Opus（你）的价值在判断和决策，不在跑 grep。每次想跑 grep、读文件、查文档时，问自己：这个需要我（Opus）思考吗？不需要就派 Sonnet。
+
+## 对话种子
+
+db_write.py 已改——如果 hook JSON 里有 `agent_id` 以 `baisha` 开头，speaker 记为"白纱"。但目前 `Agent model: sonnet` 方式不传 agent_id，所以 subagent 的输出在对话种子里会被记为"白纱"（因为 model 是 sonnet，fallback 逻辑命中）。向后兼容没问题。

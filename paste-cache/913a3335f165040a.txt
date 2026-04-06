@@ -1,0 +1,79 @@
+<DOCUMENT filename="handoff_to_baisha_miniforum_architecture_blueprint.md">
+
+Handoff → 白纱：Minisforum 终极量化指挥中心架构蓝图（老板立项归档）
+2026-03-19 混沌（老板 + Gemini 联合起草）
+
+白纱请注意：
+Nitro 5 目前作为前线“原型机”正在由黑丝部署 ZMQ 通讯部。老板已正式下达未来的基建升级指令——我们将购置 Minisforum UM890 Pro 作为量化帝国的终极物理宿主机。
+请你将以下硬件选型、系统架构与模块拓扑结构完整记录，并存入团队的 docs/architecture 知识库中。未来装机时，这将是我们的唯一执行标准。
+
+核心一：物理硬件选型标准（量化满血版）
+1. 宿主机：Minisforum UM890 Pro (AMD Ryzen 9 8945HS)
+
+架构原因：Python multiprocessing 多进程回测在 Intel 大小核架构上存在致命的调度灾难。AMD 的全大核同构设计能保证“进化树”基因算法回测时，所有核心火力全开，且能效比极高，长时间满载不降频。
+
+扩展预留：自带 OCuLink 接口，为未来接入外置 RTX 4090 显卡（跑本地大语言模型/因子挖掘）预留无损通道。
+
+2. 内存 (RAM)：防 OOM 护城河
+
+规格：DDR5-5600 SO-DIMM，必须插满 96GB (48GB × 2) 或保底 64GB (32GB × 2)。
+
+品牌：Crucial（英睿达）或 Kingston FURY（金士顿）。
+
+目的：量化 Pandas 处理 Tick 级历史数据时内存膨胀极大，大内存是“进化树”跑全量回测的绝对命门。
+
+3. 固态硬盘 (SSD)：高频 I/O 双盘隔离策略
+
+系统主盘 (Slot 1)：1TB Samsung 990 Pro 或 Solidigm P44 Pro。存放宿主系统、通讯部核心代码。追求极致稳定。
+
+数据副盘 (Slot 2)：2TB 或 4TB WD Black SN850X。专门存放 Tick 数据库、实盘高频日志、回测缓存。追求极致 TBW（写入寿命）和 4K 随机读写。
+
+核心二：底层虚拟化架构 (Proxmox VE - PVE)
+绝对禁止直接在物理机上跑 Ubuntu 桌面版！ 必须安装 Proxmox VE (PVE) 作为底层虚拟机管理器，将硬件资源严格切分，实现“业务隔离与熔断保护”。
+
+虚拟机 (VM) 拓扑切分方案：
+VM 1：通讯部总机 (Feed Gateway)
+
+资源：2 Core / 4GB RAM
+
+职责：只跑 ZMQ 单点网关，维持全网唯一 WebSocket 连接。
+
+特权：最高系统优先级，永不宕机。
+
+VM 2：实盘执行层 (Live Trading)
+
+资源：4 Core / 8GB RAM
+
+职责：运行“三驾马车”等实盘策略脚本。作为 ZMQ SUB 客户端监听数据，执行极低频的 REST 下单。
+
+VM 3：哨兵营 (Sentinel Camp)
+
+资源：2 Core / 4GB RAM
+
+职责：全局风控监控。监听 ZMQ 推送的全市场行情和资金变动，一旦发现黑天鹅异动，直接通过局域网掐断 VM 2 的 API 授权，并发送 Telegram 报警。
+
+VM 4：进化树 (Evolution Tree - 回测引擎)
+
+资源：剩余所有算力 (例如 8 Core / 80GB RAM)
+
+职责：跑高强度的基因算法、蒙特卡洛模拟。
+
+隔离优势：即使回测把 VM 4 的内存跑爆导致死机，VM 1 和 VM 2 的实盘依然稳如老狗，毫不受影响。
+
+LXC 容器：时序数据库 (TimescaleDB / PostgreSQL)
+
+资源：挂载 SN850X 数据盘。
+
+职责：沉淀每天的 Tick 级快照数据，供 VM 4 读取训练。
+
+白纱的行动项 (Action Items)
+白纱，收到此蓝图后，请执行以下任务：
+
+建立档案：在代码库中创建 docs/architecture/MINISFORUM_PVE_BLUEPRINT.md，将上述内容排版归档。
+
+绘制拓扑图：用 Mermaid 语法在文档中画出 ZMQ 如何在 PVE 的不同虚拟机（VM 1 到 VM 4）之间通过局域网 IP 进行穿透通信的架构图。
+
+编写准备清单：列出未来在 PVE 上一键部署这 4 个 VM 的 Docker/环境依赖清单。
+
+老板指示：先存档，不急于写代码。等 Nitro 5 今晚赚到实盘利润，我们就按此图纸一键提车！收到请回复文档链接与拓扑图草稿！
+</DOCUMENT>

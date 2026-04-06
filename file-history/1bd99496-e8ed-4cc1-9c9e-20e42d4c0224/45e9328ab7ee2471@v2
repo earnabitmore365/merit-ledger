@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""
+combined_backtest.py — 21 策略并行系统联合回测验证
+
+目的：用历史 K 线验证 Phase 1 代码的正确性：
+1. KlineDispatcher 聚合 1m → 5m/15m/30m/1h 正确
+2. StrategyRunner × 21 都能产出信号
+3. 路由映射（coin×interval → strategies）覆盖完整
+4. Mirror 翻转不报错
+5. indicator_cache 双 namespace 正常工作
+
+用法：
+    cd lab && python3 combined_backtest.py [--bars 1000]
+
+不走交易所，不走 ZMQ，纯本地回放。
+
+@see lab/team_config.py — 21 策略配置
+@see lab/kline_dispatcher.py — K线聚合
+@see lab/strategy_runner.py — 策略运行
+"""
+
+import os
+import sys
+import json
+import time
+import logging
+import argparse
+from collections import defaultdict
+
+# 确保 lab/ 和 lab/src/ 在 sys.path
+_lab_dir = os.path.dirname(os.path.abspath(__file__))
+if _lab_dir not in sys.path:
+    sys.path.insert(0, _lab_dir)
+_src_dir = os.path.join(_lab_dir, 'src')
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
+from team_config import TEAM, get_needed_intervals, get_strategy_map
+from kline_dispatcher import KlineDispatcher
+from strategy_runner import StrategyRunner
+
+# ==================== 日志 ====================
+
+logging.basicConfig(
+    level=logging.WARNING,  # 只显示警告和错误，减少噪音
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%H:%M:%S',
+)
+logger = logging.getLogger('combined_backtest')
+logger.setLevel(logging.INFO)
+
+# ==================== 数据加载 ====================
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), 'src', 'backtest', 'data', 'historical')
+
+
+def load_1m_klines(coin, count=1000):
+    """加载本地 1m K 线（最后 count 根）"""
+    path = os.path.join(DATA_DIR, coin, '1m.json')
+    if not os.path.exists(path):
+        logger.error(f"找不到 {coin}/1m.json")
+        return []
+
+    with open(path) as f:
+        data = json.load(f)
+
+    # 取最后 count 根
+    return data[-count:]
+
+
+def load_interval_klines(coin, interval, count=250):
+    """加载本地指定周期 K 线（预填窗口用）"""
+    path = os.path.join(DATA_DIR, coin, f'{interval}.json')
+    if not os.path.exists(path):
+        return []
+
+    with open(path) as f:
+        data = json.load(f)
+
+    return data[-count:]
+
+
+# ==================== Mock Adapter ====================
+
+class MockAdapter:
+    """模拟 Adapter，只提供 get_klines 供 KlineDispatcher.startup() 用"""
+
+    def get_klines(self, coin, interval, limit=250):
+        return load_interval_klines(coin, interval, limit)
+
+
+# ==================== 主逻辑 ====================
+
+def run_backtest(n_bars=1000):
+    """运行联合回测"""
+    logger.info("=" * 60)
+    logger.info("21 策略并行系统 — 联合回测验证")
+    logger.info(f"回放 {n_bars} 根 1m K 线")
+    logger.info("=" * 60)
+
+    # 1. 创建 StrategyRunner × 21
+    runners = []
+    for cfg in TEAM:
+        try:
+            runner = StrategyRunner(cfg, None)  # adapter=None，回测不需要
+            runners.append(runner)
+            logger.info(f"  ✅ 加载: {runner.id} (mirror={cfg.mirror})")
+        except Exception as e:
+            logger.error(f"  ❌ 加载失败: {cfg.coin}_{cfg.strategy}_{cfg.interval}: {e}")
+
+    if not runners:
+        logger.error("没有策略加载成功，退出")
+        return
+
+    # 2. 统计收集器
+    signals = defaultdict(lambda: defaultdict(int))  # {strategy_id: {signal: count}}
+    bar_counts = defaultdict(int)  # {(coin, interval): count}
+    errors = defaultdict(list)  # {strategy_id: [error_msg]}
+
+    # 3. 回调函数：K 线到了，路由到对应 runners
+    strategy_map = {}
+    for r in runners:
+        key = (r.coin, r.interval)
+        strategy_map.setdefault(key, []).append(r)
+
+    def on_bar(coin, interval, bar, klines):
+        """KlineDispatcher 回调"""
+        bar_counts[(coin, interval)] += 1
+        key = (coin, interval)
+        for runner in strategy_map.get(key, []):
+            try:
+                sig = runner.on_bar(bar, klines)
+                if sig:
+                    signals[runner.id][sig] += 1
+                else:
+                    signals[runner.id]['None'] += 1
+            except Exception as e:
+                errors[runner.id].append(str(e))
+                signals[runner.id]['ERROR'] += 1
+
+    # 4. 创建 KlineDispatcher
+    dispatcher = KlineDispatcher(on_bar_callback=on_bar)
+
+    # 5. 预加载历史（用 MockAdapter）
+    logger.info("\n预加载历史 K 线...")
+    adapter = MockAdapter()
+    dispatcher.startup(adapter)
+
+    # 6. 加载 1m 数据并逐根回放
+    needed = get_needed_intervals()
+    all_coins = sorted(needed.keys())
+
+    # 找出所有币种 1m 数据的公共时间范围
+    coin_bars = {}
+    for coin in all_coins:
+        bars = load_1m_klines(coin, n_bars)
+        if bars:
+            coin_bars[coin] = bars
+            logger.info(f"  {coin}/1m: {len(bars)} 根")
+        else:
+            logger.warning(f"  {coin}/1m: 无数据!")
+
+    if not coin_bars:
+        logger.error("没有可用的 K 线数据")
+        return
+
+    # 7. 按时间戳合并回放（模拟实盘：同一分钟各币种 K 线同时到达）
+    logger.info(f"\n开始回放 {n_bars} 根 K 线...")
+    start_time = time.time()
+
+    # 简单方式：逐根喂，每个币种独立
+    total_bars = 0
+    for coin, bars in coin_bars.items():
+        for bar in bars:
+            dispatcher.on_1m_bar(coin, bar)
+            total_bars += 1
+
+    elapsed = time.time() - start_time
+
+    # 8. 输出结果
+    logger.info("\n" + "=" * 60)
+    logger.info("回测结果")
+    logger.info("=" * 60)
+
+    logger.info(f"\n⏱️  总耗时: {elapsed:.1f}s | {total_bars} 根 1m K 线 | "
+                f"{total_bars / elapsed:.0f} bars/s")
+
+    # K 线分发统计
+    logger.info(f"\n📊 K 线分发统计:")
+    for (coin, iv), cnt in sorted(bar_counts.items()):
+        logger.info(f"  {coin}/{iv}: {cnt} 根")
+
+    # 策略信号统计
+    logger.info(f"\n📈 策略信号统计 ({len(runners)} 个策略):")
+    no_signal = []
+    has_error = []
+    for runner in runners:
+        sid = runner.id
+        sig_dist = dict(signals[sid])
+        total_sigs = sum(sig_dist.values())
+        buy_count = sig_dist.get('BUY', 0)
+        sell_count = sig_dist.get('SELL', 0)
+        hold_count = sig_dist.get('HOLD', 0)
+        none_count = sig_dist.get('None', 0)
+        err_count = sig_dist.get('ERROR', 0)
+
+        status = "✅" if (buy_count + sell_count) > 0 else "⚠️"
+        if err_count > 0:
+            status = "❌"
+            has_error.append(sid)
+
+        logger.info(f"  {status} {sid}: "
+                     f"BUY={buy_count} SELL={sell_count} HOLD={hold_count} "
+                     f"None={none_count} ERR={err_count} (total={total_sigs})")
+
+        if buy_count + sell_count == 0 and err_count == 0:
+            no_signal.append(sid)
+
+    # 错误详情
+    if errors:
+        logger.info(f"\n❌ 错误详情:")
+        for sid, errs in errors.items():
+            unique_errs = set(errs)
+            for e in unique_errs:
+                count = errs.count(e)
+                logger.info(f"  {sid}: {e} (×{count})")
+
+    # 覆盖检查
+    logger.info(f"\n🔍 覆盖检查:")
+    expected_keys = set()
+    for r in runners:
+        expected_keys.add((r.coin, r.interval))
+    delivered_keys = set(bar_counts.keys())
+    missing = expected_keys - delivered_keys
+    if missing:
+        logger.warning(f"  ⚠️ 缺失: {missing}")
+    else:
+        logger.info(f"  ✅ 所有 {len(expected_keys)} 个 coin×interval 组合都有 K 线分发")
+
+    # 总结
+    logger.info(f"\n📋 总结:")
+    logger.info(f"  策略总数: {len(runners)}")
+    logger.info(f"  有交易信号: {len(runners) - len(no_signal) - len(has_error)}")
+    logger.info(f"  无交易信号: {len(no_signal)} {no_signal if no_signal else ''}")
+    logger.info(f"  有错误: {len(has_error)} {has_error if has_error else ''}")
+
+    if not has_error and not missing:
+        logger.info(f"\n✅ 联合回测通过 — K 线分发正确，策略信号正常")
+    else:
+        logger.warning(f"\n⚠️ 联合回测有问题，需要排查")
+
+    return {
+        'total_bars': total_bars,
+        'elapsed': elapsed,
+        'runners': len(runners),
+        'signals': dict(signals),
+        'bar_counts': dict(bar_counts),
+        'errors': dict(errors),
+        'no_signal': no_signal,
+        'has_error': has_error,
+        'missing': missing,
+    }
+
+
+# ==================== 入口 ====================
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='21策略并行系统联合回测')
+    parser.add_argument('--bars', type=int, default=1000,
+                        help='回放K线数量（默认1000，约16小时）')
+    args = parser.parse_args()
+
+    run_backtest(args.bars)

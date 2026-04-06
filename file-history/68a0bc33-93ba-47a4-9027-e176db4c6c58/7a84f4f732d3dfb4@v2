@@ -1,0 +1,67 @@
+# 方案：初熊/熊 Regime 改 Non-Mirror 模式
+
+## Context
+
+比赛实盘32小时不开单。根因：RegimeBridge 的 REGIME_MAP 设计矛盾——初熊/熊设为 `mode='mirror'` + `filter='SELL_ONLY'`，但 mirror 翻转K线后，mean_reversion 看到的是"上涨行情"，只产 BUY 信号，全被 SELL_ONLY 过滤 → 永远 HOLD。
+
+老板指示：改成 non-mirror，让策略直接看真实K线，在初熊下反弹超均线时产出 SELL 信号。
+
+## 改动
+
+### 唯一改动：`lab/bitmex_race.py` — RegimeBridge.REGIME_MAP
+
+```python
+# 修改前
+REGIME_MAP = {
+    '牛':   {'mode': 'mirror', 'filter': 'BUY_ONLY'},
+    '初牛': {'mode': 'mirror', 'filter': 'BUY_ONLY'},
+    '熊':   {'mode': 'mirror', 'filter': 'SELL_ONLY'},    # ❌ mirror+SELL_ONLY矛盾
+    '初熊': {'mode': 'mirror', 'filter': 'SELL_ONLY'},    # ❌ mirror+SELL_ONLY矛盾
+    '盘整': {'mode': 'normal', 'filter': None},
+}
+
+# 修改后
+REGIME_MAP = {
+    '牛':   {'mode': 'mirror', 'filter': 'BUY_ONLY'},     # 不变
+    '初牛': {'mode': 'mirror', 'filter': 'BUY_ONLY'},     # 不变
+    '熊':   {'mode': 'normal', 'filter': 'SELL_ONLY'},    # ✅ normal：看真实K线，产SELL
+    '初熊': {'mode': 'normal', 'filter': 'SELL_ONLY'},    # ✅ normal：看真实K线，产SELL
+    '盘整': {'mode': 'normal', 'filter': None},            # 不变
+}
+```
+
+### 逻辑说明
+
+| Regime | 模式 | 策略行为 | 预期信号 |
+|--------|------|---------|---------|
+| 牛/初牛 | mirror（翻转K线）| 下跌看成上涨，抄底=做多 | BUY ✅ |
+| **熊/初熊** | **normal（真实K线）** | **反弹超均线=做空机会** | **SELL ✅** |
+| 盘整 | normal（真实K线）| 自由双向 | BUY/SELL ✅ |
+
+### 阈值问题（可选，第二步）
+
+白纱提到当前初熊低波动可能触不到阈值。当前值：
+- ETH: ±0.5%（buy=0.995, sell=1.005）
+- SOL/XRP: ±0.7%（buy=0.993, sell=1.007）
+
+如果改了 normal 模式后仍然信号太少，可以考虑收紧 sell_threshold（比如 1.003），但这个**等改了模式、看实际信号频率后再决定**，不急着一起改。
+
+## 影响范围
+
+- **只改 REGIME_MAP 一行字典** — 不动策略代码、不动 system.py、不动 Gateway
+- 切换逻辑已有现成代码（`bridge.mode != 'mirror'` → 用 `normal_strategy`），无需新增
+- 动态阈值代码用 `hasattr(strategy, '_inner')` 判断 mirror/normal，已兼容
+
+## 部署步骤
+
+1. 改 `lab/bitmex_race.py` REGIME_MAP
+2. py_compile 验证语法
+3. SCP 部署到 Nitro（Tailscale 100.88.115.98）
+4. 重启3个策略进程（SOL/ETH/XRP），Gateway 不动
+5. 看日志确认 regime=初熊 时 mode=normal + 有 SELL 信号产出
+
+## 验证
+
+1. 重启后看日志：`[Regime] 切换完成: 初熊 mode=normal filter=SELL_ONLY`
+2. 等几分钟看策略是否产出 SELL 信号（或至少不再全是 BUY 被拦截）
+3. 如果 SELL 频率仍低 → 再考虑调阈值

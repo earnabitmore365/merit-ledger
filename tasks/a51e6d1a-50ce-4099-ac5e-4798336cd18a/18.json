@@ -1,0 +1,9 @@
+{
+  "id": "18",
+  "subject": "backtest.py 加 margin_mode + _calc_raw_pnl + 改费用函数",
+  "description": "按外部顾问指令：1) __init__ 加 margin_mode 2) 新增 _calc_raw_pnl 统一方法 3) 替换 8 处 PnL 计算 4) 改 _calc_trading_costs 支持 inverse 5) 调用处传 entry_p/exit_p",
+  "activeForm": "改 backtest.py",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,37 @@
+ 验证通过，你们的排查非常严谨、证据链完整。我之前确实判断失误：我把“inner 没吃到翻转数据”排在最高概率，其实是错的。
+“漏翻/多翻”也是错的。
+“不是 mirror 开的单”也是错的。
+唯一说对的就是 max_price 每批都在变（漂移），这确实是直接导致“乱开单”的罪魁祸首。
+
+现在把问题彻底说透（包括为什么你们老板说“实盘 mirror 这件事本身就是多余的”）：1. 代码逻辑本身没有 bug你们已经用日志 + 源码路径 + grep 全部证实：init_cache(mirrored) 
+generate_signal(coin, mirrored) 
+mean_reversion 里 klines[-1] 和 get_indicator 都走的是翻转后的数据 
+_flip_signal 只调用一次，system / bitmex_race 完全干净 
+
+所以“翻转世界”确实被正确构建了，信号也只反转了一次。2. 真正致命的问题 = max_price 漂移（你们已经关掉的原因）每调用一次 generate_signal，klines 通常是最近 200 根（或 1000 根），max_price = max(high) 就会变：价格新高 → max_price ↑ → 前面所有历史 K 线全部向下平移
+价格回落 → max_price ↓ → 前面所有历史 K 线又向上平移
+
+这等于每根新 K 线都在给整个坐标系做一次全局位移。
+SMA、均值回归的“均线”位置会跟着乱跳，指标完全失真 → 信号随机 → 就是你们看到的“正确位置开错单”。这不是代码 bug，是 mirror 在实盘的天然缺陷（回测可以用全局历史 max_price，实盘做不到）。3. 更深一层：即使把 max_price 固定成锚点（anchor_price），这个 mean_reversion_mirror 依然是多余的我现在才看到 inner 是 mean_reversion，这才是关键。数学上证明一下（超级简单）：真实世界：price > mean → mean_reversion 发 SELL
+price < mean → mean_reversion 发 BUY
+
+翻转世界（mirrored_price = anchor - real_price）：mirrored_mean = anchor - real_mean
+mirrored_deviation = mirrored_price - mirrored_mean = -(real_deviation)
+
+所以：real price > mean（real_dev > 0）
+→ mirrored_dev < 0 → inner 认为“低于均线” → 发 BUY
+→ flip 后变成 SELL（与原策略完全一致）
+real price < mean（real_dev < 0）
+→ mirrored_dev > 0 → inner 认为“高于均线” → 发 SELL
+→ flip 后变成 BUY（与原策略完全一致）
+
+结论：mean_reversion + mirror = 原策略的精确拷贝信号 100% 相同，只是中间绕了个大弯（还多了漂移风险）。这才是你们老板那句“实盘翻转K线+翻转信号这件事本身就是多余的”的根本原因。（如果 inner 是趋势策略、突破策略、动量策略，那 mirror 才真的会变成“反向版本”，有对冲价值。但 mean_reversion 天生对称，mirror 纯属脱裤子放屁。）总结 & 建议已经关掉是对的，继续跑 mean_reversion 原版就好。
+如果以后还想做“镜像对冲”：必须换成趋势/动量类 inner 策略
+必须用固定锚点（建议 anchor_price = 10000 或历史全局 max×1.2，持久化存盘）
+或者直接写一个 ReverseStrategy（不翻数据，只在信号层反转 + 改仓位方向），但白纱说过“简单反转信号是错的”，所以要慎用。
+
+mean_reversion 在趋势市（现在 ETH 明显在拉升）本来就容易被反复鞭打，浮亏正常，不用太焦虑。
+
+你们排查得这么细，我服了 
+现在问题彻底清楚了：不是代码写错，是 mean_reversion + mirror 这个组合本身在实盘不成立。要不要我帮你们把 MirrorStrategy 彻底重构一个通用版（带固定锚点 + 自动检测 inner 类型跳过 mean_reversion）？或者直接删掉就行？你们决定。
+

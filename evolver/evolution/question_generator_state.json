@@ -1,0 +1,10 @@
+{
+  "lastAskedAt": "2026-03-27T08:25:53.627Z",
+  "recentQuestions": [
+    "Capability gap detected in agent environment: **TOOLRESULT**: { \"results\": [], \"disabled\": true, \"unavailable\": true, \"error\": \"Local embeddings unavailable.\\nReason: optional dependency node-llam -- How can this be addressed or what alternative approaches exist?",
+    "User requested a feature that may benefit from community solutions: **USER**: Implement the following plan: # Plan: 实盘监控命令 monitor.command ## Context 老板要一个 `.command` 文件（macOS 双击即可运行的终端脚本），远程监控 Nitro 上两个实盘进程的状态。包括 regi -- Are there existing implementations or best practices for this?",
+    "User requested a feature that may benefit from community solutions: **USER**: Implement the following plan: # 计划：三驾马车实盘上线（v2.1 mirror + TTP） ## Context 交易系统 4 小时零交易，根因是 mean_reversion ±5% 阈值在 1m 上不可能触发。经全量回测验证，v2.1 SMA -- Are there existing implementations or best practices for this?",
+    "Agent evolution has reached saturation after exhausting genes: [gene_gep_optimize_prompt_and_assets, gene_auto_53538cc4]. What new evolution directions, automation patterns, or capability genes would be most valuable?",
+    "Agent has failed 8 consecutive evolution cycles (last gene: gene_auto_53538cc4). The current approach is exhausted. What alternative strategies or environmental fixes should be tried?"
+  ]
+}

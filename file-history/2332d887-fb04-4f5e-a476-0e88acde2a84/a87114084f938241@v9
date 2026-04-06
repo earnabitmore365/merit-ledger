@@ -1,0 +1,56 @@
+# Plan: ARCHITECTURE.md seed_v3 残留清理 + wuji-verify REGISTRY 维护
+
+## Context
+
+代码里的 seed_v3 引用已在上一个 mission 清零，但 ARCHITECTURE.md 有 14 处 seed_v3 残留未同步。wuji-verify 跑出 ⏳ 文档项时应该当场解决，不该留遗留。
+
+同时 wuji-verify REGISTRY 刚更新了 backtest/research 框架，需要确认改动正确。
+
+## 修改文件
+
+| 文件 | 操作 |
+|------|------|
+| `ARCHITECTURE.md` | replace_all: seed_v3.db → seed_signal.db, seed_v3_ttp.db → seed_ttp_close.db |
+| `ARCHITECTURE.md` | 章节标题 7.1 更新 |
+
+## 具体改动
+
+ARCHITECTURE.md 14 处 seed_v3 残留（grep 确认）：
+
+1. 行 39：目录 `7.1 seed_v3.db` → `7.1 seed_signal.db`
+2. 行 78：`generate_seed.py（写 seed_v3.db）` → `（写 seed_signal.db）`
+3. 行 164：`seed_v3.db` → `seed_signal.db`
+4. 行 165：`seed_v3_ttp.db` → `seed_ttp_close.db`
+5. 行 331：`写入 seed_v3.db` → `写入 seed_signal.db`
+6. 行 359：两处 seed_v3 → seed_signal / seed_ttp_close
+7. 行 780-781：同上
+8. 行 804：同上
+9. 行 918：同上
+10. 行 986-988：同上
+11. 行 998-1000：章节标题和描述
+12. 行 1167：同上
+
+用 replace_all 批量替换：
+- `seed_v3.db` → `seed_signal.db`
+- `seed_v3_ttp.db` → `seed_ttp_close.db`
+
+## 验证
+
+1. `grep seed_v3 ARCHITECTURE.md` → 0 结果
+2. `python3 wuji-verify.py ARCHITECTURE.md` → 确认文档项不再 ⏳
+3. 对改过的核心文件重跑 wuji-verify 确认文档项变 ✅
+
+## 执行顺序
+
+1. ARCHITECTURE.md 批量替换
+2. grep 确认零残留
+3. wuji-verify 重跑验证
+4. CHANGELOG 更新
+
+## 自审
+
+- **完整性**：✅ 14 处 seed_v3 残留全列出（grep 确认），无 seed_v3_ttp_highlow 残留（grep 0结果）
+- **真实性**：✅ 行号和内容来自 grep 实际输出
+- **有效性**：✅ replace_all 批量替换，最简方案
+- **第一性原理**：✅ 代码改了文档必须同步，根因是之前改代码没同步文档
+- **遗留**：无

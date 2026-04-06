@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Gateway 查询工具 — MCP Server 通过 SSH 调用此脚本
+
+用法:
+    python3 gw_query.py BALANCE
+    python3 gw_query.py POSITIONS
+    python3 gw_query.py PRICE SOL
+    python3 gw_query.py INSTRUMENT ETH
+    python3 gw_query.py ORDERBOOK SOL
+    python3 gw_query.py EXECUTIONS 10
+    python3 gw_query.py KLINES SOL 1m
+
+@see CHECKPOINT.md#106 — Gateway MCP 扩展
+"""
+import sys
+import json
+import zmq
+
+REP_PORT = 5556
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "用法: gw_query.py COMMAND [args...]"}))
+        sys.exit(1)
+
+    cmd = ' '.join(sys.argv[1:])
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.REQ)
+    sock.setsockopt(zmq.RCVTIMEO, 5000)  # 5 秒超时
+    sock.connect(f"tcp://127.0.0.1:{REP_PORT}")
+    sock.send_string(cmd)
+
+    try:
+        reply = sock.recv_string()
+        print(reply)
+    except zmq.Again:
+        print(json.dumps({"error": "Gateway 无响应（超时 5 秒）"}))
+        sys.exit(1)
+    finally:
+        sock.close()
+        ctx.term()
+
+
+if __name__ == '__main__':
+    main()

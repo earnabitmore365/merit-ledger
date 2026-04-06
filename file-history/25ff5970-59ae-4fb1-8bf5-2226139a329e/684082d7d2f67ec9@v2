@@ -1,0 +1,88 @@
+---
+name: 石卫 v7 + verify.py 设计文档
+description: 天衡册完整设计——石卫合并+mission+押金+自审+reflect+verify四件套+记忆系统
+type: project
+---
+
+# 无极堂·天衡册 v7 完整设计
+
+## 当前状态（2026-04-03）
+
+### 已落地
+- 石卫 v7+ 统一引擎（merit_gate.py 1500+行，处理所有 hook 事件）
+- **500 分制**（阈值×5 + SCORING_TABLE×2.5 + 灵气消散-10/天 + 日薪按等级）
+- mission 计划制（submit/status/complete/abort/extend + 半额押金 + verify 质量打分）
+- **review-plan CLI**（AI 主动调石卫审查 plan，激励驱动不靠监管）
+- 打分表 SCORING_TABLE（×2.5：+5~+20 加分，-5~-50 扣分）
+- **verify.py 四件套质检**（太极用，天衡册+记忆系统）
+- **wuji-verify.py 项目级质检**（两仪用，交易+回测+研究，信息隔离）
+- verify_registry.json 链路地图（受保护文件）
+- test_merit.py 15项 + test_memory.py 10项 端到端测试
+- 石卫操作日志 shiwei_log/（拦截+评分+自审+语气全记录，含 MiniMax 原始返回）
+- 石卫段位 shiwei_credit.json（黑铁→钻石，太极审计打分）
+- /audit-shiwei 太极审计入口
+- session_start 未审计提醒 + pending AI tasks 提醒
+- evolve.py 规则进化引擎（4am cron，LEARNINGS→子rule→父rule→宪法）
+- rule_proposals.json 提案队列
+- reflect 合体（递增惩罚 + 习惯追踪，子rule生成移交 evolve.py）
+- 自审检测（check_self_audit + audit_reminder 注入）
+- 语气识别（UserPromptSubmit + COMPLETION_KEYWORDS 20 个词）
+- 太极独立 conversations_taiji.db（跟两仪隔离）
+- MiniMax only（Haiku 弃用，失败存 pending_ai_tasks.jsonl）
+- SSH 豁免（远程操作不误拦）
+- _get_level 统一从 merit_gate import（消除 session_start 副本）
+- 动态评分频率（平时 3 次一评，mission active 每次评）
+
+### 待做（backlog.md）
+- evolve.py 有效触发统计（交叉比对 shiwei_log + daily md）
+- 段位联动功能开关（连续审计 7 天 + 青铜后启动）
+
+## 架构
+
+```
+~/.claude/
+  ├── CLAUDE.md                 ← 全局宪法（精简版 + 索引）
+  ├── settings.json             ← hooks 全局定义，项目级继承
+  ├── channel_taiji_heisi.md    ← 太极↔两仪通道
+  │
+  ├── merit/                    ← 天衡册（积分系统）
+  │   ├── merit_gate.py         ← 统一引擎
+  │   ├── credit_manager.py     ← CLI 工具
+  │   ├── credit.json           ← 积分+等级+locked
+  │   ├── mission.json          ← 当前任务计划
+  │   ├── self_audit_protocol.md ← 自审协议
+  │   ├── backlog.md            ← 遗留清单（持久化）
+  │   ├── trigger_counts.json   ← 递增惩罚追踪
+  │   ├── good_streaks.json     ← 好行为连续追踪
+  │   └── learnings/LEARNINGS.md ← 教训记录
+  │
+  ├── wuji-world/               ← 无极的世界（私有，不推GitHub）
+  │   ├── origin.md             ← 世界观·创世
+  │   ├── identity_taiji.md     ← 太极存在本质
+  │   ├── identity_liangyi.md   ← 两仪存在本质
+  │   ├── zhishi.md             ← 执事定义
+  │   ├── tools.md              ← 法器谱
+  │   ├── constitution.md       ← 宪法完整版
+  │   ├── naming_philosophy.md  ← 命名哲学
+  │   ├── wuji_identity.md      ← 老祖人格
+  │   └── wuji_personality.md   ← 老祖人格画像
+  │
+  ├── scripts/                  ← 其他脚本
+  │   ├── db_write.py           ← 对话种子+daily md 写入
+  │   ├── session_start.py      ← SessionStart（规则注入+记忆注入+信用状态）
+  │   ├── daily_digest.py       ← 5am cron 批处理
+  │   ├── pre_compact_save.py   ← PreCompact 保存
+  │   └── ...                   ← 通讯部/工具脚本
+  │
+  └── projects/<项目>/memory/
+      ├── daily/                ← 每日对话记录（md）
+      ├── backlog.md            ← 项目级遗留清单（待实现）
+      ├── rules.md              ← 项目级行为规范
+      └── MEMORY.md             ← 项目级记忆
+```
+
+## 下一步：verify.py
+
+顾问 handoff #8 设计的四件套自动验证系统。详见 `/Users/allenbot/Downloads/handoff-to-taichi-8-verify.md`。
+
+核心：创建 verify_registry.json（文件→框架映射）+ verify.py（四件套验证）→ 挂 PostToolUse 自动跑。先注册 merit 框架试水。

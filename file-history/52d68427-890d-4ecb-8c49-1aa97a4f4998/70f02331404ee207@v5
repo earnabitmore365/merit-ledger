@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""
+Regime Router — 全地形系统（Grok + Gemini 联合方案 2026-03-17）
+
+单实例、双引擎、无缝切换：
+- Normal Pipeline: 正常K线 → 均值回归信号（盘整行情）
+- Flipped Pipeline: 固定max_price翻转K线 → 趋势跟踪信号（单边行情）
+- RegimeDetector 决定用哪套信号
+- 装甲风控：动态ATR熔断 + 30分钟冷却锁
+
+@see lab/README.md#architecture
+"""
+
+import time
+import logging
+import numpy as np
+from typing import Dict, List, Optional
+
+logger = logging.getLogger('regime_router')
+
+
+class RegimeRouter:
+    """智能离合器：根据 regime 选 normal 或 flipped 信号"""
+
+    def __init__(self, strategy, coin: str, interval: str,
+                 fixed_max_prices: Dict[str, float],
+                 regime_detector,
+                 cooldown_sec: int = 1800,
+                 atr_percentile: float = 90.0,
+                 atr_lookback_bars: int = 672):
+        """
+        Args:
+            strategy: 原始策略实例
+            coin: 交易币种
+            interval: 交易周期
+            fixed_max_prices: {coin: fixed_max_price} 从 coin_max_price.json 读取
+            regime_detector: RegimeDetector 实例
+            cooldown_sec: 切换冷却时间（秒），默认30分钟
+            atr_percentile: ATR 熔断百分位，默认90th
+            atr_lookback_bars: ATR 历史保留条数，默认14天（30m周期=672根）
+        """
+        self._strategy = strategy
+        self._coin = coin
+        self._interval = interval
+        self._fixed_max_price = fixed_max_prices.get(coin)
+        if self._fixed_max_price is None:
+            raise ValueError(f"coin_max_price.json 中没有 {coin} 的配置")
+
+        self._detector = regime_detector
+        self._current_mode = 'normal'
+        self._last_switch_time = 0
+        self._cooldown_sec = cooldown_sec
+        self._atr_history = []
+        self._atr_percentile = atr_percentile
+        self._atr_lookback_bars = atr_lookback_bars
+        self._switch_count = 0
+
+        self._warmed_up = False
+
+        logger.info(
+            f"RegimeRouter 初始化: {coin}/{interval} "
+            f"fixed_max_price=${self._fixed_max_price:.4f} "
+            f"冷却={cooldown_sec}s ATR百分位={atr_percentile}"
+        )
+
+    def warmup(self, klines: List[Dict]):
+        """用历史K线预热 RegimeDetector（建立摆动追踪状态）"""
+        if self._warmed_up:
+            return
+        agg = self._aggregate_to_1h(klines) if self._interval in ('5m', '15m', '30m') else klines
+        for i, bar in enumerate(agg):
+            self._detector.update(
+                idx=i,
+                high=bar['high'], low=bar['low'],
+                close=bar['close'], volume=bar['volume'],
+                time_ms=bar.get('time', 0)
+            )
+        self._warmed_up = True
+        logger.info(f"[预热] 喂了 {len(agg)} 根聚合K线，当前 regime={self._detector.regime}")
+
+    @property
+    def name(self):
+        return f"regime_router[{self._strategy.name}]"
+
+    @name.setter
+    def name(self, value):
+        pass
+
+    @property
+    def current_idx(self):
+        return getattr(self._strategy, 'current_idx', 0)
+
+    @current_idx.setter
+    def current_idx(self, value):
+        self._strategy.current_idx = value
+
+    def flip_klines(self, klines: List[Dict]) -> List[Dict]:
+        """用固定 max_price 翻转K线（坐标系绝对静止）"""
+        mp = self._fixed_max_price
+        flipped = []
+        for k in klines:
+            m = dict(k)
+            m['open'] = mp - k['open']
+            m['close'] = mp - k['close']
+            m['high'] = mp - k['low']
+            m['low'] = mp - k['high']
+            flipped.append(m)
+        return flipped
+
+    def _should_fuse(self) -> bool:
+        """熔断检查：当前ATR超过历史动态百分位"""
+        if len(self._atr_history) < 48:  # 至少1天数据才启用
+            return False
+        threshold = np.percentile(self._atr_history, self._atr_percentile)
+        current_atr = self._atr_history[-1]
+        return current_atr > threshold
+
+    def _in_cooldown(self) -> bool:
+        """30分钟冷却锁"""
+        return (time.time() - self._last_switch_time) < self._cooldown_sec
+
+    def _determine_mode(self, klines: list) -> str:
+        """ADX(14) 快速判断趋势 vs 盘整（v2.0 标准版，Grok+Gemini+白纱联合拍板）
+
+        ADX > 30 → flipped（强趋势）
+        ADX < 20 → normal（明确盘整）
+        20-30 → 缓冲区，保持上一状态（防抖）
+        """
+        from core.indicator_cache import get_indicator, set_active_namespace
+        set_active_namespace('normal')
+
+        try:
+            adx_data = get_indicator('adx', period=14)
+            if adx_data is None:
+                return self._current_mode
+            # adx_data 可能是 dict{'adx':[], 'plus_di':[], 'minus_di':[]} 或 list
+            if isinstance(adx_data, dict):
+                adx_arr = adx_data.get('adx', [])
+            else:
+                adx_arr = adx_data
+            if not adx_arr or len(adx_arr) < 14:
+                return self._current_mode
+            adx_val = float(adx_arr[-1])
+        except Exception:
+            return self._current_mode
+
+        if adx_val > 30:
+            return 'flipped'
+        elif adx_val < 20:
+            return 'normal'
+        else:
+            return self._current_mode  # 20-30 缓冲区：保持惯性
+
+    def update_regime(self, klines: List[Dict]) -> str:
+        """更新 regime 检测（补丁2：小周期聚合到1h再喂）
+
+        Returns:
+            当前 regime 字符串
+        """
+        if self._interval in ('15m', '30m', '5m'):
+            # 聚合到 1h 再喂 detector（避免假信号）
+            agg = self._aggregate_to_1h(klines)
+            if agg:
+                for bar in agg[-3:]:  # 只喂最近几根聚合后的
+                    self._detector.update(
+                        idx=0,
+                        high=bar['high'], low=bar['low'],
+                        close=bar['close'], volume=bar['volume'],
+                        time_ms=bar.get('time', 0)
+                    )
+        else:
+            # 1h 及以上直接喂最新一根
+            latest = klines[-1]
+            self._detector.update(
+                idx=len(klines) - 1,
+                high=latest['high'], low=latest['low'],
+                close=latest['close'], volume=latest['volume'],
+                time_ms=latest.get('time', 0)
+            )
+        return self._detector.regime
+
+    def _aggregate_to_1h(self, klines: List[Dict]) -> List[Dict]:
+        """将小周期K线聚合到1h"""
+        interval_minutes = {'5m': 5, '15m': 15, '30m': 30}.get(self._interval, 30)
+        bars_per_hour = 60 // interval_minutes
+        if len(klines) < bars_per_hour:
+            return []
+
+        aggregated = []
+        # 从尾部按 bars_per_hour 分组
+        for i in range(0, len(klines) - bars_per_hour + 1, bars_per_hour):
+            group = klines[i:i + bars_per_hour]
+            if len(group) < bars_per_hour:
+                break
+            aggregated.append({
+                'time': group[-1].get('time', 0),
+                'open': group[0]['open'],
+                'high': max(k['high'] for k in group),
+                'low': min(k['low'] for k in group),
+                'close': group[-1]['close'],
+                'volume': sum(k['volume'] for k in group),
+            })
+        return aggregated
+
+    def generate_signal(self, coin: str, klines: List[Dict] = None):
+        """双引擎 + regime 选信号
+
+        注意：init_cache 在 bitmex_race.py 主循环里已经调过了（补丁1）。
+        这里只负责选 namespace + 生成信号。
+        """
+        from core.strategy.base import Signal, TradingSignal
+        from core.indicator_cache import set_active_namespace, get_indicator
+
+        if not klines:
+            return TradingSignal(signal=Signal.HOLD, coin=coin)
+
+        # 1. 更新 regime
+        regime = self.update_regime(klines)
+
+        # 2. 更新 ATR 历史（从 normal cache 取）
+        try:
+            set_active_namespace('normal')
+            atr = get_indicator('atr', period=14)
+            if atr is not None and len(atr) > 0:
+                self._atr_history.append(float(atr[-1]))
+                if len(self._atr_history) > self._atr_lookback_bars:
+                    self._atr_history = self._atr_history[-self._atr_lookback_bars:]
+        except Exception:
+            pass
+
+        # 3. 决定模式（ADX 快速判断，v2.0）
+        new_mode = self._determine_mode(klines)
+
+        # 4. 熔断检查
+        fused = False
+        if new_mode == 'flipped' and self._should_fuse():
+            new_mode = 'normal'
+            fused = True
+            logger.warning(f"[熔断] ATR 超过 {self._atr_percentile}th 百分位，强制 NORMAL 模式")
+
+        # 5. 冷却锁
+        if new_mode != self._current_mode:
+            if self._in_cooldown():
+                logger.info(f"[冷却] 切换被冻结（距上次切换 {time.time()-self._last_switch_time:.0f}s < {self._cooldown_sec}s）")
+                new_mode = self._current_mode
+            else:
+                logger.info(f"[切换] {self._current_mode} → {new_mode} (regime={regime})")
+                self._last_switch_time = time.time()
+                self._current_mode = new_mode
+                self._switch_count += 1
+
+        # 6. 切换到对应 namespace 并生成信号
+        set_active_namespace(self._current_mode)
+
+        if self._current_mode == 'flipped':
+            flipped = self.flip_klines(klines)
+            # === 诊断日志（Grok+白纱 要求）===
+            try:
+                rsi = get_indicator('rsi', period=14)
+                rsi_val = f"{float(rsi[-1]):.2f}" if rsi is not None and len(rsi) > 0 else "None"
+            except Exception:
+                rsi_val = "ERR"
+            try:
+                bb = get_indicator('bb', period=20)
+                bb_val = f"upper={float(bb['upper'][-1]):.2f}" if isinstance(bb, dict) and bb.get('upper') and len(bb['upper']) > 0 else "None"
+            except Exception:
+                bb_val = "ERR"
+            logger.info(f"[DIAG FLIPPED] RSI={rsi_val} BB={bb_val} klines[-1]close=${klines[-1]['close']:.2f} flipped[-1]close=${flipped[-1]['close']:.2f}")
+            # === 诊断结束 ===
+            self._strategy.current_idx = len(flipped) - 1
+            signal = self._strategy.generate_signal(coin, flipped)
+        else:
+            self._strategy.current_idx = len(klines) - 1
+            signal = self._strategy.generate_signal(coin, klines)
+
+        # 7. 标记元数据
+        if not hasattr(signal, 'metadata') or signal.metadata is None:
+            signal.metadata = {}
+        signal.metadata['regime'] = regime
+        signal.metadata['mode'] = self._current_mode
+        signal.metadata['fused'] = fused
+        signal.metadata['switch_count'] = self._switch_count
+
+        logger.info(
+            f"regime={regime} mode={self._current_mode} signal={signal.signal} "
+            f"fused={fused} switches={self._switch_count}"
+        )
+
+        return signal

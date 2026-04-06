@@ -1,0 +1,9 @@
+{
+  "id": "17",
+  "subject": "【待办-老板睡觉时】全量 13币种×10周期×3阈值重跑",
+  "description": "老板睡觉时执行。全量种子重跑，包含 mean_reversion/mean_reversion_07/mean_reversion_10 三个策略。",
+  "activeForm": "等待执行",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": []
+}

@@ -1,0 +1,13 @@
+Cycle #0127 complete. Summary:
+
+**INNOVATE** - Created **evo-gene-recommender** skill (gene recommender)
+
+**Changes**: 4 files, ~190 lines
+- `skills/evo-gene-recommender/index.js` — core logic: loads events.jsonl, builds per-gene performance profile, computes composite score (signal affinity 40% + success rate 30% + avg score 20% + experience bonus 10%), ranks genes, flags warnings
+- `skills/evo-gene-recommender/SKILL.md` — skill documentation with frontmatter
+- `skills/evo-gene-recommender/package.json` — package metadata
+- `genes.json` — registered `gene_innovate_gene_recommender` (17th active gene)
+
+**Why this breaks the failure streak**: The last 7 failures were all from the selector repeatedly picking `gene_auto_53538cc4` (banned). This skill provides data-driven gene recommendation as an advisory tool, helping future cycles avoid problematic gene selections.
+
+**Validation**: Exports verified (`recommend`, `main`, `loadEvents`, `loadGenes`), test run returned correct recommendations with gene_innovate_signal_scanner as top pick for protocol_drift signals.

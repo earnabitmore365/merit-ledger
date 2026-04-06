@@ -1,0 +1,49 @@
+# 积分自然衰减（房租机制）
+
+## Context
+
+功过格缺第二条腿——"罚不做"。空转检测太难自动化（时间/进程/transcript 都可伪装）。顾问提出积分自然衰减：每天 -2 分 = 房租。老板认可"我提供电脑电力配额，你交租"。
+
+## 做法
+
+SessionStart hook（session_start.py）里加衰减检查：
+- 每次会话启动 → 算距离上次衰减过了几天
+- 每满 24 小时 → 扣 2 分
+- 更新 credit.json 里的分数和 last_decay_ts
+
+## 改动
+
+### 1. session_start.py 加 decay 函数
+
+在 `inject_credit_status(cwd)` 里，注入状态之前先检查衰减：
+
+```python
+def apply_daily_decay():
+    # 读 credit.json
+    # 算 hours_since_last_decay
+    # 每满 24h → days * 2 扣分
+    # 更新 score + last_decay_ts
+    # 记录到 history
+```
+
+### 2. credit.json 加 last_decay_ts 字段
+
+```json
+{
+  "agents": {...},
+  "history": [...],
+  "last_decay_ts": "2026-03-30T00:00:00"
+}
+```
+
+## 衰减参数
+
+- 每天 -2 分
+- 从 Lv.3（50分）完全不干活掉到 Lv.2（20分）需要 15 天
+- 干活的人每天赚 +3~+9，远大于 -2，感觉不到
+
+## 验证
+
+1. 模拟 3 天没活动 → 扣 6 分
+2. 模拟 1 天正常干活 → 衰减 -2 + 赚分 +6 = 净 +4
+3. 等级变化正确

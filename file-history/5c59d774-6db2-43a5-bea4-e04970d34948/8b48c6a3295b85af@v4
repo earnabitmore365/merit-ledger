@@ -1,0 +1,77 @@
+# 修复 evolver 回滚范围越界 — 只允许删 skills/ 下的文件
+
+## Context
+
+evolver 回滚失败演化时，会删除演化期间新增的 untracked 文件。但删除范围是**整个仓库**，不限于 `skills/` 目录。导致黑丝白纱的 handoff 文件被误删（monitor_bot.py 也被删过）。
+
+evolver 的本职是进化 AI 的 skills，不应该碰老板的业务代码和项目文件。回滚只应该清理 `skills/` 目录下演化产生的文件。
+
+## 修改文件
+
+`~/.claude/tools/evolver/src/gep/solidify.js`
+
+## 修改内容
+
+### 第 696-720 行：`rollbackNewUntrackedFiles` 函数
+
+**现在的问题**（第 702-719 行）：
+```javascript
+for (const rel of toDelete) {
+    // 只检查是否在保护列表 → 不在保护列表的都可能被删
+    if (isCriticalProtectedPath(safeRel)) { skipped.push(safeRel); continue; }
+    // ... fs.unlinkSync(normAbs) 删除文件
+}
+```
+
+**修复**：在第 704 行后加一个路径过滤，只删 `skills/` 开头的文件：
+
+```javascript
+for (const rel of toDelete) {
+    const safeRel = String(rel || '').replace(/\\/g, '/').replace(/^\.\/+/, '');
+    if (!safeRel) continue;
+    // FIX: evolver 只进化 skills，回滚只能删 skills/ 下的文件
+    if (!safeRel.startsWith('skills/')) {
+      skipped.push(safeRel);
+      continue;
+    }
+    // CRITICAL: Never delete files inside protected skill directories during rollback.
+    if (isCriticalProtectedPath(safeRel)) {
+      skipped.push(safeRel);
+      continue;
+    }
+    // ... 后面不变
+}
+```
+
+### 第 730-753 行：空目录清理
+
+同样的问题——回滚后清理空目录也不应该清理 `skills/` 以外的目录：
+
+```javascript
+for (var si = 0; si < sortedDirs.length; si++) {
+    // FIX: 只清理 skills/ 下的空目录
+    if (!sortedDirs[si].startsWith('skills/') && sortedDirs[si] !== 'skills') continue;
+    if (isCriticalProtectedPath(sortedDirs[si] + '/')) continue;
+    // ... 后面不变
+}
+```
+
+## 自审
+
+| # | 检查项 | 状态 |
+|---|--------|------|
+| 1 | 修改只加了 2 行路径过滤，不影响正常 skills 文件的回滚 | ✅ |
+| 2 | `skills/` 前缀匹配：`skills/anima/index.js` → true，`handofftotaiji.md` → false | ✅ |
+| 3 | 保护列表检查保留（双重保护：先过滤非 skills，再检查保护列表） | ✅ |
+| 4 | 空目录清理也限制在 skills/ 下 | ✅ |
+| 5 | `computeBlastRadius`（第 206 行）不需要改 — 它只是统计，不删文件 | ✅ |
+| 6 | `detectDestructiveChanges`（第 537 行）不需要改 — 它只检测，不删文件 | ✅ |
+| 7 | `gitListChangedFiles`（第 80 行）不需要改 — 它只列出文件 | ✅ |
+| 8 | skipped 数组会记录被跳过的非 skills 文件，日志可追溯 | ✅ |
+| 9 | 如果 evolver 将来要进化 skills 以外的文件（比如 src/），这个修复需要同步更新过滤前缀 | ✅ 当前不需要 |
+
+## 验证
+
+1. `node -c solidify.js` — 语法检查
+2. 在 `~/.claude` 目录下创建一个测试 untracked 文件 `test_handoff.md`，模拟回滚，确认不会被删
+3. 在 `skills/test_skill/` 下创建测试文件，模拟回滚，确认会被删（正常行为）

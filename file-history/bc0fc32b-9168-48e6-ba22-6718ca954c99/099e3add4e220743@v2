@@ -1,0 +1,1314 @@
+# DuckDB Python 参考文档（量化交易项目专用）
+
+> 来源：DuckDB 官方文档 https://duckdb.org/docs/stable/
+> 整理日期：2026-03-28
+> 重点：Python API 实际用法、量化场景最佳实践
+
+---
+
+## 目录
+
+1. [安装与基础](#1-安装与基础)
+2. [连接管理（connect）](#2-连接管理)
+3. [SQL 执行（execute / sql）](#3-sql-执行)
+4. [结果获取（fetchall / fetchdf / arrow）](#4-结果获取)
+5. [数据导入：JSON](#5-数据导入json)
+6. [数据导入：CSV](#6-数据导入csv)
+7. [数据导入：Parquet](#7-数据导入parquet)
+8. [pandas 交互（DataFrame ↔ DuckDB）](#8-pandas-交互)
+9. [SQL 语句：INSERT](#9-sql-语句insert)
+10. [SQL 语句：UPDATE](#10-sql-语句update)
+11. [并发与事务](#11-并发与事务)
+12. [性能优化](#12-性能优化)
+13. [量化场景速查](#13-量化场景速查)
+14. [踩过的坑](#14-踩过的坑)
+15. [我们项目的 DuckDB 文件清单](#15-我们项目的-duckdb-文件清单)
+16. [seed_report.duckdb Schema](#16-seed_reportduckdb-schema)
+
+---
+
+## 1. 安装与基础
+
+```bash
+pip install duckdb
+# 或
+conda install python-duckdb -c conda-forge
+```
+
+要求：Python 3.9+
+
+最简用法（内存数据库，无需 connect）：
+```python
+import duckdb
+duckdb.sql("SELECT 42").show()
+```
+
+Relations（关系对象）是延迟执行的——只有调用 `.show()` / `.fetchall()` / `.df()` 等方法时才真正执行：
+```python
+r1 = duckdb.sql("SELECT 42 AS price")
+duckdb.sql("SELECT price * 2 FROM r1").show()  # 链式引用
+```
+
+---
+
+## 2. 连接管理
+
+### 连接类型
+
+```python
+import duckdb
+
+# 内存数据库（会话结束即销毁）
+con = duckdb.connect()
+con = duckdb.connect(":memory:")
+
+# 持久化文件数据库
+con = duckdb.connect("market_data.duckdb")
+con = duckdb.connect(database="market_data.duckdb", read_only=False)
+
+# 只读模式（允许多进程同时读）
+con = duckdb.connect(database="market_data.duckdb", read_only=True)
+
+# 带配置参数
+con = duckdb.connect("market_data.duckdb", config={
+    "threads": 8,
+    "memory_limit": "4GB"
+})
+```
+
+### 上下文管理器（推荐）
+
+```python
+with duckdb.connect("market_data.duckdb") as con:
+    con.sql("CREATE TABLE IF NOT EXISTS trades (ts TIMESTAMP, price DOUBLE, vol BIGINT)")
+    con.sql("INSERT INTO trades VALUES (NOW(), 42.5, 1000)")
+# 自动 close，不需要手动调用
+```
+
+### 线程安全注意
+
+全局 `duckdb.sql()` 共用同一个连接，**不是线程安全的**。
+多线程场景下，每个线程必须创建自己的连接对象：
+
+```python
+import threading
+import duckdb
+
+def worker(thread_id):
+    # 每个线程各自创建连接
+    con = duckdb.connect("market_data.duckdb")
+    result = con.sql(f"SELECT * FROM klines WHERE symbol = 'BTC'").fetchall()
+    con.close()
+
+threads = [threading.Thread(target=worker, args=(i,)) for i in range(4)]
+```
+
+---
+
+## 3. SQL 执行
+
+### execute() — DB-API 2.0 标准接口
+
+```python
+con = duckdb.connect("market_data.duckdb")
+
+# 基础执行
+con.execute("CREATE TABLE IF NOT EXISTS klines (symbol VARCHAR, ts BIGINT, close DOUBLE)")
+
+# 参数化查询（防 SQL 注入，推荐量化场景使用）
+# 方式1：位置参数 ?
+con.execute("SELECT * FROM klines WHERE symbol = ? AND ts > ?", ["BTCUSDT", 1700000000])
+
+# 方式2：索引参数 $1
+con.execute("SELECT $1, $1, $2", ["BTC", "USDT"])
+
+# 方式3：命名参数字典
+con.execute("SELECT * FROM klines WHERE symbol = $sym", {"sym": "BTCUSDT"})
+
+# 批量执行（executemany）
+rows = [("BTCUSDT", 1700000001, 42500.0), ("ETHUSDT", 1700000001, 2300.0)]
+con.executemany("INSERT INTO klines VALUES (?, ?, ?)", rows)
+```
+
+### sql() / query() — 返回 Relation 对象
+
+```python
+# sql() 是推荐方式，返回 Relation 可链式操作
+rel = con.sql("SELECT * FROM klines WHERE symbol = 'BTCUSDT'")
+
+# 链式过滤、排序、限制
+result = (
+    con.sql("SELECT * FROM klines")
+       .filter("symbol = 'BTCUSDT'")
+       .order("ts DESC")
+       .limit(100)
+)
+```
+
+### description 属性（列元数据）
+
+```python
+con.execute("SELECT symbol, close FROM klines LIMIT 1")
+print(con.description)
+# [('symbol', None, None, None, None, None, None),
+#  ('close', None, None, None, None, None, None)]
+```
+
+---
+
+## 4. 结果获取
+
+### 标准 cursor 方式
+
+```python
+con.execute("SELECT * FROM klines WHERE ts > 1700000000")
+
+# 一次取全部
+rows = con.fetchall()          # list of tuples
+
+# 逐行取
+row = con.fetchone()           # 一行 tuple，耗尽返回 None
+
+# 取 N 行
+rows = con.fetchmany(size=100) # list of tuples，最多 size 行
+```
+
+### DataFrame / Arrow 转换
+
+```python
+# 转 pandas DataFrame（最常用）
+df = con.sql("SELECT * FROM klines").df()
+df = con.sql("SELECT * FROM klines").fetchdf()    # 同 df()
+
+# 转 Polars DataFrame
+pl_df = con.sql("SELECT * FROM klines").pl()
+
+# 转 Apache Arrow Table（零拷贝，高性能）
+arrow_table = con.sql("SELECT * FROM klines").arrow()
+arrow_table = con.sql("SELECT * FROM klines").fetch_arrow_table()
+
+# 转 NumPy 数组
+np_arrays = con.sql("SELECT close FROM klines").fetchnumpy()
+# 返回 dict: {'close': array([42500.0, ...])}
+```
+
+### show() — 调试用
+
+```python
+con.sql("SELECT * FROM klines LIMIT 5").show()
+# 终端直接打印表格，仅调试使用
+```
+
+---
+
+## 5. 数据导入：JSON
+
+### 基础用法
+
+```python
+import duckdb
+
+# 直接查询 JSON 文件（最简）
+duckdb.sql("SELECT * FROM 'data.json'")
+
+# 自动建表
+duckdb.sql("CREATE TABLE trades AS SELECT * FROM read_json('trades.json')")
+
+# COPY 导入
+duckdb.sql("COPY trades FROM 'trades.json' (AUTO_DETECT true)")
+```
+
+### read_json() 完整参数
+
+```sql
+SELECT * FROM read_json('data.json',
+    format = 'auto',          -- auto | array | newline_delimited | unstructured
+    auto_detect = true,       -- 自动推断列类型（默认 true）
+    columns = {               -- 手动指定列名和类型（优先于 auto_detect）
+        symbol: 'VARCHAR',
+        ts: 'BIGINT',
+        close: 'DOUBLE',
+        vol: 'DOUBLE'
+    },
+    compression = 'auto',     -- auto | gzip | zstd | none
+    sample_size = 20480,      -- 采样行数用于类型推断
+    maximum_object_size = 16777216,  -- 单个 JSON 对象最大字节数（默认 16MB）
+    maximum_depth = -1,       -- schema 推断的嵌套深度（-1 = 无限）
+    ignore_errors = false,    -- 跳过解析错误（仅 newline_delimited 支持）
+    records = 'auto'          -- 是否包含 record 对象
+);
+```
+
+### format 参数说明
+
+| format | 适用场景 |
+|--------|---------|
+| `auto` | 自动判断（默认，大多数情况够用） |
+| `array` | JSON 最外层是数组 `[{...}, {...}]` |
+| `newline_delimited` | NDJSON，每行一个 JSON 对象（流式数据） |
+| `unstructured` | 顶层 JSON 对象 |
+
+### Python API 方式
+
+```python
+import duckdb
+
+con = duckdb.connect("market_data.duckdb")
+
+# 从 JSON 文件创建关系
+rel = con.read_json("klines.json")
+df = rel.df()
+
+# 直接查询
+con.execute("SELECT symbol, AVG(close) FROM read_json('klines.json') GROUP BY symbol")
+```
+
+---
+
+## 6. 数据导入：CSV
+
+### 基础用法
+
+```python
+import duckdb
+
+# 最简（auto-detect 处理大多数 CSV）
+duckdb.sql("SELECT * FROM 'data.csv'")
+duckdb.sql("SELECT * FROM read_csv('data.csv')")
+
+# Python API
+con = duckdb.connect()
+rel = con.read_csv("klines.csv")
+
+# 建表
+duckdb.sql("CREATE TABLE klines AS SELECT * FROM 'klines.csv'")
+duckdb.sql("COPY klines FROM 'klines.csv'")
+```
+
+### read_csv() 核心参数
+
+```sql
+SELECT * FROM read_csv('flights.csv',
+    delim = ',',         -- 分隔符（alias: sep），默认 ','
+    header = true,       -- 第一行是列名
+    auto_detect = true,  -- 启用 CSV sniffer 自动推断（默认 true）
+    columns = {          -- 手动指定 schema（覆盖 auto_detect）
+        'symbol': 'VARCHAR',
+        'ts': 'BIGINT',
+        'open': 'DOUBLE',
+        'high': 'DOUBLE',
+        'low': 'DOUBLE',
+        'close': 'DOUBLE',
+        'volume': 'DOUBLE'
+    },
+    compression = 'auto',   -- auto | none | gzip | zstd
+    encoding = 'utf-8',     -- utf-8 | utf-16 | latin-1
+    skip = 0,               -- 跳过开头 N 行
+    null_padding = false,   -- 列数不足时用 NULL 填充
+    dateformat = '',        -- 日期格式，如 '%Y-%m-%d'
+    strict_mode = true,     -- 遇到格式错误抛异常
+    store_rejects = true,   -- 存储失败行到 reject_errors 表
+    nullstr = ''            -- 代表 NULL 的字符串值
+);
+```
+
+### 多文件读取（量化常用）
+
+```sql
+-- glob 模式批量读取
+SELECT * FROM 'data/klines_*.csv';
+SELECT * FROM read_csv('data/*.csv');
+
+-- 列表方式
+SELECT * FROM read_csv(['btc_2024.csv', 'btc_2025.csv']);
+```
+
+---
+
+## 7. 数据导入：Parquet
+
+### 基础用法
+
+```sql
+-- 直接查询
+SELECT * FROM 'test.parquet';
+
+-- 扩展名不是 .parquet 时用函数
+SELECT * FROM read_parquet('data.parq');
+
+-- 建表
+CREATE TABLE klines AS SELECT * FROM 'klines.parquet';
+
+-- 建视图（延迟读取，省内存）
+CREATE VIEW klines_view AS SELECT * FROM read_parquet('klines.parquet');
+```
+
+### read_parquet() 参数
+
+```sql
+SELECT * FROM read_parquet('data.parquet',
+    binary_as_string = false,   -- 二进制列转字符串
+    filename = false,           -- 结果中包含文件名列（v1.3.0+ 自动）
+    file_row_number = false,    -- 包含行号列
+    hive_partitioning = true,   -- 自动识别 Hive 分区路径
+    union_by_name = false       -- 多文件合并时按列名对齐（列不一致时必开）
+);
+```
+
+### 多文件读取
+
+```sql
+-- 通配符
+SELECT * FROM 'data/klines_*.parquet';
+SELECT * FROM read_parquet('data/*.parquet');
+
+-- 列表
+SELECT * FROM read_parquet(['2024_q1.parquet', '2024_q2.parquet']);
+
+-- Hive 分区（如 symbol=BTCUSDT/date=2024-01-01/data.parquet）
+SELECT * FROM read_parquet('data/**/*.parquet', hive_partitioning = true);
+
+-- 包含文件名
+SELECT *, filename FROM read_parquet('data/*.parquet');
+```
+
+### 导出为 Parquet
+
+```sql
+-- 基础导出（默认 Snappy 压缩）
+COPY (SELECT * FROM klines) TO 'output.parquet' (FORMAT parquet);
+
+-- 指定压缩（量化推荐 zstd：压缩率高，解压快）
+COPY klines TO 'klines_zstd.parquet' (FORMAT parquet, COMPRESSION zstd);
+
+-- 自定义行组大小（推荐 100k-1M 行）
+COPY (FROM klines) TO 'klines.parquet' (
+    FORMAT parquet,
+    COMPRESSION zstd,
+    ROW_GROUP_SIZE 100000
+);
+
+-- 整个数据库导出
+EXPORT DATABASE 'backup_dir' (FORMAT parquet);
+```
+
+### 查看 Parquet 元数据
+
+```sql
+SELECT * FROM parquet_metadata('test.parquet');
+SELECT * FROM parquet_schema('test.parquet');
+SELECT * FROM parquet_file_metadata('test.parquet');
+
+-- 检查结构
+DESCRIBE SELECT * FROM 'test.parquet';
+```
+
+---
+
+## 8. pandas 交互
+
+### DuckDB 查询 pandas DataFrame（直接引用变量名）
+
+```python
+import duckdb
+import pandas as pd
+
+# 无需注册，直接在 SQL 中使用变量名
+klines_df = pd.DataFrame({
+    'symbol': ['BTCUSDT', 'ETHUSDT'],
+    'close': [42500.0, 2300.0],
+    'volume': [1000.0, 5000.0]
+})
+
+# 直接引用 Python 变量名 klines_df
+result = duckdb.sql("SELECT symbol, AVG(close) FROM klines_df GROUP BY symbol").df()
+```
+
+原理：DuckDB 的 replacement scan 机制，自动把不存在的表名映射到同名 Python 变量。
+
+### DataFrame 导入 DuckDB 持久表
+
+```python
+con = duckdb.connect("market_data.duckdb")
+
+# CREATE TABLE AS SELECT（最常用）
+con.sql("CREATE TABLE klines AS SELECT * FROM klines_df")
+
+# INSERT INTO
+con.sql("INSERT INTO klines SELECT * FROM klines_df")
+
+# 列顺序不同时，用 BY NAME
+con.sql("INSERT INTO klines BY NAME SELECT * FROM klines_df")
+```
+
+### DuckDB 查询结果转 pandas
+
+```python
+# 转 pandas DataFrame
+df = con.sql("SELECT * FROM klines WHERE symbol = 'BTCUSDT'").df()
+df = con.sql("SELECT * FROM klines").fetchdf()  # 同 df()
+
+# 分块处理（大数据量）
+chunks = con.sql("SELECT * FROM klines").fetch_df_chunk(vectors_per_chunk=1000)
+for chunk in chunks:
+    process(chunk)  # chunk 是 pandas DataFrame
+```
+
+### Apache Arrow（零拷贝高性能）
+
+```python
+import pyarrow as pa
+
+# DuckDB → Arrow Table
+arrow_table = con.sql("SELECT * FROM klines").arrow()
+
+# Arrow Table → DuckDB 查询
+arrow_data = pa.table({'symbol': ['BTCUSDT'], 'close': [42500.0]})
+result = duckdb.sql("SELECT * FROM arrow_data WHERE close > 40000").df()
+
+# 使用 from_arrow 创建 Relation
+rel = con.from_arrow(arrow_data)
+rel.filter("close > 40000").df()
+```
+
+### 其他格式转换
+
+```python
+# 转 Polars DataFrame
+pl_df = con.sql("SELECT * FROM klines").pl()
+
+# 转 NumPy（直接得到列数组 dict）
+np_data = con.sql("SELECT close, volume FROM klines").fetchnumpy()
+# {'close': array([42500., ...]), 'volume': array([1000., ...])}
+```
+
+---
+
+## 9. SQL 语句：INSERT
+
+### 基础语法
+
+```sql
+-- 值插入
+INSERT INTO klines VALUES ('BTCUSDT', 1700000001, 42500.0);
+
+-- 多行
+INSERT INTO klines VALUES
+    ('BTCUSDT', 1700000001, 42500.0),
+    ('ETHUSDT', 1700000001, 2300.0);
+
+-- FROM SELECT
+INSERT INTO klines SELECT * FROM new_klines;
+
+-- 指定列
+INSERT INTO klines (symbol, ts, close) VALUES ('BTCUSDT', 1700000001, 42500.0);
+```
+
+### BY POSITION vs BY NAME
+
+```sql
+-- BY POSITION（默认）：按列声明顺序映射
+INSERT INTO klines BY POSITION VALUES ('BTCUSDT', 1700000001, 42500.0);
+
+-- BY NAME：按列名匹配（列顺序不同时更安全）
+INSERT INTO klines BY NAME (SELECT 42500.0 AS close, 'BTCUSDT' AS symbol, 1700000001 AS ts);
+```
+
+### ON CONFLICT（Upsert，量化场景常用）
+
+```sql
+-- 冲突时忽略（去重插入）
+INSERT INTO klines VALUES ('BTCUSDT', 1700000001, 42500.0)
+ON CONFLICT DO NOTHING;
+
+-- 简写
+INSERT OR IGNORE INTO klines VALUES ('BTCUSDT', 1700000001, 42500.0);
+
+-- 冲突时更新（标准 upsert）
+-- EXCLUDED 虚拟表代表"要插入但冲突了的那一行"
+INSERT INTO klines (symbol, ts, close, volume)
+VALUES ('BTCUSDT', 1700000001, 42600.0, 2000.0)
+ON CONFLICT (symbol, ts) DO UPDATE SET
+    close = EXCLUDED.close,
+    volume = EXCLUDED.volume;
+
+-- 简写（更新所有列）
+INSERT OR REPLACE INTO klines VALUES ('BTCUSDT', 1700000001, 42600.0, 2000.0);
+
+-- 带条件的 upsert（仅当新值更大时更新）
+INSERT INTO klines VALUES ('BTCUSDT', 1700000001, 42600.0, 2000.0)
+ON CONFLICT (symbol, ts) DO UPDATE SET
+    close = EXCLUDED.close
+WHERE EXCLUDED.close > klines.close;
+```
+
+### RETURNING（获取插入结果）
+
+```sql
+-- 返回插入的行（可用于获取自增 ID）
+INSERT INTO orders (symbol, qty) VALUES ('BTCUSDT', 10)
+RETURNING *;
+
+INSERT INTO orders (symbol, qty) VALUES ('BTCUSDT', 10)
+RETURNING order_id, created_at;
+```
+
+---
+
+## 10. SQL 语句：UPDATE
+
+### 基础语法
+
+```sql
+-- 更新满足条件的行
+UPDATE klines SET close = 0.0 WHERE close IS NULL;
+
+-- 更新多列
+UPDATE klines SET close = 42600.0, volume = 2000.0
+WHERE symbol = 'BTCUSDT' AND ts = 1700000001;
+```
+
+### UPDATE FROM（用另一张表的值更新）
+
+量化场景常用：把新数据表的值同步到主表：
+
+```sql
+-- FROM 另一张表
+UPDATE klines
+SET close = new_data.close,
+    volume = new_data.volume
+FROM new_data
+WHERE klines.symbol = new_data.symbol
+  AND klines.ts = new_data.ts;
+
+-- FROM 子查询
+UPDATE klines
+SET close = (
+    SELECT nd.close
+    FROM new_data nd
+    WHERE klines.symbol = nd.symbol
+      AND klines.ts = nd.ts
+);
+```
+
+### UPDATE FROM 同一张表（自引用）
+
+```sql
+-- 同表更新需要用别名区分
+UPDATE klines AS k
+SET close = (
+    SELECT adjusted.close * 1.01
+    FROM klines AS adjusted
+    WHERE k.symbol = adjusted.symbol
+      AND adjusted.ts = k.ts - 1
+);
+```
+
+### UPDATE + JOIN 模式
+
+```sql
+-- 用 JOIN 更新：把法国城市收入增加 100
+UPDATE city
+SET revenue = revenue + 100
+FROM country
+WHERE city.country_code = country.code
+  AND country.name = 'France';
+```
+
+---
+
+## 11. 并发与事务
+
+### DuckDB 并发模型
+
+DuckDB 使用 MVCC（多版本并发控制）+ 乐观并发控制（OCC）：
+- 读不阻塞写，写不阻塞读
+- Append（追加）操作永不冲突
+- 两个线程修改同一行 → 第二个失败，需重试
+
+### 单进程内（线程）
+
+```python
+import duckdb
+import threading
+
+# 单进程内，多线程可并发写，但每个线程必须有自己的连接
+def write_worker(symbol_data):
+    con = duckdb.connect("market_data.duckdb")  # 独立连接
+    try:
+        con.execute("INSERT INTO klines SELECT * FROM symbol_data")
+        con.commit()
+    except duckdb.TransactionException:
+        # 乐观锁冲突，重试
+        con.rollback()
+        # ... 重试逻辑
+    finally:
+        con.close()
+```
+
+### 多进程读写
+
+**官方明确声明：不支持多进程同时写入。**
+
+```
+"Writing to DuckDB from multiple processes is not supported automatically."
+```
+
+多进程场景策略：
+
+```python
+# 策略1：多进程只读（read_only=True）
+con = duckdb.connect("market_data.duckdb", read_only=True)
+# 多个进程可以同时以只读模式打开同一个文件
+
+# 策略2：跨进程写锁（文件锁）
+import filelock
+lock = filelock.FileLock("market_data.lock")
+with lock:
+    con = duckdb.connect("market_data.duckdb")
+    con.execute("INSERT INTO ...")
+    con.close()
+
+# 策略3：写入独立 Parquet/CSV，批量合并
+# 各进程写自己的临时文件，定期用单进程合并到主库
+
+# 策略4：中间层（Web Server 或消息队列串行化写入）
+```
+
+### 事务控制
+
+```python
+con = duckdb.connect("market_data.duckdb")
+
+# 显式事务
+con.begin()
+try:
+    con.execute("INSERT INTO klines ...")
+    con.execute("UPDATE stats ...")
+    con.commit()
+except Exception:
+    con.rollback()
+    raise
+
+# WAL 强制落盘（checkpoint）
+con.checkpoint()
+# 白话：把 WAL 预写日志里的数据真正写入主数据文件
+```
+
+### 设计取向（重要）
+
+```
+"DuckDB is optimized for bulk operations, so executing many small transactions
+ is not a primary design goal."
+```
+
+量化场景建议：批量攒数据，批量写入，而不是每条 K 线单独 INSERT。
+
+---
+
+## 12. 性能优化
+
+### 数据类型（影响最大）
+
+选择正确类型：存储更小，查询更快。
+
+| 场景 | 推荐类型 | 避免 |
+|------|---------|------|
+| 时间戳 | `TIMESTAMP` / `BIGINT` | `VARCHAR` |
+| 价格 | `DOUBLE` | `VARCHAR` |
+| 交易量 | `BIGINT` | `VARCHAR` |
+| 标的名称 | `VARCHAR` | —— |
+| 布尔状态 | `BOOLEAN` | `INTEGER` |
+| 小整数 | `TINYINT` / `SMALLINT` | `BIGINT` |
+
+实测：DATETIME 列 vs VARCHAR 列：
+- 存储：3.3 GB vs 5.2 GB（节省 37%）
+- 查询：0.9s vs 3.9s（快 4.3x）
+
+### Schema 设计
+
+```sql
+-- 先批量 LOAD，再加约束（性能差 4x）
+-- 错误做法（加主键再导入）
+CREATE TABLE klines (symbol VARCHAR, ts BIGINT, close DOUBLE, PRIMARY KEY (symbol, ts));
+COPY klines FROM 'data/*.parquet';  -- 慢！461 秒
+
+-- 正确做法
+CREATE TABLE klines (symbol VARCHAR, ts BIGINT, close DOUBLE);
+COPY klines FROM 'data/*.parquet';  -- 快！121 秒
+ALTER TABLE klines ADD PRIMARY KEY (symbol, ts);  -- 总计 242 秒
+```
+
+### 索引策略
+
+DuckDB 有两种索引：
+
+**Zonemap（自动，列级）**
+- 每个列的行组自动维护 min/max 统计
+- 查询带 `>` `<` `=` 过滤时自动跳过不匹配的行组
+- 数据按查询列排序时效益最大（建议按 ts 排序存储）
+
+**ART 索引（显式，单列高选择性查询）**
+
+```sql
+-- 只在高选择性列建索引
+CREATE INDEX idx_symbol ON klines (symbol);
+
+-- 注意：ART 索引不加速 JOIN、聚合、排序
+-- 注意：有索引的表，INSERT/UPDATE/DELETE 更慢
+-- 策略：先导入数据，后建索引
+```
+
+### 内存与线程设置
+
+```python
+con = duckdb.connect("market_data.duckdb", config={
+    "threads": 8,           # 并行线程数（默认 = CPU 核心数）
+    "memory_limit": "8GB",  # 最大内存使用
+})
+
+# 运行时设置
+con.execute("SET threads = 4")
+con.execute("SET memory_limit = '4GB'")
+con.execute("SET temp_directory = '/tmp/duckdb_spill'")  # 溢出到磁盘路径
+con.execute("SET preserve_insertion_order = false")  # 允许重排序，省内存
+```
+
+### Parquet 性能
+
+```sql
+-- 行组大小：推荐 100k - 1M 行
+-- 小于 5000 行：性能下降 5-10x
+
+-- 压缩建议：zstd（压缩率高 + 解压快）
+COPY klines TO 'klines.parquet' (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 100000);
+
+-- 查询时启用投影下推（只读需要的列）
+SELECT symbol, close FROM 'klines.parquet';  -- 只读两列，自动过滤其余
+
+-- Hive 分区（大数据集过滤加速）
+-- 目录结构：data/symbol=BTCUSDT/date=2024-01-01/data.parquet
+SELECT * FROM read_parquet('data/**/*.parquet', hive_partitioning = true)
+WHERE symbol = 'BTCUSDT' AND date = '2024-01-01';
+```
+
+### EXPLAIN ANALYZE（查询诊断）
+
+```sql
+-- 查看执行计划和 CPU 耗时
+EXPLAIN ANALYZE SELECT * FROM klines WHERE symbol = 'BTCUSDT' AND ts > 1700000000;
+
+-- 检查是否走了索引扫描
+-- 输出里看 "INDEX SCAN" vs "SEQ SCAN"
+```
+
+### 连接复用
+
+```python
+# 不要反复 connect/disconnect，复用连接保留元数据缓存
+con = duckdb.connect("market_data.duckdb")
+
+# 整个程序生命周期使用同一个 con（单线程场景）
+# 多线程场景：每个线程一个 con，但不要频繁创建销毁
+```
+
+---
+
+## 13. 量化场景速查
+
+### K 线数据批量写入（推荐模式）
+
+```python
+import duckdb
+import pandas as pd
+
+con = duckdb.connect("market_data.duckdb")
+
+# 建表（先不加主键）
+con.execute("""
+    CREATE TABLE IF NOT EXISTS klines_1m (
+        symbol   VARCHAR NOT NULL,
+        ts       BIGINT  NOT NULL,   -- Unix 毫秒时间戳
+        open     DOUBLE,
+        high     DOUBLE,
+        low      DOUBLE,
+        close    DOUBLE,
+        volume   DOUBLE,
+        quote_vol DOUBLE
+    )
+""")
+
+# 批量写入 DataFrame
+def upsert_klines(con, df: pd.DataFrame):
+    con.sql("""
+        INSERT INTO klines_1m BY NAME
+        SELECT * FROM df
+        ON CONFLICT (symbol, ts) DO UPDATE SET
+            open  = EXCLUDED.open,
+            high  = EXCLUDED.high,
+            low   = EXCLUDED.low,
+            close = EXCLUDED.close,
+            volume = EXCLUDED.volume
+    """)
+```
+
+### 查询最新 N 条 K 线
+
+```python
+def get_latest_klines(con, symbol: str, limit: int = 200) -> pd.DataFrame:
+    return con.sql(f"""
+        SELECT * FROM klines_1m
+        WHERE symbol = $sym
+        ORDER BY ts DESC
+        LIMIT {limit}
+    """, {"sym": symbol}).df()
+```
+
+### 从 Parquet 批量导入历史数据
+
+```python
+def import_history_parquet(con, pattern: str):
+    con.execute(f"""
+        INSERT INTO klines_1m BY NAME
+        SELECT * FROM read_parquet('{pattern}')
+        ON CONFLICT DO NOTHING
+    """)
+
+import_history_parquet(con, "data/klines/*.parquet")
+```
+
+### 多进程只读查询（安全模式）
+
+```python
+from multiprocessing import Pool
+import duckdb
+
+def analyze_symbol(symbol: str):
+    # 只读模式，多进程安全
+    con = duckdb.connect("market_data.duckdb", read_only=True)
+    result = con.sql(f"""
+        SELECT ts, close
+        FROM klines_1m
+        WHERE symbol = '{symbol}'
+        ORDER BY ts
+    """).fetchnumpy()
+    con.close()
+    return result
+
+with Pool(4) as pool:
+    results = pool.map(analyze_symbol, ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"])
+```
+
+### 定期导出 Parquet 备份
+
+```python
+def export_to_parquet(con, symbol: str, output_path: str):
+    con.execute(f"""
+        COPY (
+            SELECT * FROM klines_1m
+            WHERE symbol = '{symbol}'
+            ORDER BY ts
+        ) TO '{output_path}'
+        (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 100000)
+    """)
+```
+
+---
+
+## 附录：Python API 关键方法速查表
+
+### DuckDBPyConnection
+
+| 方法 | 说明 |
+|------|------|
+| `connect(db, read_only, config)` | 创建连接 |
+| `execute(query, params)` | 执行 SQL，支持参数化 |
+| `executemany(query, params_list)` | 批量执行 |
+| `sql(query)` / `query(query)` | 执行并返回 Relation |
+| `fetchall()` | 取全部结果（tuples） |
+| `fetchone()` | 取一行 |
+| `fetchmany(size)` | 取 N 行 |
+| `df()` / `fetchdf()` | 取结果为 pandas DataFrame |
+| `fetch_df_chunk(n)` | 分块取 DataFrame |
+| `arrow()` | 取结果为 Arrow Table |
+| `pl()` | 取结果为 Polars DataFrame |
+| `fetchnumpy()` | 取结果为 NumPy 数组 dict |
+| `read_csv(file, **params)` | 读 CSV 返回 Relation |
+| `read_json(file, **params)` | 读 JSON 返回 Relation |
+| `read_parquet(file, **params)` | 读 Parquet 返回 Relation |
+| `from_df(df)` | DataFrame → Relation |
+| `from_arrow(table)` | Arrow Table → Relation |
+| `begin()` | 开始事务 |
+| `commit()` | 提交事务 |
+| `rollback()` | 回滚事务 |
+| `checkpoint()` | WAL 强制落盘 |
+| `close()` | 关闭连接 |
+| `description` | 列元数据（DB-API 2.0） |
+
+### DuckDBPyRelation（链式操作）
+
+| 方法 | 说明 |
+|------|------|
+| `filter(cond)` | WHERE 过滤 |
+| `project(cols)` | SELECT 指定列 |
+| `order(cols)` | ORDER BY |
+| `limit(n, offset)` | LIMIT / OFFSET |
+| `distinct()` | 去重 |
+| `join(other, cond, type)` | JOIN（inner/left/right/outer） |
+| `aggregate(agg, groups)` | GROUP BY 聚合 |
+| `sum(col)` / `avg(col)` / `min(col)` / `max(col)` | 聚合统计 |
+| `lag(col, offset)` / `lead(col, offset)` | 窗口偏移 |
+| `rank()` / `row_number()` | 窗口排名 |
+| `create(name)` | 结果存为新表 |
+| `insert_into(name)` | 结果插入已有表 |
+| `create_view(name)` | 结果存为视图 |
+| `df()` / `fetchdf()` | 转 pandas |
+| `arrow()` | 转 Arrow |
+| `pl()` | 转 Polars |
+| `show()` | 终端打印（调试用） |
+
+---
+
+## 14. 我们项目踩过的坑（Anti-Patterns）
+
+> 以下每条都是实际发生过的事故，写代码前必须对照检查。
+
+### 坑 1：executemany 批量插入百万行 → 内存爆炸
+
+**错误做法**：
+```python
+# ❌ 1.64 亿行用 executemany，Python 进程被 OOM kill（exit 133/SIGBUS）
+rows = sqlite_cursor.fetchall()  # 1.64 亿行全部加载到内存
+con.executemany("INSERT INTO paired_trades VALUES (?, ?, ...)", rows)
+```
+
+**正确做法**：
+```python
+# ✅ CTAS 直接从 SQLite 复制，190 倍速，零 Python 内存开销
+con.execute("INSTALL sqlite; LOAD sqlite;")
+con.execute(f"ATTACH '{sqlite_path}' AS src (TYPE sqlite)")
+con.execute("CREATE TABLE paired_trades AS SELECT * FROM src.paired_trades")
+con.execute("DETACH src")
+```
+
+**正确做法（从 JSON）**：
+```python
+# ✅ read_json_auto 直接建表，零 Python 内存
+con.execute("""
+    CREATE TABLE klines AS
+    SELECT * FROM read_json_auto('data/*.json')
+""")
+```
+
+**原则**：数据搬运不经过 Python。DuckDB 读 SQLite / JSON / CSV / Parquet 全部是原生 C++ 实现，比 Python 中转快 100-200 倍。
+
+---
+
+### 坑 2：ATTACH SQLite 直接查询 → 150 倍慢
+
+**错误做法**：
+```python
+# ❌ ATTACH 后直接查 → 179 秒（SQLite 原生只要 1.2 秒）
+con.execute(f"ATTACH '{sqlite_path}' AS src (TYPE sqlite)")
+con.execute("SELECT AVG(CAST(pnl AS REAL)) FROM src.paired_trades")  # 极慢
+```
+
+**正确做法**：
+```python
+# ✅ 先 CTAS 复制到 DuckDB 原生格式，再查
+con.execute("CREATE TABLE paired_trades AS SELECT * FROM src.paired_trades")
+con.execute("SELECT AVG(pnl) FROM paired_trades")  # 列式扫描，秒级
+```
+
+**原因**：ATTACH 模式下 DuckDB 走行式读取 SQLite，丧失列式存储的全部优势。
+
+---
+
+### 坑 3：大表建索引 → Python 崩溃
+
+**错误做法**：
+```python
+# ❌ 1.64 亿行表建索引 → 内存暴涨 → Python 崩溃 + WAL 损坏
+con.execute("CREATE INDEX idx_combo ON paired_trades (coin, interval, strategy)")
+```
+
+**正确做法**：
+```python
+# ✅ 不建显式索引。DuckDB 的 Zonemap（min/max 自动统计）在列式存储上已经够用
+# 如果查询真的慢，先 EXPLAIN ANALYZE 确认瓶颈再考虑索引
+```
+
+**原因**：DuckDB ART 索引在大表上建立时内存开销巨大。Zonemap 已覆盖大多数过滤场景。
+
+---
+
+### 坑 4：SQLite 导入全用 TEXT → CAST 地狱
+
+**错误做法**：
+```python
+# ❌ 所有列建成 TEXT（因为 SQLite 类型宽松）
+con.execute("CREATE TABLE combo_summary (coin TEXT, interval TEXT, pnl TEXT, ...)")
+# 查询时每个数值列都要 CAST
+con.execute("SELECT AVG(CAST(pnl AS REAL)) FROM combo_summary")  # 每个查询都要 CAST
+```
+
+**正确做法**：
+```python
+# ✅ 用 CTAS 从 SQLite 复制时，DuckDB auto-detect 会推断类型
+con.execute("CREATE TABLE combo_summary AS SELECT * FROM src.combo_summary")
+# 或手动指定关键列类型
+con.execute("""
+    CREATE TABLE combo_summary AS
+    SELECT coin::VARCHAR, interval::VARCHAR, pnl::DOUBLE, trades::INTEGER
+    FROM src.combo_summary
+""")
+```
+
+---
+
+### 坑 5：Python nan/inf 直接写入 → DuckDB 报错
+
+**错误做法**：
+```python
+# ❌ 指标计算产生 nan/inf，直接传给 DuckDB → 报错
+indicator_df['sma_20'] = ta.sma(close, length=20)  # 前 19 行是 NaN
+con.execute("INSERT INTO klines SELECT * FROM indicator_df")  # 报错
+```
+
+**正确做法**：
+```python
+# ✅ 写入前清洗 nan/inf → None
+import numpy as np
+
+def sanitize(df):
+    return df.replace([np.inf, -np.inf], np.nan)  # inf → NaN
+    # DuckDB 接受 NaN → 存为 NULL
+
+# 或逐值清洗
+def sanitize_value(v):
+    if v is None or (isinstance(v, float) and (np.isnan(v) or np.isinf(v))):
+        return None
+    return v
+```
+
+---
+
+### 坑 6：Parquet 中文字段变 BLOB
+
+**现象**：`regime_fact` 等中文字段在 Parquet 查询时返回 BLOB，WHERE 匹配失败。
+
+**Workaround**：
+```sql
+-- 查询时 decode
+SELECT * FROM 'data.parquet' WHERE decode(regime_fact) = '牛市';
+```
+
+**状态**：已知问题，下游 Gate/哨兵脚本待适配。
+
+---
+
+### 坑 7：多进程写入 → 数据损坏
+
+**错误做法**：
+```python
+# ❌ 4 个 worker 同时写一个 .duckdb 文件
+def worker(coin):
+    con = duckdb.connect("klines.duckdb")  # 多进程同时写
+    con.execute("INSERT INTO klines ...")   # 数据损坏风险
+```
+
+**正确做法**：
+```python
+# ✅ 多进程只读
+con = duckdb.connect("klines.duckdb", read_only=True)
+
+# ✅ 写入用单进程，或各进程写独立文件后合并
+```
+
+---
+
+### 坑 8：进程崩溃导致 WAL 损坏
+
+**现象**：建索引时 Python 崩溃，WAL 文件损坏，之后无法打开 .duckdb 文件。
+
+**修复**：
+```bash
+# 删除 WAL 文件，数据回退到最后一次 checkpoint
+rm klines.duckdb.wal
+# 重新打开，从上次 checkpoint 恢复
+```
+
+**预防**：
+```python
+# 大操作后显式 checkpoint
+con.execute("CHECKPOINT")
+# 白话：把 WAL 日志里的修改真正写入主文件，这样即使崩溃也不丢数据
+```
+
+---
+
+## 15. 我们项目的 DuckDB 文件清单
+
+| 文件 | 大小 | 用途 | 访问模式 |
+|------|------|------|----------|
+| `data/klines.duckdb` | ~44 GB | K线 + 101 个指标列（24币种×10周期，6500万行） | generate_seed.py 只读；build_klines 读写 |
+| `reports/seed_report.duckdb` | 待建 | 4种子合并 + 后算字段（管线最后一环） | build_seed_report.py 写；分析查询只读 |
+
+> 旧版 DuckDB 种子文件（seed_v3*.duckdb）已废弃，新架构用 4 个 SQLite 种子 + 1 个 DuckDB 报告。
+
+### 项目中的 DuckDB 配置
+
+```python
+# 标准配置（所有脚本统一使用）
+con = duckdb.connect(str(db_path))
+con.execute("SET memory_limit = '4GB'")   # 防止撑爆 Mac 内存
+con.execute("SET threads = 2")             # 不抢系统资源（可按需调整）
+
+# 多 worker 读取 K线
+con = duckdb.connect(str(db_path), read_only=True)  # 必须 read_only
+```
+
+---
+
+## 16. seed_report.duckdb Schema
+
+> 管线最后一环：4 个 SQLite 种子合并 + 14 字段后算 → 统一查询入口
+> 构建脚本：`backtest/build_seed_report.py`
+
+### 数据管线
+
+```
+generate_seed.py --seed4
+  → seed_signal.db      (signal_only: 无TTP，纯信号开平仓)
+  → seed_ttp_close.db   (ttp_close: TTP用close价触发)
+  → seed_ttp_hl.db      (ttp_highlow: TTP用high/low触发)
+  → seed_dual.db        (dual_hold: 允许同时持有多空)
+         ↓
+build_seed_report.py
+  → 合并 4 个 SQLite（ATTACH + INSERT SELECT，不用 executemany）
+  → 后算 14 字段（从 paired_trades 的 11 字段 + 固定参数推导）
+  → seed_report.duckdb
+```
+
+### combo_summary 表（36 + 1 列）
+
+```sql
+CREATE TABLE combo_summary (
+    seed_type             VARCHAR,    -- 'signal_only'/'ttp_close'/'ttp_highlow'/'dual_hold'
+    id                    INTEGER,    -- 原 SQLite 内部 ID
+    strategy              VARCHAR,
+    coin                  VARCHAR,
+    interval              VARCHAR,
+    -- 引擎直出字段（从 SQLite 搬入）
+    total_return          DOUBLE,     -- 总收益率（%）
+    final_balance         DOUBLE,     -- 最终余额
+    max_drawdown          DOUBLE,     -- 最大回撤（%）
+    sharpe_ratio          DOUBLE,     -- 夏普比率（年化）
+    sortino_ratio         DOUBLE,     -- 索提诺比率
+    calmar_ratio          DOUBLE,     -- 卡玛比率
+    total_trades          INTEGER,
+    winning_trades        INTEGER,
+    losing_trades         INTEGER,
+    win_rate              DOUBLE,     -- 胜率（%）
+    avg_win_pct           DOUBLE,     -- 平均盈利（%）
+    avg_loss_pct          DOUBLE,     -- 平均亏损（%，正数）
+    profit_factor         DOUBLE,     -- 盈利因子
+    ttp_count             INTEGER,
+    double_count          INTEGER,
+    fastest_double_days   DOUBLE,
+    avg_double_days       DOUBLE,
+    daily_open_positions  DOUBLE,
+    cagr                  DOUBLE,     -- 年化复合增长率
+    max_daily_dd          DOUBLE,     -- 最大单日回撤（金额）
+    reward_risk           DOUBLE,     -- 盈亏比
+    max_consec_loss_amt   DOUBLE,     -- 最大连续亏损金额
+    total_fees            DOUBLE,     -- 总费用
+    max_balance           DOUBLE,
+    min_balance           DOUBLE,
+    max_win               DOUBLE,     -- 最大单笔盈利
+    max_loss              DOUBLE,     -- 最大单笔亏损
+    expectancy_ratio      DOUBLE,
+    longest_win_streak    INTEGER,
+    longest_loss_streak   INTEGER,
+    signal_close_count    INTEGER,
+    backtest_time         VARCHAR
+);
+```
+
+### paired_trades 表（15 列）
+
+```sql
+CREATE TABLE paired_trades (
+    seed_type         VARCHAR,      -- 种子类型
+    combo_id          INTEGER,      -- 对应 combo_summary.id
+    strategy          VARCHAR,      -- JOIN 冗余（方便查询）
+    coin              VARCHAR,
+    interval          VARCHAR,
+    open_candle_idx   INTEGER,      -- 开仓K线全局索引
+    close_candle_idx  INTEGER,      -- 平仓K线全局索引
+    open_time         VARCHAR,      -- 开仓时间（epoch ms）
+    close_time        VARCHAR,      -- 平仓时间（epoch ms）
+    direction         VARCHAR,      -- 'long' 或 'short'
+    entry_price       DOUBLE,       -- 开仓价
+    exit_price        DOUBLE,       -- 平仓价
+    close_type        VARCHAR,      -- 'signal'/'stop_loss'/'ttp'/'end_of_data'
+    mfe               DOUBLE,       -- 最大有利偏移（比例）
+    mae               DOUBLE        -- 最大不利偏移（比例）
+);
+```
+
+### 后算字段说明
+
+SQLite 种子的 combo_summary 中 sharpe/sortino/calmar/max_drawdown/final_balance/cagr 等 14 个字段是**占位 0**（generate_seed.py 只存交易不算这些）。build_seed_report.py 负责后算：
+
+```
+后算输入：paired_trades 的 11 字段 + 固定参数
+  - INITIAL_CAPITAL = 500
+  - LEVERAGE = 10
+  - FEE_RATE = 0.00035（每侧）
+  - SLIPPAGE_PCT = 0.0002（每侧）
+  - FUNDING_RATE_8H = 0.0001
+
+后算步骤：
+  1. 推算 pnl（注意 direction 是字符串 "long"/"short"，需转换）
+     long:  pnl = (exit - entry) / entry × leverage × capital - fees
+     short: pnl = (entry - exit) / entry × leverage × capital - fees
+  2. 构建余额曲线（INITIAL_CAPITAL 累加 pnl）
+  3. 从余额曲线算出：
+     - final_balance, max_drawdown, sharpe, sortino, calmar
+     - cagr, double_count, fastest_double_days, avg_double_days
+     - total_fees, max_balance, min_balance
+     - daily_open_positions, max_daily_dd, expectancy_ratio
+```
+
+### 索引
+
+```sql
+CREATE INDEX idx_cs_strat ON combo_summary(strategy, coin, interval);
+CREATE INDEX idx_cs_seed ON combo_summary(seed_type);
+CREATE INDEX idx_pt_seed ON paired_trades(seed_type);
+CREATE INDEX idx_pt_strat ON paired_trades(strategy, coin, interval);
+```
+
+### 查询示例
+
+```sql
+-- 跨种子对比：某策略在4种模式下的表现
+SELECT seed_type, total_return, sharpe_ratio, max_drawdown, total_trades
+FROM combo_summary
+WHERE strategy = 'rsi_reversal' AND coin = 'BTC' AND interval = '1m'
+ORDER BY seed_type;
+
+-- 找高夏普策略
+SELECT strategy, coin, seed_type, sharpe_ratio, calmar_ratio, total_trades
+FROM combo_summary
+WHERE interval = '1m' AND sharpe_ratio > 2.0
+ORDER BY sharpe_ratio DESC
+LIMIT 20;
+
+-- 某策略的交易时间分布
+SELECT strftime(open_time/1000, 'unixepoch', '%H') AS hour, COUNT(*)
+FROM paired_trades
+WHERE strategy = 'rsi_reversal' AND coin = 'BTC' AND seed_type = 'signal_only'
+GROUP BY hour ORDER BY hour;
+```

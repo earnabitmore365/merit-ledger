@@ -1,0 +1,161 @@
+# Plan: DuckDB 报告层 — 4 SQLite 合并 + 14 字段后算
+
+## Context
+
+4 个 SQLite 种子（signal_only/ttp_close/ttp_highlow/dual_hold）已生成完毕（24 币种 × 105 策略 × 10 周期）。combo_summary 有 36 列但 14 列填了占位 0（sharpe/drawdown/calmar/final_balance/cagr 等）。需要从 paired_trades 的 11 字段后算这 14 列，合并到统一的 DuckDB 报告。
+
+现有 `build_seed_report.py` 只搬了 19 列，没做后算。`refresh_summary.py` 有后算逻辑但依赖 SQLite 特有字段（pnl/balance_after）。
+
+## 修改文件
+
+| 文件 | 操作 |
+|------|------|
+| `backtest/build_seed_report.py` | 重写：扩展 schema + 后算 14 字段 |
+
+## 固定参数（来自 run_metadata）
+
+```
+INITIAL_CAPITAL = 500
+LEVERAGE = 10.0
+FEE_RATE = 0.00035（每侧）
+SLIPPAGE_PCT = 0.0002（每侧）
+FUNDING_RATE_8H = 0.0001
+FIXED_BET_AMOUNT = 1（$1 固定注码）
+bars_per_funding: 1m=480, 5m=96, 15m=32, 30m=16, 1h=8, 2h=4, 4h=2, 8h=1, 12h=1, 1d=1
+```
+
+## 后算的 14 个字段
+
+| 字段 | 依赖 | 说明 |
+|------|------|------|
+| final_balance | balance_curve | 最终余额 |
+| max_drawdown | balance_curve | 最大回撤（%）|
+| sharpe_ratio | per_trade_returns | 夏普（年化，rf=0.02/252）|
+| sortino_ratio | per_trade_returns | 索提诺（仅负收益标准差）|
+| calmar_ratio | total_return, max_dd | total_return / max_dd |
+| cagr | final_balance, trading_days | 年化复合增长率 |
+| double_count | balance_curve | 翻倍次数 |
+| fastest_double_days | balance_curve + timestamps | 最快翻倍天数 |
+| avg_double_days | balance_curve + timestamps | 平均翻倍天数 |
+| daily_open_positions | total_trades, trading_days | 日均开仓量 |
+| total_fees | per_trade_fee | 总费用 |
+| max_balance | balance_curve | 历史最高余额 |
+| min_balance | balance_curve | 历史最低余额 |
+| expectancy_ratio | win_rate, avg_win, avg_loss | 期望比率 |
+| total_return | final_balance | 覆盖：(final_balance-500)/500*100，确保与 final_balance 一致 |
+
+## 方案：Python 逐 combo 后算
+
+### 为什么不用纯 SQL
+
+Sharpe/Sortino 需要标准差、翻倍追踪需要状态机、最大回撤需要累积最高点。这些在 SQL 中极其复杂且难以验证。Python 逐 combo 循环更可靠，且已有 `refresh_summary.py` 的验证过的逻辑可复用。
+
+### 流程
+
+```
+Step 1: 导入 4 个 SQLite → DuckDB（ATTACH + CTAS，不用 executemany）
+  - combo_summary: 全 36 列 + seed_type
+  - paired_trades: 原 11 列 + seed_type + strategy/coin/interval（JOIN 冗余）
+
+Step 2: 逐 combo 后算（Python）
+  - 从 DuckDB 读 paired_trades（按 combo 分组）
+  - 推算 pnl：
+    long:  raw = (exit - entry) / entry × leverage
+    short: raw = (entry - exit) / entry × leverage
+    fee = FEE_RATE × 2
+    slip = SLIPPAGE_PCT × 2
+    funding = FUNDING_RATE_8H × floor(holding_bars / bars_per_funding)
+    pnl = raw - fee - slip - funding
+  - 乘以 FIXED_BET_AMOUNT（$1 注码）得到 pnl 金额
+  - 构建 balance_curve = [INITIAL_CAPITAL, +pnl1, +pnl2, ...]
+  - 算 14 个字段
+  - 批量 UPDATE combo_summary
+
+Step 3: 建索引 + 统计汇总
+```
+
+### pnl 公式详解
+
+```python
+# generate_seed.py save_sim_combo 行 1172-1182 的原始逻辑：
+if direction == "long":
+    raw_pnl = (exit_price - entry_price) / entry_price * leverage
+else:
+    raw_pnl = (entry_price - exit_price) / entry_price * leverage
+
+holding = close_candle_idx - open_candle_idx
+fee = FEE_RATE * 2              # 开+平
+slip = SLIPPAGE_PCT * 2          # 开+平
+funding_count = holding // bars_per_funding
+funding = FUNDING_RATE_8H * funding_count
+net_pnl = raw_pnl - fee - slip - funding
+
+# pnl 是 r_value（比例），乘 capital 得金额
+pnl_amount = net_pnl * FIXED_BET_AMOUNT  # $1 注码
+```
+
+### 性能估算
+
+- combo 数量：24 币种 × 105 策略 × 4 seed_type × ~10 周期 ≈ 100,000
+- 但 1m 以外的周期种子还没有（当前只有 1m）
+- 1m: 24 × 105 × 4 = 10,080 combos
+- 平均每 combo 读取 + 计算 < 50ms → 总计 ~8 分钟
+- DuckDB 批量 UPDATE 很快
+
+### 代码结构
+
+```python
+def build_report():
+    # Step 1: 导入
+    import_sqlite_to_duckdb(con)
+
+    # Step 2: 后算
+    combos = con.execute(
+        "SELECT seed_type, id, strategy, coin, interval "
+        "FROM combo_summary").fetchall()
+
+    updates = []
+    for seed_type, combo_id, strategy, coin, interval in combos:
+        trades = con.execute(
+            "SELECT open_candle_idx, close_candle_idx, open_time, close_time, "
+            "direction, entry_price, exit_price, close_type "
+            "FROM paired_trades "
+            "WHERE seed_type=? AND combo_id=? "
+            "ORDER BY open_candle_idx, close_candle_idx",
+            [seed_type, combo_id]).fetchall()
+
+        metrics = compute_post_metrics(trades, interval)
+        updates.append((metrics, seed_type, combo_id))
+
+    # 批量 UPDATE
+    for metrics, seed_type, combo_id in updates:
+        con.execute("UPDATE combo_summary SET ... WHERE seed_type=? AND id=?",
+                    [..., seed_type, combo_id])
+
+    # Step 3: 索引
+    create_indexes(con)
+```
+
+### compute_post_metrics 复用
+
+从 `refresh_summary.py` 的 `recalculate_summary` 提取核心逻辑，适配 11 字段输入：
+- 原版从 DB 读 `pnl, balance_after, fee, ...` → 新版从 entry/exit/direction 推算 pnl
+- 余额曲线、Sharpe、回撤、翻倍等逻辑不变
+
+## 验证方案
+
+1. **抽查对比**：BTC 1m rsi_reversal 的后算结果 vs 手算（INITIAL_CAPITAL=500, 30360 笔交易）
+2. **非零检查**：所有 combo 的 14 个后算字段不应全为 0（除非交易数为 0）
+3. **合理性检查**：
+   - sharpe 在 [-5, 5] 范围内
+   - max_drawdown 在 [0, 100] 范围内
+   - final_balance > 0
+   - calmar = total_return / max_drawdown（可验算）
+4. **数据量检查**：combo 数 = 4 × SQLite 各自的 combo 数之和
+
+## 执行顺序
+
+1. 重写 build_seed_report.py
+2. 跑一次生成 seed_report.duckdb
+3. 验证后算字段
+4. 更新 CHANGELOG + backlog

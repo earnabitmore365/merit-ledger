@@ -1,0 +1,9 @@
+{
+  "id": "31",
+  "subject": "修相关性计算：用open_time替代candle_idx",
+  "description": "用开仓时间（小时级对齐）算重合度，替代无效的candle_idx比较",
+  "activeForm": "修相关性重跑",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

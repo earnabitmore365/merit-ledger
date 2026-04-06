@@ -1,0 +1,60 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/inject_rules.py"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          }
+        ]
+      }
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "memsearch-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "zilliztech/memsearch"
+      }
+    }
+  }
+}

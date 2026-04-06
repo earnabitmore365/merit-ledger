@@ -1,0 +1,23 @@
+# Mirror 永久封杀 + 止血 + 重启
+
+## Context
+Grok + Gemini 三方共识：实盘任何形式的K线翻转永久封杀。max_price 漂移导致指标全部重绘，mirror 冠军是假神。
+
+## 执行清单
+
+### 1. 止血：kill 全部 4 个实例
+```bash
+ssh -p 2222 pc_heisi_claude@localhost "pkill -f bitmex_race"
+```
+
+### 2. 检查持仓，决定平仓
+查 ETH SHORT @ $2294.19 和 XRP SHORT @ $1.47 当前盈亏，汇报老板决定
+
+### 3. 封杀 3 个文件
+- `mirror.py`：generate_signal 改成 raise RuntimeError
+- `bitmex_race.py`：--mirror 和 --flip-klines 启动直接报错，删除 FlipKlinesStrategy 和 PaperWrapper 中的翻转逻辑
+- `system.py`：策略名含 mirror/flip 直接报错
+
+### 4. 同步 Nitro
+
+### 5. 更新 CHECKPOINT + README

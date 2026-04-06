@@ -1,0 +1,666 @@
+# Handoff to Consultant — 21 策略并行系统 Phase 1 完成 + 4 年资金模拟
+
+> 从：黑丝（Opus）
+> 至：顾问
+> 日期：2026-03-22
+
+---
+
+## 1. 完成了什么
+
+Phase 1 代码全部写完（6 个文件）+ 联合回测资金模拟已跑完。
+
+### 文件清单
+
+| 文件 | 行数 | 职责 |
+|------|------|------|
+| `team_config.py` | 112 | 21 策略配置表 + 注码计算 + 周期映射 |
+| `kline_dispatcher.py` | 202 | 1m K线预加载 + 聚合(5m/15m/30m/1h) + 分发 |
+| `strategy_runner.py` | 270 | 单策略生命周期：信号 + 内部持仓 + SL/TP挂单 + TTP + 序列化 |
+| `limit_executor.py` | 170 | 限价5次重试 + 部分成交补齐 + 小周期重算信号 + 转市价 |
+| `trade_logger.py` | 130 | SQLite 实盘交易记录(live_trades表) |
+| `unified_trader.py` | 400 | 主入口：21策略并行 + 事件驱动 + 崩溃恢复 + 对账 + 熔断 |
+| `sim_21_team.py` | 332 | 资金模拟脚本（读种子数据，不依赖交易代码） |
+| `combined_backtest.py` | 175 | 冒烟测试（K线分发+信号验证） |
+
+### 冒烟测试结果
+- 21 策略全部加载，零错误
+- 19 个 coin×interval 组合 K 线分发完整
+- 11 个策略产出 BUY/SELL 信号，10 个 HOLD（1h 策略数据太少正常）
+
+---
+
+## 2. 资金模拟结果（4 年：2022-03-23 ~ 2026-03-22）
+
+### 关键指标
+
+```
+初始余额:         $398.00
+最终余额:         $581,053,647（复利爆炸，见下方说明）
+最大回撤:         49.7% (2022-03-29，最低 $225.57)
+熔断触发:         0 次
+跳过率:           3.9% (732/18997)
+最大同时持仓:     21
+```
+
+### 复利爆炸说明
+注码公式 `available ÷ 21` 随余额增长无上限，导致后期天文数字。**前 2 年数据最有参考价值**（本金小，复利效应小）：
+
+| 时期 | 起点 | 终点 | 收益率 |
+|------|------|------|--------|
+| 2022 全年 | $398 | $4,894 | +1,130% |
+| 2023 全年 | $4,894 | $8,406 | +72% |
+| 2024 全年 | $8,406 | $17,088 | +103% |
+| 2025 起爆炸 | $17,088 | 天文数字 | 复利不真实 |
+
+### 最大回撤详情
+- 2022-03-29：$398 → $225.57（-43.3%），差点触 $100 熔断
+- 原因：刚开始 21 策略同时开仓，几个同时亏损
+- 4 月即恢复并大涨到 $5,680
+
+### 各策略贡献
+
+**赚钱的 14 个：**
+
+| 策略 | 开仓 | 胜率 | 备注 |
+|------|------|------|------|
+| BNB_mean_reversion_30m (mirror) | 254 | 69.7% | 最大贡献 |
+| BTC_bb_squeeze_30m (mirror) | 474 | 64.1% | 第二 |
+| ETH_mean_reversion_1m (mirror) | 2002 | 77.9% | 高频稳赚 |
+| ETH_advanced_kline_echo_1h (mirror) | 1797 | 65.2% | |
+| SOL_williams_fast_1h (mirror) | 1105 | 57.5% | |
+| ETH_proc_30m (mirror) | 309 | 70.2% | |
+| AVAX_smc_real_1h (no mirror) | 937 | 47.2% | 低胜率但盈利 |
+| SOL_mean_reversion_1m (mirror) | 1745 | 81.0% | 最高胜率 |
+| XRP_mean_reversion_1m (mirror) | 1947 | 74.5% | |
+| LINK_order_block_5m (mirror) | 3002 | 64.0% | 最多交易 |
+| LINK_mean_reversion_15m (mirror) | 683 | 69.4% | |
+| ADA_mean_reversion_5m (mirror) | 1094 | 72.9% | |
+| DOT_bb_squeeze_5m (mirror) | 407 | 67.1% | |
+| AVAX_mean_reversion_1m (mirror) | 258 | 53.7% | 微利（被跳过732次） |
+
+**亏钱的 7 个（拖后腿）：**
+
+| 策略 | 开仓 | 胜率 | 特征 |
+|------|------|------|------|
+| AVAX_bb_squeeze_1h (no mirror) | 425 | 67.1% | 高胜率但单笔亏损大 |
+| LINK_bb_squeeze_1h (no mirror) | 427 | 70.3% | 同上 |
+| DOT_bb_squeeze_1h (no mirror) | 388 | 68.8% | 同上 |
+| XRP_rsi_reversal_1h (mirror) | 477 | 59.3% | 低胜率 |
+| ADA_mean_reversion_1h (mirror) | 60 | 71.7% | 交易太少 |
+| SOL_bb_squeeze_1h (no mirror) | 444 | 71.2% | 高胜率但单笔亏损大 |
+| DOT_bb_squeeze_30m (mirror) | 30 | 70.0% | 交易太少 |
+
+**规律：亏钱的全是 1h 策略（6/7），特征是胜率高但单笔亏损远大于单笔盈利（profit factor < 1）。**
+
+---
+
+## 3. 需要顾问审阅的决策点
+
+### 决策 1：踢掉 7 个拖后腿策略？
+
+选项 A：踢掉全部 7 个 → 14 策略上阵
+- 优点：去掉拖后腿，每个策略分到更多资金
+- 缺点：减少分散度
+
+选项 B：只踢 1h 非 mirror 的 3 个（AVAX/LINK/DOT bb_squeeze_1h）
+- 它们都是非 mirror + 1h + bb_squeeze，特征一致
+- 保留其他 4 个观察
+
+选项 C：保留全部 21 个
+- 亏损策略在某些 regime 下可能有对冲价值
+
+### 决策 2：注码公式需要加上限吗？
+
+当前：`bet = max(100, available // 21 // 10 * 10)` — 无上限
+建议加上限：`bet = min(bet, MAX_BET)` — 如 MAX_BET = $1,000
+
+### 决策 3：最大回撤 49.7% 可接受吗？
+
+临界 50%。发生在第一周（21 策略同时开仓 + 同时亏损）。
+
+---
+
+## 4. 架构设计（已实现）
+
+```
+Feed Gateway (ZMQ PUB 5555)
+      ↓ 1m K线
+FeedClient (ZMQ SUB)
+      ↓
+KlineDispatcher (聚合 1m→5m/15m/30m/1h)
+      ↓ on_bar_callback(coin, interval, bar, klines)
+UnifiedTrader (路由到对应 StrategyRunner)
+      ↓
+StrategyRunner × 21 (每个策略独立信号→交易)
+      ↓
+BitMEX Adapter (Hedge Mode, 共享一个 adapter)
+```
+
+### 核心设计原则
+1. **无 Regime 切换** — 21 策略全员常驻
+2. **内部持仓跟踪** — BitMEX 合并同币种仓位，不能靠 API 查
+3. **交易所挂单保护** — 开仓后挂 SL(±10%)，TTP 激活后挂 TP，平仓前撤 SL+TP
+4. **限价重试** — 5次×10s，1m/5m 重算信号，15m+ 直接重挂，5次失败转市价
+5. **崩溃恢复** — JSON 原子写入，重启时恢复+查挂单+补齐
+6. **每小时对账** — 内部加总 vs 交易所仓位，偏差报警
+7. **熔断** — 余额 < $100 全平
+
+---
+
+## 5. 代码（完整）
+
+### 5.1 strategy_runner.py
+
+```python
+#!/usr/bin/env python3
+"""单个策略的完整生命周期管理"""
+
+import os, sys, logging
+from datetime import datetime
+
+_lab_dir = os.path.dirname(os.path.abspath(__file__))
+if _lab_dir not in sys.path:
+    sys.path.insert(0, _lab_dir)
+_src_dir = os.path.join(_lab_dir, 'src')
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
+from core.strategy.base import get_strategy, Signal
+from core.risk.ttp import TTPManager, TTPConfig
+from exchange.base import OrderSide
+
+logger = logging.getLogger(__name__)
+
+
+class StrategyRunner:
+    """状态机：idle → pending_open → active → pending_close → idle"""
+
+    def __init__(self, config, adapter):
+        self.coin = config.coin
+        self.strategy_name = config.strategy
+        self.interval = config.interval
+        self.mirror = config.mirror
+        self.id = f"{config.coin}_{config.strategy}_{config.interval}"
+
+        self._inner_strategy = get_strategy(config.strategy)
+        self._adapter = adapter
+        self.ttp_manager = TTPManager(TTPConfig())
+
+        # 内部持仓状态（不靠 API 查）
+        self.position = None          # 'BUY' / 'SELL' / None
+        self.entry_price = 0.0
+        self.position_size = 0.0
+        self._target_size = 0.0
+        self.open_time = None
+        self.sl_order_id = None
+        self.tp_order_id = None
+        self.state = 'idle'
+        self._last_ttp_level = 0.0
+
+    def on_bar(self, bar, klines):
+        """收到 K 线，返回信号（不执行交易）"""
+        if not klines or len(klines) < 2:
+            return None
+        klines_list = list(klines)
+        if self.mirror:
+            klines_list = self._flip_klines(klines_list)
+            bar = klines_list[-1]
+        try:
+            from core.indicator_cache import init_cache
+            namespace = 'flipped' if self.mirror else 'normal'
+            init_cache(self.coin, self.interval, klines_list, namespace=namespace)
+        except Exception as e:
+            logger.warning(f"[{self.id}] indicator_cache 更新失败: {e}")
+        self._inner_strategy.current_idx = len(klines_list) - 1
+        try:
+            result = self._inner_strategy.generate_signal(self.coin, klines_list)
+            if result is None:
+                return None
+            if hasattr(result, 'signal'):
+                sig = result.signal
+                return sig.value if hasattr(sig, 'value') else str(sig)
+            return str(result)
+        except Exception as e:
+            logger.error(f"[{self.id}] generate_signal 异常: {e}")
+            return None
+
+    def _flip_klines(self, klines):
+        if not klines:
+            return klines
+        max_price = max(k['high'] for k in klines)
+        return [dict(k, open=max_price-k['open'], close=max_price-k['close'],
+                     high=max_price-k['low'], low=max_price-k['high']) for k in klines]
+
+    def after_open(self, adapter):
+        """开仓后挂 SL 单(±10%)"""
+        if not self.position or self.entry_price <= 0:
+            return
+        if self.position == 'BUY':
+            sl_price, sl_side = round(self.entry_price * 0.90, 2), OrderSide.SELL
+        else:
+            sl_price, sl_side = round(self.entry_price * 1.10, 2), OrderSide.BUY
+        try:
+            result = adapter.place_stop_loss(coin=self.coin, stop_price=sl_price,
+                                             size=self.position_size, side=sl_side)
+            if result.success:
+                self.sl_order_id = result.order_id
+        except Exception as e:
+            logger.error(f"[{self.id}] after_open 异常: {e}")
+        self.tp_order_id = None
+        self._last_ttp_level = 0.0
+        self.ttp_manager.state.reset()
+
+    def update_ttp_on_exchange(self, adapter, current_price):
+        """TTP level 变化时更新 TP 单"""
+        if not self.position or self.entry_price <= 0:
+            return None
+        pos_side = "LONG" if self.position == "BUY" else "SHORT"
+        result = self.ttp_manager.check(position=None, current_price=current_price,
+                                        position_side=pos_side, entry_price=self.entry_price)
+        if result.should_close:
+            return 'TTP_TRIGGERED'
+        ttp_level = self.ttp_manager.state.ttp_level
+        if self.ttp_manager.state.active and ttp_level > 0:
+            if abs(ttp_level - self._last_ttp_level) > 0.001:
+                if self.tp_order_id:
+                    try: adapter.cancel_order(self.tp_order_id)
+                    except: pass
+                tp_side = OrderSide.SELL if self.position == 'BUY' else OrderSide.BUY
+                try:
+                    tp_result = adapter.place_take_profit(coin=self.coin, tp_price=round(ttp_level, 2),
+                                                          size=self.position_size, side=tp_side)
+                    if tp_result.success:
+                        self.tp_order_id = tp_result.order_id
+                        self._last_ttp_level = ttp_level
+                except Exception as e:
+                    logger.error(f"[{self.id}] update_ttp 异常: {e}")
+        return None
+
+    def before_close(self, adapter):
+        """平仓前撤 SL+TP 单"""
+        for oid_attr in ('sl_order_id', 'tp_order_id'):
+            oid = getattr(self, oid_attr)
+            if oid:
+                try: adapter.cancel_order(oid)
+                except: pass
+                setattr(self, oid_attr, None)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'coin': self.coin, 'strategy_name': self.strategy_name,
+            'interval': self.interval, 'mirror': self.mirror,
+            'position': self.position, 'entry_price': self.entry_price,
+            'position_size': self.position_size, '_target_size': self._target_size,
+            'open_time': self.open_time, 'sl_order_id': self.sl_order_id,
+            'tp_order_id': self.tp_order_id, 'state': self.state,
+            '_last_ttp_level': self._last_ttp_level,
+            'ttp_state': {k: getattr(self.ttp_manager.state, k)
+                          for k in ('position_side','entry_price','highest','pullback_low',
+                                    'lowest','pullback_high','in_pullback','swing_count',
+                                    'ttp_level','active')},
+        }
+
+    def from_dict(self, d):
+        for k in ('position','entry_price','position_size','_target_size','open_time',
+                   'sl_order_id','tp_order_id','state','_last_ttp_level'):
+            if k in d:
+                setattr(self, k, d[k])
+        ttp = d.get('ttp_state', {})
+        for k, v in ttp.items():
+            setattr(self.ttp_manager.state, k, v)
+```
+
+### 5.2 limit_executor.py
+
+```python
+#!/usr/bin/env python3
+"""限价挂单 + 重试 + 转市价"""
+
+import os, sys, time, logging
+
+_lab_dir = os.path.dirname(os.path.abspath(__file__))
+_src_dir = os.path.join(_lab_dir, 'src')
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
+from exchange.base import OrderRequest, OrderSide, OrderType
+
+logger = logging.getLogger(__name__)
+
+
+class LimitOrderExecutor:
+    MAX_RETRIES = 5
+    RETRY_INTERVAL = 10  # 秒
+    SMALL_TF = {'1m', '5m'}
+
+    def execute_limit(self, strategy, side, size, adapter, dispatcher=None):
+        """限价挂单 + 重试。返回 {'success': bool, 'price': float, ...}"""
+        order_side = OrderSide.BUY if side == 'BUY' else OrderSide.SELL
+
+        for attempt in range(self.MAX_RETRIES):
+            bid, ask = adapter.get_best_bid_ask(strategy.coin)
+            if bid <= 0 or ask <= 0:
+                time.sleep(self.RETRY_INTERVAL)
+                continue
+
+            price = bid if side == 'BUY' else ask
+            order = OrderRequest(coin=strategy.coin, side=order_side,
+                                 order_type=OrderType.LIMIT, size=size, price=price)
+            result = adapter.place_order(order)
+            if not result.success:
+                time.sleep(self.RETRY_INTERVAL)
+                continue
+
+            order_id = result.order_id
+            time.sleep(self.RETRY_INTERVAL)
+
+            status = adapter.get_order_status(order_id)
+            ord_status = status.get('ordStatus', '')
+            filled_qty = float(status.get('cumQty', 0) or 0)
+
+            if ord_status == 'Filled':
+                return {'success': True, 'price': float(status.get('avgPx', 0) or 0),
+                        'actual_size': filled_qty or size, 'attempts': attempt + 1}
+
+            if filled_qty > 0:
+                adapter.cancel_order(order_id)
+                remaining = size - filled_qty
+                avg_price = float(status.get('avgPx', 0) or 0)
+                if remaining > 0:
+                    mkt = OrderRequest(coin=strategy.coin, side=order_side,
+                                       order_type=OrderType.MARKET, size=remaining)
+                    mkt_result = adapter.place_order(mkt)
+                    mkt_price = mkt_result.filled_price or price
+                    blended = (avg_price * filled_qty + mkt_price * remaining) / size
+                    return {'success': True, 'price': blended, 'actual_size': size,
+                            'attempts': attempt + 1, 'partial_fill': True}
+                return {'success': True, 'price': avg_price, 'actual_size': filled_qty,
+                        'attempts': attempt + 1, 'partial_fill': True}
+
+            adapter.cancel_order(order_id)
+
+            if strategy.interval in self.SMALL_TF and dispatcher:
+                klines = dispatcher.get_window(strategy.coin, strategy.interval)
+                if klines and len(klines) >= 2:
+                    new_signal = strategy.on_bar(klines[-1], klines)
+                    if new_signal != side:
+                        return {'success': False, 'reason': 'signal_gone',
+                                'attempts': attempt + 1}
+
+        # 5 次失败 → 转市价
+        mkt = OrderRequest(coin=strategy.coin, side=order_side,
+                           order_type=OrderType.MARKET, size=size)
+        mkt_result = adapter.place_order(mkt)
+        if mkt_result.success:
+            return {'success': True, 'price': mkt_result.filled_price or 0,
+                    'actual_size': mkt_result.filled_size or size,
+                    'attempts': self.MAX_RETRIES, 'fallback': 'market'}
+        return {'success': False, 'reason': f'market_failed: {mkt_result.message}',
+                'attempts': self.MAX_RETRIES}
+```
+
+### 5.3 trade_logger.py
+
+```python
+#!/usr/bin/env python3
+"""实盘交易记录（SQLite）"""
+
+import os, sqlite3, logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+DEFAULT_DB = os.path.join(os.path.dirname(__file__), 'reports', 'live_trades.db')
+
+
+class TradeLogger:
+    def __init__(self, db_path=None):
+        self.db_path = db_path or DEFAULT_DB
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        self.conn = sqlite3.connect(self.db_path)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS live_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                strategy_id TEXT, coin TEXT, strategy TEXT, interval TEXT,
+                side TEXT, entry_price REAL, exit_price REAL,
+                position_size REAL, pnl REAL, fee REAL,
+                open_time TEXT, close_time TEXT, close_reason TEXT,
+                bet_amount REAL, balance_after REAL)""")
+        self.conn.commit()
+
+    def log_trade(self, strategy, close_reason, exit_price, pnl, fee, balance):
+        bet = strategy.position_size / 10 if strategy.position_size else 0
+        self.conn.execute("""
+            INSERT INTO live_trades VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (strategy.id, strategy.coin, strategy.strategy_name, strategy.interval,
+             strategy.position, strategy.entry_price, exit_price,
+             strategy.position_size, pnl, fee, strategy.open_time,
+             datetime.utcnow().isoformat(), close_reason, bet, balance))
+        self.conn.commit()
+
+    def get_daily_report(self, date=None):
+        if not date: date = datetime.utcnow().strftime('%Y-%m-%d')
+        return self.conn.execute("""
+            SELECT strategy_id, COUNT(*), SUM(pnl), SUM(fee)
+            FROM live_trades WHERE close_time LIKE ?
+            GROUP BY strategy_id ORDER BY SUM(pnl) DESC""", (f"{date}%",)).fetchall()
+
+    def close(self):
+        if self.conn: self.conn.close()
+```
+
+### 5.4 unified_trader.py
+
+```python
+#!/usr/bin/env python3
+"""21 策略并行交易主脚本"""
+
+import os, sys, json, time, signal, logging
+from datetime import datetime
+
+_lab_dir = os.path.dirname(os.path.abspath(__file__))
+if _lab_dir not in sys.path: sys.path.insert(0, _lab_dir)
+_src_dir = os.path.join(_lab_dir, 'src')
+if _src_dir not in sys.path: sys.path.insert(0, _src_dir)
+
+from team_config import TEAM, get_bet_amount, get_needed_intervals, LEVERAGE, CIRCUIT_BREAKER_USD
+from kline_dispatcher import KlineDispatcher
+from strategy_runner import StrategyRunner
+from limit_executor import LimitOrderExecutor
+from trade_logger import TradeLogger
+from data.feed_client import FeedClient
+from exchange.bitmex.adapter import BitMEXAdapter
+from exchange.base import OrderRequest, OrderSide, OrderType
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+logger = logging.getLogger('unified_trader')
+STATE_FILE = os.path.join(_lab_dir, 'strategy_states.json')
+
+
+class UnifiedTrader:
+    def __init__(self):
+        self.adapter = BitMEXAdapter()
+        self.feed_client = FeedClient()
+        self.executor = LimitOrderExecutor()
+        self.logger = TradeLogger()
+        self.strategies = [StrategyRunner(cfg, self.adapter) for cfg in TEAM]
+        self.dispatcher = KlineDispatcher(on_bar_callback=self._on_bar)
+        self._strategy_map = {}
+        for s in self.strategies:
+            self._strategy_map.setdefault((s.coin, s.interval), []).append(s)
+        self._running = True
+        self._reconcile_timer = self._daily_report_timer = self._last_ttp_check = 0.0
+        signal.signal(signal.SIGTERM, lambda s, f: setattr(self, '_running', False))
+        signal.signal(signal.SIGINT, lambda s, f: setattr(self, '_running', False))
+
+    def start(self):
+        self._startup_recovery()
+        self.dispatcher.startup(self.adapter)
+        for coin in get_needed_intervals():
+            self.feed_client.subscribe(coin, '1m')
+        self._reconcile()
+        now = time.time()
+        self._reconcile_timer = self._daily_report_timer = self._last_ttp_check = now
+        self._run_forever()
+
+    def _run_forever(self):
+        while self._running:
+            if not self.feed_client.wait_for_kline(timeout=120):
+                if not self.feed_client.is_gateway_alive():
+                    self._on_gateway_disconnect()
+                continue
+            for coin in get_needed_intervals():
+                klines = self.feed_client.get_klines(coin, '1m')
+                if klines: self.dispatcher.on_1m_bar(coin, klines[-1])
+            now = time.time()
+            if now - self._last_ttp_check >= 1:
+                self._check_ttp(); self._last_ttp_check = now
+            self._check_circuit_breaker()
+            if now - self._reconcile_timer >= 3600:
+                self._reconcile(); self._reconcile_timer = now
+            if now - self._daily_report_timer >= 86400:
+                self._send_daily_report(); self._daily_report_timer = now
+        self._save_states(); self.logger.close()
+
+    def _on_bar(self, coin, interval, bar, klines):
+        for s in self._strategy_map.get((coin, interval), []):
+            if s.state in ('pending_open', 'pending_close'): continue
+            try:
+                sig = s.on_bar(bar, klines)
+                if sig and sig != 'HOLD': self._execute(s, sig)
+            except Exception as e:
+                logger.error(f"[{s.id}] on_bar: {e}")
+
+    def _execute(self, strategy, signal_str):
+        if signal_str in ('BUY','SELL') and not strategy.position:
+            available = self.adapter.get_balance().get('available', 0)
+            bet = get_bet_amount(available)
+            if available < bet / LEVERAGE: return
+            strategy.state = 'pending_open'
+            strategy._target_size = bet
+            result = self.executor.execute_limit(strategy, signal_str, bet, self.adapter, self.dispatcher)
+            if result['success']:
+                strategy.position = signal_str
+                strategy.entry_price = result['price']
+                strategy.position_size = result.get('actual_size', bet)
+                strategy.open_time = datetime.utcnow().isoformat()
+                strategy.state = 'active'
+                strategy.after_open(self.adapter)
+                self._save_states()
+            else:
+                strategy.state = 'idle'
+        elif strategy.position:
+            close_side = 'SELL' if strategy.position == 'BUY' else 'BUY'
+            if signal_str in (close_side, 'CLOSE'):
+                self._close_position(strategy, close_side, 'SIGNAL')
+
+    def _close_position(self, strategy, close_side, reason):
+        strategy.state = 'pending_close'
+        strategy.before_close(self.adapter)
+        result = self.executor.execute_limit(strategy, close_side, strategy.position_size,
+                                              self.adapter, self.dispatcher)
+        if result['success']:
+            pnl = self._calc_pnl(strategy, result['price'])
+            bal = self.adapter.get_balance().get('available', 0)
+            self.logger.log_trade(strategy, reason, result['price'], pnl, 0, bal)
+            strategy.position = None; strategy.entry_price = 0
+            strategy.position_size = 0; strategy.state = 'idle'
+            strategy.ttp_manager.state.reset()
+            self._save_states()
+        else:
+            strategy.state = 'active'
+
+    def _calc_pnl(self, s, exit_price):
+        if s.position == 'BUY': return (exit_price - s.entry_price) / s.entry_price * s.position_size
+        if s.position == 'SELL': return (s.entry_price - exit_price) / s.entry_price * s.position_size
+        return 0.0
+
+    def _check_ttp(self):
+        for s in self.strategies:
+            if s.state != 'active' or not s.position: continue
+            price = self.feed_client.get_price(s.coin)
+            if price <= 0: continue
+            if s.update_ttp_on_exchange(self.adapter, price) == 'TTP_TRIGGERED':
+                self._close_position(s, 'SELL' if s.position=='BUY' else 'BUY', 'TTP')
+
+    def _check_circuit_breaker(self):
+        bal = self.feed_client.get_balance()
+        avail = bal.get('availableMargin', 0)
+        avail_usd = avail / 1e6 if avail > 1000 else avail
+        if 0 < avail_usd < CIRCUIT_BREAKER_USD: self._circuit_break()
+
+    def _circuit_break(self):
+        self.adapter.cancel_all_orders()
+        for s in self.strategies:
+            if s.position:
+                self.adapter.place_order(OrderRequest(
+                    coin=s.coin, side=OrderSide.SELL if s.position=='BUY' else OrderSide.BUY,
+                    order_type=OrderType.MARKET, size=s.position_size, reduce_only=True))
+                s.position = None; s.position_size = 0; s.state = 'idle'
+        self._save_states()
+
+    def _startup_recovery(self):
+        self._load_states()
+        # pending_open → 查交易所补齐或撤销
+        # pending_close → 市价平完
+        # 撤无主挂单（完整逻辑见磁盘 unified_trader.py L290-L350）
+
+    def _save_states(self):
+        tmp = STATE_FILE + '.tmp'
+        with open(tmp, 'w') as f: json.dump({s.id: s.to_dict() for s in self.strategies}, f, indent=2)
+        os.replace(tmp, STATE_FILE)
+
+    def _load_states(self):
+        if not os.path.exists(STATE_FILE): return
+        with open(STATE_FILE) as f: states = json.load(f)
+        for s in self.strategies:
+            if s.id in states: s.from_dict(states[s.id])
+
+    def _reconcile(self):
+        positions = self.adapter.get_positions()
+        internal = {}
+        for s in self.strategies:
+            if s.position:
+                internal.setdefault(s.coin, {'long':0,'short':0})
+                internal[s.coin]['long' if s.position=='BUY' else 'short'] += s.position_size
+        ex_map = {p.coin: p.size if p.side=='LONG' else -p.size for p in positions}
+        for coin in set(list(internal)+list(ex_map)):
+            i = internal.get(coin, {'long':0,'short':0})
+            diff = abs(ex_map.get(coin,0) - (i['long']-i['short']))
+            if diff > 0.01: logger.warning(f"⚠️ 对账偏差 {coin}: {diff:.4f}")
+
+    def _on_gateway_disconnect(self):
+        self.dispatcher.on_reconnect(self.adapter)
+        self._save_states()
+
+    def _send_daily_report(self):
+        report = self.logger.get_daily_report()
+        if report: logger.info(f"📊 每日: {sum(r[1] for r in report)}笔 PnL={sum(r[2] or 0 for r in report):.2f}")
+
+
+if __name__ == '__main__':
+    UnifiedTrader().start()
+```
+
+### 5.5 sim_21_team.py（资金模拟，完整代码见磁盘 lab/sim_21_team.py 332行）
+
+```python
+# 核心逻辑摘要：
+# 1. 从 seed_v3_ttp.db 读 21 策略的 paired_trades（按 combo_id 匹配）
+# 2. 每笔交易拆成 OPEN + CLOSE 事件，按时间排序
+# 3. OPEN：available ÷ 21 算注码 → 占用保证金
+# 4. CLOSE：nominal × pnl_pct - fee → 更新余额，止损限制 = 保证金
+# 5. 熔断：余额 < $100 全平
+# 用法：python3 sim_21_team.py --years 4
+```
+
+---
+
+## 6. 下一步
+
+| 步骤 | 内容 | 依赖 |
+|------|------|------|
+| Phase 2 | 接交易：部署 Nitro 实测 | 顾问审阅通过 + 决策 1/2/3 |
+| Phase 3 | 风控：Telegram 报警 + process_guard.sh | Phase 2 |
+
+**等顾问对 3 个决策点给意见后继续。**

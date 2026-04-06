@@ -1,0 +1,1 @@
+/Users/allenbot/.claude/plugins/marketplaces/claude-code-workflows/plugins/frontend-mobile-security/agents/frontend-security-coder.md

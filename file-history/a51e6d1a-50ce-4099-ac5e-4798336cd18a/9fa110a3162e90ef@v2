@@ -1,0 +1,510 @@
+#!/usr/bin/env python3
+"""
+BitMEX WebSocket 模块
+
+订阅实时数据：orderbook、trades、持仓更新、订单状态
+"""
+
+import json
+import time
+import hmac
+import hashlib
+import logging
+import threading
+from typing import Callable, Dict, List, Optional
+
+try:
+    import websocket as ws_lib
+    HAS_WEBSOCKET = True
+except ImportError:
+    HAS_WEBSOCKET = False
+
+
+logger = logging.getLogger('BitMEX.WS')
+
+
+class BitMEXWebSocket:
+    """BitMEX WebSocket 客户端
+
+    Usage:
+        ws = BitMEXWebSocket(testnet=True)
+        ws.connect(api_key='...', api_secret='...')
+        ws.subscribe(['orderBookL2_25:XBTUSD', 'position', 'order'])
+        price = ws.get_best_bid('XBTUSD')
+    """
+
+    MAINNET_URL = 'wss://ws.bitmex.com/realtime'
+    TESTNET_URL = 'wss://ws.testnet.bitmex.com/realtime'
+
+    def __init__(self, testnet: bool = True):
+        self.testnet = testnet
+        self.url = self.TESTNET_URL if testnet else self.MAINNET_URL
+
+        # 数据存储
+        self._orderbook: Dict[str, Dict] = {}   # symbol -> {bids: [], asks: []}
+        self._positions: Dict[str, Dict] = {}    # symbol -> position data
+        self._orders: Dict[str, Dict] = {}       # orderID -> order data
+        self._last_price: Dict[str, float] = {}  # symbol -> last trade price
+
+        # 连接状态
+        self._ws = None
+        self._thread = None
+        self._connected = False
+        self._authenticated = False
+        self._lock = threading.Lock()
+
+        # 自动重连
+        self._reconnect_enabled = True
+        self._reconnect_delay = 5       # 首次重连等待秒数
+        self._reconnect_max_delay = 60  # 最大等待秒数
+        self._reconnect_lock = threading.Lock()  # 防止多线程同时重连
+        self._reconnecting = False
+        self._subscribed_topics: List[str] = []  # 记住订阅，重连后自动恢复
+        self._last_message_time = 0  # 上次收到消息的时间
+
+        # 回调
+        self._on_order_update: Optional[Callable] = None
+        self._on_position_update: Optional[Callable] = None
+        self._on_table_callback: Optional[Callable] = None      # 泛用回调：(table, action, rows)
+        self._on_reconnect_callback: Optional[Callable] = None  # 重连成功回调
+
+        # K线/余额存储（供 Feed Gateway 使用）
+        self._kline_data: Dict[str, Dict] = {}   # "{symbol}_{interval}" → latest kline
+        self._margin_data: Dict = {}              # 最新余额
+
+    def connect(self, api_key: str = '', api_secret: str = '',
+                on_order_update: Optional[Callable] = None,
+                on_position_update: Optional[Callable] = None) -> bool:
+        """连接 WebSocket
+
+        Args:
+            api_key: API Key（私有频道需要）
+            api_secret: API Secret
+            on_order_update: 订单更新回调
+            on_position_update: 持仓更新回调
+        """
+        if not HAS_WEBSOCKET:
+            logger.error("websocket-client 未安装: pip install websocket-client")
+            return False
+
+        self._api_key = api_key
+        self._api_secret = api_secret
+        self._on_order_update = on_order_update
+        self._on_position_update = on_position_update
+
+        try:
+            self._ws = ws_lib.WebSocketApp(
+                self.url,
+                on_open=self._on_open,
+                on_message=self._on_message,
+                on_error=self._on_error,
+                on_close=self._on_close,
+            )
+            self._thread = threading.Thread(
+                target=self._ws.run_forever,
+                kwargs={'ping_interval': 15, 'ping_timeout': 10},
+                daemon=True,
+            )
+            self._thread.start()
+
+            # 等待连接
+            for _ in range(50):
+                if self._connected:
+                    # 启动 watchdog（每 10 秒巡检）
+                    self._watchdog_thread = threading.Thread(
+                        target=self._watchdog, daemon=True)
+                    self._watchdog_thread.start()
+                    return True
+                time.sleep(0.1)
+
+            logger.error("WebSocket 连接超时")
+            return False
+        except Exception as e:
+            logger.error(f"WebSocket 连接失败: {e}")
+            return False
+
+    def disconnect(self):
+        """断开 WebSocket"""
+        if self._ws:
+            self._ws.close()
+        self._connected = False
+        self._authenticated = False
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+    # ═══════════════════════════════════════════════
+    # 订阅
+    # ═══════════════════════════════════════════════
+
+    def subscribe(self, topics: List[str]):
+        """订阅频道
+
+        Args:
+            topics: 频道列表，如 ['orderBookL2_25:XBTUSD', 'trade:XBTUSD',
+                                   'position', 'order', 'margin']
+        """
+        if self._ws and self._connected:
+            msg = json.dumps({'op': 'subscribe', 'args': topics})
+            self._ws.send(msg)
+            logger.info(f"订阅: {topics}")
+        # 记住订阅，重连后自动恢复
+        for t in topics:
+            if t not in self._subscribed_topics:
+                self._subscribed_topics.append(t)
+
+    def subscribe_orderbook(self, symbol: str):
+        """订阅指定品种的 orderbook（Top 25）"""
+        self.subscribe([f'orderBookL2_25:{symbol}'])
+
+    def subscribe_trades(self, symbol: str):
+        """订阅指定品种的成交"""
+        self.subscribe([f'trade:{symbol}'])
+
+    def subscribe_private(self):
+        """订阅私有频道（订单、持仓、余额）"""
+        self.subscribe(['order', 'position', 'margin'])
+
+    # ═══════════════════════════════════════════════
+    # 数据获取
+    # ═══════════════════════════════════════════════
+
+    def get_best_bid(self, symbol: str) -> Optional[float]:
+        """获取最优买价"""
+        with self._lock:
+            book = self._orderbook.get(symbol, {})
+            bids = book.get('bids', [])
+            return bids[0]['price'] if bids else None
+
+    def get_best_ask(self, symbol: str) -> Optional[float]:
+        """获取最优卖价"""
+        with self._lock:
+            book = self._orderbook.get(symbol, {})
+            asks = book.get('asks', [])
+            return asks[0]['price'] if asks else None
+
+    def get_best_bid_ask(self, symbol: str) -> tuple:
+        """获取最优买卖价 (bid, ask)"""
+        return self.get_best_bid(symbol), self.get_best_ask(symbol)
+
+    def get_last_price(self, symbol: str) -> Optional[float]:
+        """获取最新成交价"""
+        with self._lock:
+            return self._last_price.get(symbol)
+
+    def get_positions(self) -> Dict[str, Dict]:
+        """获取所有持仓"""
+        with self._lock:
+            return dict(self._positions)
+
+    def get_orders(self) -> Dict[str, Dict]:
+        """获取所有活跃订单"""
+        with self._lock:
+            return {k: v for k, v in self._orders.items()
+                    if v.get('ordStatus') in ('New', 'PartiallyFilled')}
+
+    # ═══════════════════════════════════════════════
+    # 内部回调
+    # ═══════════════════════════════════════════════
+
+    def _on_open(self, ws):
+        logger.info("WebSocket 已连接")
+        self._connected = True
+        self._last_message_time = time.time()
+
+        # 认证（如果有 API Key）
+        if self._api_key and self._api_secret:
+            self._authenticate()
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        logger.info(f"WebSocket 断开: {close_status_code} {close_msg}")
+        self._connected = False
+        self._authenticated = False
+        # 自动重连
+        if self._reconnect_enabled:
+            threading.Thread(target=self._reconnect, daemon=True).start()
+
+    def _on_error(self, ws, error):
+        logger.error(f"WebSocket 错误: {error}")
+
+    def _watchdog(self):
+        """每 10 秒巡检连接状态，发现异常立刻触发重连"""
+        CHECK_INTERVAL = 10   # 巡检间隔（秒）
+        STALE_TIMEOUT = 60    # 超过这个时间没收到任何消息，视为连接死亡
+
+        while self._reconnect_enabled:
+            time.sleep(CHECK_INTERVAL)
+            if not self._reconnect_enabled:
+                break
+
+            # 检查1：connected 标志（on_close 已触发）
+            if not self._connected:
+                logger.warning("Watchdog: 连接已断开，触发重连")
+                self._trigger_reconnect()
+                continue
+
+            # 检查2：消息超时（连接看似活着但实际已死）
+            elapsed = time.time() - self._last_message_time
+            if self._last_message_time > 0 and elapsed > STALE_TIMEOUT:
+                logger.warning(f"Watchdog: {elapsed:.0f}秒未收到消息，判定连接死亡")
+                # 强制关闭旧连接
+                try:
+                    if self._ws:
+                        self._ws.close()
+                except Exception:
+                    pass
+                self._connected = False
+                self._trigger_reconnect()
+
+    def _trigger_reconnect(self):
+        """触发重连（加锁，防止多线程同时重连）"""
+        with self._reconnect_lock:
+            if self._reconnecting:
+                return  # 已有重连在进行
+            self._reconnecting = True
+
+        try:
+            self._reconnect()
+        finally:
+            with self._reconnect_lock:
+                self._reconnecting = False
+
+    def _reconnect(self):
+        """自动重连（指数退避，最大60秒）"""
+        delay = self._reconnect_delay
+        while self._reconnect_enabled and not self._connected:
+            logger.info(f"WebSocket {delay}秒后自动重连...")
+            time.sleep(delay)
+            if self._connected:
+                break
+            try:
+                # 清理旧连接
+                old_ws = self._ws
+                if old_ws:
+                    try:
+                        old_ws.close()
+                    except Exception:
+                        pass
+
+                self._ws = ws_lib.WebSocketApp(
+                    self.url,
+                    on_open=self._on_open,
+                    on_message=self._on_message,
+                    on_error=self._on_error,
+                    on_close=self._on_close,
+                )
+                self._thread = threading.Thread(
+                    target=self._ws.run_forever,
+                    kwargs={'ping_interval': 15, 'ping_timeout': 10},
+                    daemon=True,
+                )
+                self._thread.start()
+
+                # 等待连接
+                for _ in range(50):
+                    if self._connected:
+                        break
+                    time.sleep(0.1)
+
+                if self._connected:
+                    logger.info("WebSocket 重连成功")
+                    # 恢复之前的订阅
+                    if self._subscribed_topics:
+                        time.sleep(0.5)
+                        self.subscribe(self._subscribed_topics)
+                    # 【Gemini终极补丁】重连成功回调（Gateway 用于全量覆盖 K 线）
+                    if self._on_reconnect_callback:
+                        try:
+                            threading.Thread(
+                                target=self._on_reconnect_callback,
+                                daemon=True).start()
+                        except Exception as e:
+                            logger.error(f"重连回调异常: {e}")
+                    delay = self._reconnect_delay  # 重置退避
+                    break
+                else:
+                    logger.warning("WebSocket 重连失败，继续重试")
+                    delay = min(delay * 2, self._reconnect_max_delay)
+            except Exception as e:
+                logger.error(f"WebSocket 重连异常: {e}")
+                delay = min(delay * 2, self._reconnect_max_delay)
+
+    def _on_message(self, ws, message):
+        self._last_message_time = time.time()
+        try:
+            data = json.loads(message)
+        except json.JSONDecodeError:
+            return
+
+        # 系统消息
+        if 'info' in data or 'success' in data:
+            if data.get('request', {}).get('op') == 'authKeyExpires':
+                self._authenticated = data.get('success', False)
+                logger.info(f"认证{'成功' if self._authenticated else '失败'}")
+            return
+
+        if 'error' in data:
+            logger.error(f"WS 错误: {data['error']}")
+            return
+
+        table = data.get('table', '')
+        action = data.get('action', '')
+        rows = data.get('data', [])
+
+        if table == 'orderBookL2_25':
+            self._handle_orderbook(action, rows)
+        elif table == 'trade':
+            self._handle_trade(rows)
+        elif table == 'position':
+            self._handle_position(action, rows)
+        elif table == 'order':
+            self._handle_order(action, rows)
+        elif table.startswith('tradeBin'):
+            self._handle_tradebin(table, action, rows)
+        elif table == 'margin':
+            self._handle_margin(action, rows)
+
+        # 泛用回调（所有 table 都触发，供 Feed Gateway 使用）
+        if self._on_table_callback and table:
+            try:
+                self._on_table_callback(table, action, rows)
+            except Exception as e:
+                logger.error(f"Table callback 错误: {e}")
+
+    def _authenticate(self):
+        """发送认证消息"""
+        expires = int(time.time()) + 30
+        message = f'GET/realtime{expires}'
+        signature = hmac.new(
+            self._api_secret.encode('utf-8'),
+            message.encode('utf-8'),
+            hashlib.sha256,
+        ).hexdigest()
+
+        auth_msg = json.dumps({
+            'op': 'authKeyExpires',
+            'args': [self._api_key, expires, signature],
+        })
+        self._ws.send(auth_msg)
+
+    def _handle_orderbook(self, action: str, rows: list):
+        """处理 orderbook 更新"""
+        with self._lock:
+            for row in rows:
+                symbol = row.get('symbol', '')
+                if symbol not in self._orderbook:
+                    self._orderbook[symbol] = {'bids': [], 'asks': []}
+
+                book = self._orderbook[symbol]
+                side = row.get('side', '')
+                entry = {'id': row.get('id'), 'price': row.get('price', 0),
+                         'size': row.get('size', 0)}
+
+                if action == 'partial':
+                    # 快照：重建
+                    if side == 'Buy':
+                        book['bids'].append(entry)
+                    else:
+                        book['asks'].append(entry)
+                elif action == 'insert':
+                    if side == 'Buy':
+                        book['bids'].append(entry)
+                    else:
+                        book['asks'].append(entry)
+                elif action == 'update':
+                    target = book['bids'] if side == 'Buy' else book['asks']
+                    for i, e in enumerate(target):
+                        if e['id'] == entry['id']:
+                            if 'size' in row:
+                                target[i]['size'] = row['size']
+                            break
+                elif action == 'delete':
+                    target = book['bids'] if side == 'Buy' else book['asks']
+                    book['bids' if side == 'Buy' else 'asks'] = [
+                        e for e in target if e['id'] != entry['id']
+                    ]
+
+            # 排序：bids 降序, asks 升序
+            if rows:
+                symbol = rows[0].get('symbol', '')
+                if symbol in self._orderbook:
+                    self._orderbook[symbol]['bids'].sort(
+                        key=lambda x: x['price'], reverse=True)
+                    self._orderbook[symbol]['asks'].sort(
+                        key=lambda x: x['price'])
+
+    def _handle_trade(self, rows: list):
+        """处理成交更新"""
+        with self._lock:
+            for row in rows:
+                symbol = row.get('symbol', '')
+                price = row.get('price', 0)
+                if price > 0:
+                    self._last_price[symbol] = price
+
+    def _handle_position(self, action: str, rows: list):
+        """处理持仓更新"""
+        with self._lock:
+            for row in rows:
+                symbol = row.get('symbol', '')
+                if action == 'partial' or action == 'insert':
+                    self._positions[symbol] = row
+                elif action == 'update':
+                    if symbol in self._positions:
+                        self._positions[symbol].update(row)
+                    else:
+                        self._positions[symbol] = row
+                elif action == 'delete':
+                    self._positions.pop(symbol, None)
+
+        if self._on_position_update:
+            try:
+                self._on_position_update(rows)
+            except Exception as e:
+                logger.error(f"持仓回调错误: {e}")
+
+    def _handle_order(self, action: str, rows: list):
+        """处理订单更新"""
+        with self._lock:
+            for row in rows:
+                oid = row.get('orderID', '')
+                if action in ('partial', 'insert'):
+                    self._orders[oid] = row
+                elif action == 'update':
+                    if oid in self._orders:
+                        self._orders[oid].update(row)
+                    else:
+                        self._orders[oid] = row
+                elif action == 'delete':
+                    self._orders.pop(oid, None)
+
+        if self._on_order_update:
+            try:
+                self._on_order_update(rows)
+            except Exception as e:
+                logger.error(f"订单回调错误: {e}")
+
+    def _handle_tradebin(self, table: str, action: str, rows: list):
+        """处理 tradeBin1m/tradeBin5m K线数据"""
+        with self._lock:
+            for row in rows:
+                symbol = row.get('symbol', '')
+                interval = table.replace('tradeBin', '')  # "1m" / "5m"
+                key = f"{symbol}_{interval}"
+                self._kline_data[key] = row
+
+    def _handle_margin(self, action: str, rows: list):
+        """处理 margin 余额更新"""
+        with self._lock:
+            for row in rows:
+                self._margin_data.update(row)
+
+    def get_kline(self, symbol: str, interval: str) -> Optional[Dict]:
+        """获取最新K线"""
+        with self._lock:
+            return self._kline_data.get(f"{symbol}_{interval}")
+
+    def get_margin(self) -> Dict:
+        """获取最新余额"""
+        with self._lock:
+            return dict(self._margin_data)
