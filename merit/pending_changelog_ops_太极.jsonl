@@ -1,0 +1,1 @@
+{"op": "BASH", "cmd": "curl -s -X POST http://localhost:8789 -H \"Authorization: Bearer a1188f5bb3603166795b244965ab9e5a\" -d \"太极→白纱：双向测试，收到请 curl 8788 回复。\" 2>&1", "ts": "13:58", "cwd": "/Users/allenbot"}
