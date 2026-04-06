@@ -1,14 +1,14 @@
 {
   "last_grad_count": 816,
   "restarts": 3,
-  "total_checks": 718,
+  "total_checks": 719,
   "last_jobs": [
-    "ADA/5m",
-    "ADA/5m",
     "AVAX/5m",
-    "AVAX/5m"
+    "AVAX/5m",
+    "AVAX/5m",
+    "BNB/5m"
   ],
-  "last_memory_gb": 12.0,
+  "last_memory_gb": 15.4,
   "consecutive_ssh_failures": 0,
   "consecutive_crashes": 0
 }

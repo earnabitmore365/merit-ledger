@@ -25,3 +25,5 @@ stats-cache.json
 settings.json.save
 settings.local.json
 .github_token
+.channel_token
+channel-server/node_modules/
