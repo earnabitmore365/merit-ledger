@@ -58,7 +58,7 @@ for role in ["太極", "两仪"]:
         json.dump({"last_mtime": mtime}, f)
 
     # touch 白纱项目目录的信号文件（触发 FileChanged hook）
-    signal = "/Volumes/SSD-2TB/project/auto-trading/.claude/channel_signal.txt"
+    signal = "/Volumes/SSD-2TB/project/auto-trading/channel_signal.txt"
     try:
         import time
         with open(signal, "w") as f:
