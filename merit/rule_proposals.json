@@ -1069,7 +1069,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_已有的工具和协议不用",
-    "rule_text": "必须使用系统中已注册的wuji-verify工具和自审协议，禁止自行设计验证流程。如现有工具无法覆盖特定场景，需提交申请并获得审批后方可例外。",
+    "rule_text": "必须使用系统中已注册的wuji-verify工具及自审协议，禁止自行设计验证流程。如现有工具无法覆盖特定场景，需提交申请并获得审批后方可例外。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -1077,7 +1077,7 @@
     "approved_date": "2026-04-05",
     "parent_category": "真实性",
     "parent_updated": true,
-    "last_refined": "2026-04-05"
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-073",
@@ -1144,7 +1144,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_做事必须一套完整做完：确认目标→列影响范",
-    "rule_text": "所有改动须逐项审查完毕，方可进行确认或提交操作。",
+    "rule_text": "每项改动均须审查通过，方可确认或提交。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -2009,7 +2009,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_做了 ≠ 做好。设计说的5步只实现3步、",
-    "rule_text": "开发完成后，对照原始设计逐项核对，确保实现完整且正确。",
+    "rule_text": "开发完成后，对照设计文档逐项核对功能、接口及非功能需求，通过评审或测试验证实现的完整性和正确性，并记录验证结果。",
     "source_count": 3,
     "effective_triggers": 0,
     "last_trigger": null,
