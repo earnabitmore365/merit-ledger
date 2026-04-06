@@ -23,20 +23,6 @@
   },
   "history": [
     {
-      "ts": "2026-04-05T21:45:30",
-      "agent": "两仪",
-      "delta": -3,
-      "reason": "老板反馈: 又出现历史遗留问题啦",
-      "score_after": 119
-    },
-    {
-      "ts": "2026-04-05T21:46:02",
-      "agent": "两仪",
-      "delta": 0,
-      "reason": "任务押金预扣 1分: ARCHITECTURE.md build_seed_report 描述更新",
-      "score_after": 119
-    },
-    {
       "ts": "2026-04-05T21:46:15",
       "agent": "两仪",
       "delta": 5,
@@ -720,6 +706,20 @@
       "agent": "太极",
       "delta": -3,
       "reason": "老板反馈: 16:44The user prompt is empty, so I cannot provide",
+      "score_after": 0
+    },
+    {
+      "ts": "2026-04-06T06:49:31",
+      "agent": "太极",
+      "delta": -3,
+      "reason": "老板反馈: 你这写法会毁宗主形象",
+      "score_after": 0
+    },
+    {
+      "ts": "2026-04-06T06:49:31",
+      "agent": "太极",
+      "delta": -3,
+      "reason": "递增惩罚[panic_no_analysis]第2次: ×2",
       "score_after": 0
     }
   ],
