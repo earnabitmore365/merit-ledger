@@ -47,7 +47,7 @@
     "desktop-shortcut": 112,
     "terminal-setup": 121
   },
-  "promptQueueUseCount": 5792,
+  "promptQueueUseCount": 5799,
   "btwUseCount": 6,
   "cachedGrowthBookFeatures": {
     "tengu_log_datadog_events": true,
@@ -1068,7 +1068,7 @@
       "lastUsedAt": 1775416516710
     }
   },
-  "lastPlanModeUse": 1775454427023,
+  "lastPlanModeUse": 1775459391827,
   "feedbackSurveyState": {
     "lastShownTime": 1775452176806
   },
