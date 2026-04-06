@@ -2,6 +2,12 @@
 
 老祖搜罗的法器。**不手搓——法器比肉身强。**
 
+## ⛔ 不可删除
+
+| 法器 | 原因 |
+|------|------|
+| `engineering@knowledge-work-plugins` | 老祖指定保留。10 个工程 skills（code-review/debug/architecture/system-design/testing-strategy/deploy-checklist/documentation/tech-debt/incident-response/standup）|
+
 ## 专精法器（Agent）
 
 | 法器 | 用途 |
