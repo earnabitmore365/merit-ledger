@@ -47,7 +47,7 @@
     "desktop-shortcut": 97,
     "terminal-setup": 101
   },
-  "promptQueueUseCount": 5761,
+  "promptQueueUseCount": 5764,
   "btwUseCount": 6,
   "cachedGrowthBookFeatures": {
     "tengu_log_datadog_events": true,
@@ -1219,7 +1219,7 @@
         "amount_minor_units": 31000,
         "currency": "AUD"
       },
-      "timestamp": 1775420820377
+      "timestamp": 1775439144050
     }
   },
   "migrationVersion": 11
