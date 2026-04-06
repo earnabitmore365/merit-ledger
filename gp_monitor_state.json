@@ -1,14 +1,14 @@
 {
   "last_grad_count": 816,
   "restarts": 3,
-  "total_checks": 717,
+  "total_checks": 718,
   "last_jobs": [
-    "XRP/15m",
-    "XRP/15m",
-    "XRP/15m",
-    "ADA/5m"
+    "ADA/5m",
+    "ADA/5m",
+    "AVAX/5m",
+    "AVAX/5m"
   ],
-  "last_memory_gb": 12.5,
+  "last_memory_gb": 12.0,
   "consecutive_ssh_failures": 0,
   "consecutive_crashes": 0
 }
