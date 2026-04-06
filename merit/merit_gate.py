@@ -459,7 +459,7 @@ def update_credit(agent_name, delta, reason):
             json.dump(data, f, ensure_ascii=False, indent=2)
         # with 块结束，文件关闭，锁自动释放
         # 冷却期写入不需要锁（独立文件）
-        if delta <= -50 and ("执事奖惩" in reason or "老板反馈" in reason):
+        if delta <= -5 and ("执事奖惩" in reason or "老板反馈" in reason):
             cooldown_path = os.path.join(MERIT_DIR, "eval_cooldown.json")
             cooldown_until = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
             try:
@@ -970,7 +970,7 @@ def handle_pre_tool_use(data):
         cmd = data.get("tool_input", {}).get("command", "")
         reason = check_bash_destructive(cmd, mission)
         if reason:
-            update_credit(agent_name, -50, f"Bash 破坏性命令: {reason}")
+            update_credit(agent_name, -5, f"Bash 破坏性命令: {reason}")
             auto_reflect_and_evolve(agent_name, -5, "bypass_without_report", reason)
             output_deny(f"[{agent_name} Lv.{level} {title}] {reason}", agent_name, f"Bash: {cmd[:60]}")
         return
@@ -1000,7 +1000,7 @@ def handle_pre_tool_use(data):
 
         reason = check_destructive(data)
         if reason:
-            update_credit(agent_name, -50, f"破坏性操作: {reason}")
+            update_credit(agent_name, -5, f"破坏性操作: {reason}")
             auto_reflect_and_evolve(agent_name, -5, "bypass_without_report", reason)
             output_deny(f"[{agent_name} Lv.{level} {title}] {reason}", agent_name, f"{tool_name}: {file_path}")
             return
@@ -1303,10 +1303,10 @@ def judge_user_sentiment(text):
             delta = parsed.get("delta", 0)
             note = parsed.get("note", "")
             if sentiment == "positive":
-                delta = max(10, min(30, delta))
+                delta = max(1, min(3, delta))
                 return delta, f"老板认可: {note or text[:50]}"
             elif sentiment == "negative":
-                delta = min(-10, max(-50, delta))
+                delta = min(-1, max(-5, delta))
                 return delta, f"老板反馈: {note or text[:50]}"
             return 0, ""
     except Exception:
@@ -1606,7 +1606,7 @@ def check_self_audit(data):
                 log_shiwei_action("Stop", agent_name, "自审检测", "补上自审，预扣取消", "AUDIT")
             elif has_completion:
                 # 主动自审（没被提醒就做了）→ 加分
-                update_credit(agent_name, +10, "主动自审：未被提醒就附完整自审+遗留清单")
+                update_credit(agent_name, +1, "主动自审：未被提醒就附完整自审+遗留清单")
                 log_shiwei_action("Stop", agent_name, "自审检测", "主动自审+1", "AUDIT")
             # 清除提醒
             reminder_path = os.path.join(MERIT_DIR, "audit_reminder.txt")

@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""用 bfg 按内容清除 git 历史中的 token 字符串"""
+import subprocess, os
+
+repo = os.path.expanduser("~/.claude")
+
+# 读取 token
+token_path = os.path.join(repo, ".github_token")
+with open(token_path) as f:
+    token = f.read().strip()
+
+# 写替换规则文件
+replace_file = "/tmp/bfg_replace.txt"
+with open(replace_file, "w") as f:
+    f.write(f"{token}==>REDACTED_TOKEN\n")
+
+print("1. bfg 替换 token 字符串...")
+r = subprocess.run(["bfg", "--replace-text", replace_file], cwd=repo, capture_output=True, text=True)
+print(r.stdout[-500:] if r.stdout else "")
+
+print("\n2. reflog expire...")
+subprocess.run(["git", "reflog", "expire", "--expire=now", "--all"], cwd=repo)
+
+print("\n3. git gc...")
+subprocess.run(["git", "gc", "--prune=now", "--aggressive"], cwd=repo, timeout=120)
+
+print("\n4. force push...")
+r = subprocess.run(["git", "push", "origin", "main", "--force"], cwd=repo, capture_output=True, text=True)
+if r.returncode == 0:
+    print("✅ 推送成功")
+else:
+    print(f"push 结果: {r.stderr[-300:]}")
+
+# 清理
+os.unlink(replace_file)
+print("\n清理完成")
