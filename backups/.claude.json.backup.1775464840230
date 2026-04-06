@@ -3,6 +3,7 @@
   "installMethod": "global",
   "autoUpdates": false,
   "theme": "dark-daltonized",
+  "preferredNotifChannel": "ghostty",
   "hasSeenTasksHint": true,
   "hasUsedBackgroundTask": true,
   "customApiKeyResponses": {
@@ -47,7 +48,7 @@
     "desktop-shortcut": 112,
     "terminal-setup": 121
   },
-  "promptQueueUseCount": 5799,
+  "promptQueueUseCount": 5802,
   "btwUseCount": 6,
   "cachedGrowthBookFeatures": {
     "tengu_log_datadog_events": true,
@@ -1068,7 +1069,7 @@
       "lastUsedAt": 1775416516710
     }
   },
-  "lastPlanModeUse": 1775459736993,
+  "lastPlanModeUse": 1775463571801,
   "feedbackSurveyState": {
     "lastShownTime": 1775452176806
   },
