@@ -25,8 +25,8 @@
     "drag-and-drop-images": 115,
     "paste-images-mac": 115,
     "double-esc-code-restore": 117,
-    "continue": 105,
-    "shift-tab": 105,
+    "continue": 117,
+    "shift-tab": 117,
     "image-paste": 102,
     "desktop-app": 107,
     "web-app": 107,
@@ -43,7 +43,7 @@
     "feedback-command": 111,
     "color-when-multi-clauding": 112,
     "git-worktrees": 112,
-    "guest-passes": 111,
+    "guest-passes": 117,
     "desktop-shortcut": 112,
     "terminal-setup": 111
   },
@@ -1026,8 +1026,8 @@
       "lastUsedAt": 1775193655768
     },
     "reflect": {
-      "usageCount": 77,
-      "lastUsedAt": 1775358903687
+      "usageCount": 79,
+      "lastUsedAt": 1775445958046
     },
     "loop": {
       "usageCount": 5,
