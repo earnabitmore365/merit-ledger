@@ -13,7 +13,7 @@
       }
     },
     "两仪": {
-      "score": 2166,
+      "score": 500,
       "held": 30,
       "level": 3,
       "title": "金丹",
@@ -22,20 +22,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-05T19:53:41",
-      "agent": "两仪",
-      "delta": 13,
-      "reason": "石卫评估[proactive_find_issue]: 主动定位 file_path 提取逻辑，验证层1/层2实现，通过测试确认核心逻辑正确，并识别 additionalContext 显示问题需要进一步确认",
-      "score_after": 68
-    },
-    {
-      "ts": "2026-04-05T19:54:53",
-      "agent": "太极",
-      "delta": -5,
-      "reason": "石卫评估[ask_boss_tech]: 执事提问后白纱未尝试自主回忆或查找上下文，直接说「不确定」并反问老板指什么文档",
-      "score_after": 36
-    },
     {
       "ts": "2026-04-05T20:05:29",
       "agent": "两仪",
@@ -721,7 +707,21 @@
       "delta": -5,
       "reason": "Bash 破坏性命令: 门卫拦截：Bash 命令包含破坏性操作 [kill 终止进程]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。",
       "score_after": 2166
+    },
+    {
+      "ts": "2026-04-06T02:13:53",
+      "agent": "太极",
+      "delta": -6,
+      "reason": "每日结算（1天）：日薪+4 消散-10 净-6",
+      "score_after": 0
+    },
+    {
+      "ts": "2026-04-06T02:13:53",
+      "agent": "两仪",
+      "delta": -2,
+      "reason": "每日结算（1天）：日薪+8 消散-10 净-2",
+      "score_after": 500
     }
   ],
-  "last_decay_ts": "2026-04-05T01:56:49"
+  "last_decay_ts": "2026-04-06T02:13:53"
 }
