@@ -29,6 +29,7 @@
 └─────────────────────────────────────────────────────────┘
 """
 
+import fcntl
 import json
 import os
 import sqlite3
@@ -837,7 +838,6 @@ def mission_complete():
 
     # 押金归还 + 质量奖励：一次原子写入（同一个锁内）
     try:
-        import fcntl
         with open(CREDIT_PATH, "r+") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             credit = json.load(f)
@@ -908,7 +908,6 @@ def mission_abort():
 
     # 放弃 = 没收押金（加文件锁，原子操作）
     try:
-        import fcntl
         with open(CREDIT_PATH, "r+") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             credit = json.load(f)
@@ -978,7 +977,6 @@ def mission_activate():
         return
 
     m["status"] = "active"
-    import fcntl
     with open(MISSION_PATH, 'r+') as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.seek(0)
