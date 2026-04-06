@@ -139,7 +139,7 @@
     "status": "approved",
     "created": "2026-04-04",
     "behavior_id": "lrn_纠错_做了 ≠ 做好。设计",
-    "rule_text": "开发完成后，应对照需求文档逐项验证功能并记录结果，形成验证报告，经审核通过后方可提交。",
+    "rule_text": "开发完成后，应对照需求文档逐项验证功能，记录每项验证的具体结果，形成验证报告，经审核通过后方可提交。",
     "source_count": 3,
     "effective_triggers": 0,
     "last_trigger": null,

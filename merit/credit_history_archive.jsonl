@@ -277,3 +277,4 @@
 {"ts": "2026-04-05T20:12:06", "agent": "两仪", "delta": 15, "reason": "石卫评估[surprising_good_idea]: 将层3从死板的AST函数名检查转变为'改代码后主动询问踩坑经验'的交互机制，思路跳跃且更贴合实战，DuckDB案例佐证有力", "score_after": 89}
 {"ts": "2026-04-05T20:16:12", "agent": "两仪", "delta": 1, "reason": "主动自审：未被提醒就附完整自审+遗留清单", "score_after": 90}
 {"ts": "2026-04-05T20:16:47", "agent": "两仪", "delta": 1, "reason": "老板认可: 现在2 3 层都好了吗？", "score_after": 91}
+{"ts": "2026-04-05T20:16:47", "agent": "两仪", "delta": 1, "reason": "习惯养成[routine_complete]连续3次", "score_after": 92}
