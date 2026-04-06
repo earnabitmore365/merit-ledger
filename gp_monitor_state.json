@@ -1,14 +1,14 @@
 {
-  "last_grad_count": 849,
+  "last_grad_count": 863,
   "restarts": 3,
-  "total_checks": 743,
+  "total_checks": 744,
   "last_jobs": [
-    "ADA/8h",
-    "ADA/8h",
-    "ADA/8h",
-    "AVAX/12h"
+    "AVAX/2h",
+    "AVAX/2h",
+    "AVAX/2h",
+    "AVAX/2h"
   ],
-  "last_memory_gb": 2.0,
+  "last_memory_gb": 4.7,
   "consecutive_ssh_failures": 0,
   "consecutive_crashes": 0
 }

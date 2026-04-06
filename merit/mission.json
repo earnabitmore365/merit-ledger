@@ -1,29 +1,19 @@
 {
-  "mission": "plan: handoff_v2_remaining.md",
+  "mission": "回测种子重建：seed4正在后台跑",
   "agent": "两仪",
-  "started": "2026-04-06T09:14:15",
-  "status": "pending",
+  "started": "2026-04-06T09:17:31",
+  "status": "active",
   "estimated_reward": 0,
-  "held_points": 4,
+  "held_points": 2,
   "items": [
     {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/ARCHITECTURE.md",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/文档/自主交易AI架构.md",
-      "done": false
+      "type": "bash",
+      "desc": "python3 generate_seed.py --seed4",
+      "done": true
     },
     {
       "type": "modify",
       "file": "/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/project/wuji-auto-trading/autonomous/README.md",
       "done": false
     }
   ]

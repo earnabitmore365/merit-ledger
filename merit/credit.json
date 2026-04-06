@@ -6,29 +6,18 @@
       "level": 1,
       "title": "锁灵",
       "locked": false,
-      "penalty_only": {
-        "enabled": true,
-        "until": null,
-        "reason": "老祖亲罚：降2级，永不加分只扣分，直到老板说解锁"
-      }
+      "penalty_only": false
     },
     "两仪": {
-      "score": 564,
-      "held": 31,
-      "level": 3,
-      "title": "金丹",
+      "score": 565,
+      "held": 33,
+      "level": 1,
+      "title": "锁灵",
       "penalty_only": false,
-      "locked": true
+      "locked": false
     }
   },
   "history": [
-    {
-      "ts": "2026-04-06T00:14:34",
-      "agent": "两仪",
-      "delta": 2,
-      "reason": "老板认可: 新指标唯一合法路径好",
-      "score_after": 198
-    },
     {
       "ts": "2026-04-06T00:14:34",
       "agent": "两仪",
@@ -721,6 +710,20 @@
       "delta": 2,
       "reason": "石卫评估[complete_no_correction]: 白纱主动创建Mission并提交完整方案，但方案属于常规功能补全，无问题纠正或创新亮点",
       "score_after": 564
+    },
+    {
+      "ts": "2026-04-06T09:17:17",
+      "agent": "两仪",
+      "delta": 1,
+      "reason": "老板认可: 没事，太极忙到晕头转向的，把信息发错给你了，他们已经解决好了",
+      "score_after": 565
+    },
+    {
+      "ts": "2026-04-06T09:17:31",
+      "agent": "两仪",
+      "delta": 0,
+      "reason": "任务押金预扣 2分: 回测种子重建：seed4正在后台跑",
+      "score_after": 565
     }
   ],
   "last_decay_ts": "2026-04-06T02:13:53"
