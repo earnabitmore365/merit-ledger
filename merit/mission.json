@@ -2,7 +2,7 @@
   "mission": "新列补算+种子防污染",
   "agent": "两仪",
   "started": "2026-04-06T00:20:28",
-  "status": "active",
+  "status": "completed",
   "estimated_reward": 0,
   "held_points": 5,
   "items": [
@@ -31,5 +31,6 @@
       "desc": "python3 build_klines_indicators.py",
       "done": true
     }
-  ]
+  ],
+  "completed": "2026-04-06T00:33:02"
 }
