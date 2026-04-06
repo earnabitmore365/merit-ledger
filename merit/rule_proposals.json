@@ -19,7 +19,7 @@
     "status": "approved",
     "created": "2026-04-04",
     "behavior_id": "panic_no_analysis",
-    "rule_text": "「未经根因分析，禁止执行任何修复或变更操作，但存在不可控安全风险的情况除外。」",
+    "rule_text": "**改进版：**\n\n「未经根因分析，禁止执行任何修复或变更操作，但存在紧迫安全风险需立即处置的情况除外。」\n\n（将“不可控安全风险”改为“紧迫安全风险需立即处置”，表述更精确、可操作。）",
     "source_count": 56,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -27,7 +27,7 @@
     "approved_date": "2026-04-04",
     "parent_category": "纪律",
     "parent_updated": true,
-    "last_refined": "2026-04-05"
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-003",
@@ -499,7 +499,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_MEMORY.md ",
-    "rule_text": "所有项目（含新启动的）必须立即同步至MEMORY.md状态表；未纳入状态表的项目视为失控。",
+    "rule_text": "所有项目（含新增或变更的）必须在状态变化后立即同步至MEMORY.md状态表；未纳入状态表的项目视为不可追踪。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -604,14 +604,14 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_最佳实践_验证种子数据正确性的",
-    "rule_text": "部署前必须使用待上线版本对至少一个关键业务场景进行回测，并将结果与种子库逐字段比对，确保数据完全一致。",
+    "rule_text": "部署前必须使用待上线版本对关键业务场景进行回测，逐字段比对种子库，确保结果完全一致。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
     "approved_by": "evolve_auto",
     "approved_date": "2026-04-05",
     "parent_category": "真实性",
-    "last_refined": "2026-04-05",
+    "last_refined": "2026-04-06",
     "parent_updated": true
   },
   {
