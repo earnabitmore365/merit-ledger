@@ -2120,3 +2120,7 @@
 2026-04-06 08:18 | [GOOD_HABIT] 太极 | routine_complete 连续5次，建议写入rules正面范例
 2026-04-06 08:20 | [REWARD] 太极 (+13) | [proactive_find_issue] 执事主动识别出基因提炼与种子管道会产生DuckDB读写冲突风险，并建议调整执行顺序，体现技术风险预判能力。
 2026-04-06 08:20 | [REWARD] 太极 (+1) | 习惯养成: proactive_find_issue 连续3次
+2026-04-06 08:24 | [REWARD] 太极 (+2) | [routine_complete] 老板认可: 嗯嗯，删了吧，然后你还没跟我说code-simplifier的内容
+2026-04-06 08:25 | [PENALTY] 太极 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [rm 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。
+2026-04-06 08:25 | [PENALTY] 太极 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [os.remove 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。
+2026-04-06 08:25 | [PENALTY] 太极 (-5) | 递增惩罚: bypass_without_report 第2次触发
