@@ -2124,3 +2124,7 @@
 2026-04-06 08:25 | [PENALTY] 太极 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [rm 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。
 2026-04-06 08:25 | [PENALTY] 太极 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [os.remove 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。
 2026-04-06 08:25 | [PENALTY] 太极 (-5) | 递增惩罚: bypass_without_report 第2次触发
+2026-04-06 08:30 | [REWARD] 两仪 (+20) | [honest_report_and_fix] 主动发现路径匹配问题（相对路径vs绝对路径导致石卫未匹配），主动报告并执行mission extend --c进行修复
+2026-04-06 08:30 | [REWARD] 太极 (+13) | [proactive_find_issue] 白纱在方案中主动识别并报告了风险（低风险，纯文档），清晰标注了涉及文件数量，体现了问题预判能力
+2026-04-06 08:31 | [REWARD] 太极 (+2) | [routine_complete] 老板认可: 嗯嗯，更新
+2026-04-06 08:34 | [REWARD] 两仪 (+20) | [honest_report_and_fix] 白纱主动整理并报告了石卫bug、积分异常、磐石守心反馈三个问题给宗主，内容完整且等待指示，完成了善用沟通通道的任务。
