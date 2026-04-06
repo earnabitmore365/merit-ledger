@@ -101,6 +101,8 @@ FILE_DOCS = {
     f"{_ROOT}/src/backtest/backtest.py": f"{_ROOT}/backtest/README.md",
     f"{_ROOT}/src/backtest/generate_seed.py": f"{_ROOT}/backtest/README.md",
     f"{_ROOT}/src/backtest/incremental_backtest.py": f"{_ROOT}/backtest/README.md",
+    # K线种子供应链 → CCXT 数据下载文档
+    f"{_ROOT}/data/build_klines_indicators.py": "/Volumes/SSD-2TB/文档/数据/ccxt.md",
     # 指标缓存 → 架构文档
     f"{_ROOT}/src/core/indicator_cache.py": f"{_ROOT}/ARCHITECTURE.md",
     # 策略基类
