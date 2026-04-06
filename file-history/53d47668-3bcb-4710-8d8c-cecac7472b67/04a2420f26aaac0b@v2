@@ -1,0 +1,23 @@
+#!/bin/bash
+# 重启 GP scheduler — 停旧的，启新的
+echo "停止旧 scheduler 和 evolve 进程..."
+pkill -f "gp_scheduler.py" 2>/dev/null
+pkill -f "gp_evolve.py" 2>/dev/null
+sleep 2
+
+# 确认全部停了
+remaining=$(pgrep -f "gp_scheduler\|gp_evolve" | wc -l)
+if [ "$remaining" -gt 0 ]; then
+    echo "还有 $remaining 个进程，强制停止..."
+    pkill -9 -f "gp_scheduler.py" 2>/dev/null
+    pkill -9 -f "gp_evolve.py" 2>/dev/null
+    sleep 1
+fi
+
+echo "启动新 scheduler..."
+cd ~/trading/gp_engine
+nohup python3 -u gp_scheduler.py --workers 2 --rounds 0 --regime > scheduler_output.log 2>&1 &
+echo "新 PID=$!"
+sleep 3
+ps aux | grep gp_scheduler | grep -v grep
+echo "完成"

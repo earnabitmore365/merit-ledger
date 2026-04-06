@@ -1,0 +1,6 @@
+#!/bin/bash
+pkill -f "gp_scheduler.py" 2>/dev/null
+pkill -f "gp_evolve.py" 2>/dev/null
+pkill -f "watchdog.sh" 2>/dev/null
+sleep 3
+echo "残留: $(pgrep -f 'gp_evolve|gp_scheduler|watchdog' | wc -l)"

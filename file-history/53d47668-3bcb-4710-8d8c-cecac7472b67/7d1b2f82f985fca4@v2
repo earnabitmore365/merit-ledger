@@ -1,0 +1,158 @@
+# GP Engine — 表达式树自进化引擎 v2.0
+
+> Tabula Rasa: 不给策略，只给数据+规则，让系统自己发现交易信号。
+
+---
+
+## 快速操作
+
+```bash
+cd ~/trading/gp_engine
+
+# 启动（5类regime × 无限循环 × 4 workers）
+nohup python3 -u gp_scheduler.py --workers 4 --rounds 0 --regime > scheduler_output.log 2>&1 &
+
+# 看状态
+tail -f scheduler_output.log
+
+# 停止
+touch STOP_SCHEDULER
+
+# 看毕业生
+ls graduates/
+```
+
+---
+
+## v2.0 核心改动
+
+### 1. 分层 Regime 进化（老板设计）
+
+旧版: 全时段进化 + 10关9过（策略要全天候赚钱）
+新版: 按市场状态专精进化（策略只需在自己的regime里赚）
+
+**5类事实Regime**（BTC 21段历史时间表，老板2026-03-03确认）：
+
+| 类型 | 段数 | 说明 |
+|------|------|------|
+| 牛 | #4 #8 #10 #15 #17 #19 | 确认趋势上涨 |
+| 初牛 | #3 #7 #13 | 底部恢复/V型反弹 |
+| 盘整 | #14 #16 | 横盘震荡 |
+| 初熊 | #1 #5 #9 #11 #18 #20 | 见顶回落 |
+| 熊 | #2 #6 #12 #21 | 确认趋势下跌 |
+
+### 2. 同Regime跨源验证
+
+```
+牛市策略在正常K线牛市段(A)进化
+  → 用翻转K线牛市段(E')验证
+  → E' = 原始熊市段 SMA(200)翻转后变成牛市走势
+  → 两段不同来源的牛市数据都赚 = 真信号
+```
+
+配对关系：A↔E', B↔D', C↔C', D↔B', E↔A'
+
+### 3. SMA(200) 轴翻转
+
+旧版: `mirror = max + min - price`（固定轴，实盘漂移重绘）
+新版: `mirror = 2 × SMA(200) - price`（滚动轴，不重绘）
+
+与主系统 mirror.py v2.1 对齐（Grok+Gemini+白纱联合拍板 2026-03-17）
+
+### 4. 毕业标准
+
+| 旧版 | 新版（regime模式） |
+|------|-------------------|
+| 5窗原始 + 5窗镜像 = 10关过9关 | 正常段WF过半 + 翻转段WF过半 |
+| 全天候都要赚 | 只需在自己regime里赚 |
+| 随机镜像（regime不对应）| 同regime跨数据源验证 |
+
+---
+
+## 硬件与内存（Nitro 24GB RAM）
+
+### 压力测试（2026-04-02）
+
+| 币种 | 60s RSS | 120s RSS | 240s RSS | 结果 |
+|------|---------|----------|----------|------|
+| ADA  | 4,516MB | 7,114MB  | — | OOM Killed |
+| BTC  | 2,241MB | 2,836MB  | 3,471MB | 存活 |
+| ETH  | 2,874MB | 4,757MB  | 7,504MB | 存活（吃swap） |
+| XRP  | 2,748MB | 5,348MB  | 7,394MB | 存活（吃swap） |
+
+### 内存限制
+
+```python
+MEMORY_ESTIMATES = {
+    '1m': 5500, '5m': 2000, '15m': 1200, '30m': 1200,
+    '1h': 1600, '2h': 600, '4h': 300, '8h': 200, '12h': 200, '1d': 100,
+}
+WORKER_MEM_LIMIT_MB = 5500  # per worker 硬限制（resource.setrlimit）
+```
+
+| 场景 | workers | 原因 |
+|------|---------|------|
+| 1m | 最多3 | 5.5GB × 3 = 16.5GB |
+| 5m-1h | 4 | 1.6GB × 4 = 6.4GB |
+| 2h+ | 4+ | <600MB/worker |
+
+---
+
+## 配置参数（config.py）
+
+### 进化参数
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| POPULATION_SIZE | 200 | 每代种群 |
+| GENERATIONS | 100 | 每轮代数 |
+| MAX_DEPTH | 7 | 树深度上限 |
+| PARSIMONY_COEFF | 0.02 | 简洁性惩罚 |
+| MIN_TRADES | 30 | 最少交易数 |
+| **MIN_INDICATORS** | **3** | **最少指标种类** |
+
+### Regime 参数（v2.0）
+
+| 参数 | 说明 |
+|------|------|
+| REGIME_TIMELINE | BTC 21段事实时间表 |
+| REGIME_MIRROR_MAP | 训练→验证配对（牛↔熊, 初牛↔初熊, 盘整↔盘整） |
+| REGIME_TYPES | ['牛', '初牛', '盘整', '初熊', '熊'] |
+
+---
+
+## 文件结构
+
+```
+gp_engine/
+├── README.md              # 本文件
+├── config.py              # 参数 + REGIME_TIMELINE + 内存限制
+├── gp_scheduler.py        # 调度器（5类regime轮转 + 内存管控）
+├── gp_evolve.py           # 进化主循环（regime筛选 + 翻转验证）
+├── engine.py              # 进化核心（岛屿模型/锦标赛）
+├── evaluator.py           # 适应度（t-stat + 指标惩罚）
+├── graduation.py          # 毕业考（regime跨源验证 / 旧版10关9过）
+├── blocks.py              # 积木库（25参数化 + 固定终端）
+├── tree.py                # 表达式树
+├── indicators.py          # 基础指标 + SMA(200)翻转 + regime时间表标签
+├── indicator_cache.py     # → ../src/core/（48指标统一库）
+├── param_optimizer.py     # CMA-ES 参数精化
+├── minimax_review.py      # MiniMax 审查
+├── watchdog.sh            # 进程守护
+├── graduates/             # 毕业生存档
+└── results/               # 日志 + 精英库
+```
+
+---
+
+## 版本历史
+
+| 版本 | 内容 |
+|------|------|
+| v0.1-v0.6 | 基础GP（单币→多币, 单方向→双方向, WF毕业, 分池进化） |
+| v0.7 | 参数化指标（23种）+ 冷却门槛制 |
+| v0.8 | 弃权制毕业考 |
+| v0.9 | indicator_cache 统一指标库 |
+| v1.0 | 岛屿模型 + CMA-ES + MiniMax审查 |
+| v1.1 | MIN_INDICATORS=3 |
+| **v2.0** | **5类事实regime + SMA(200)翻转 + 同regime跨源验证** |

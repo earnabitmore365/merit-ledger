@@ -1,0 +1,27 @@
+.DS_Store
+__pycache__/
+# evolver shim
+scripts/validate-modules.js
+# 大文件/临时文件不推
+conversations.db
+conversations_taiji.db
+debug/
+todos/
+projects/
+cache/
+plugins/cache/
+*.jsonl.bak
+stats-cache.json
+
+# 敏感文件（绝对不推）
+.comm_pass
+*.secret*
+*secrets*
+*.env
+*api_key*
+*token*
+*.pem
+*.key
+settings.json.save
+settings.local.json
+.github_token

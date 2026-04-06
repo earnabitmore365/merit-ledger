@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""验证 flipped namespace 指标是否基于翻转K线真实计算"""
+import sys, json, numpy as np
+sys.path.insert(0, '/home/pc_heisi_claude/trading/gp_engine')
+sys.path.insert(0, '/home/pc_heisi_claude/trading/src/core')
+import config, indicators, indicator_cache
+
+# 加载 BTC 1h 数据
+with open(config.DATA_DIR + '/BTC/1h.json') as f:
+    candles = json.load(f)
+
+ohlcv = {
+    'open': np.array([c['open'] for c in candles], dtype=float),
+    'high': np.array([c['high'] for c in candles], dtype=float),
+    'low': np.array([c['low'] for c in candles], dtype=float),
+    'close': np.array([c['close'] for c in candles], dtype=float),
+    'volume': np.array([c['volume'] for c in candles], dtype=float),
+}
+
+# 正常数据初始化 normal namespace
+indicator_cache.init_cache('BTC', '1h', candles, ':memory:', namespace='normal')
+
+# SMA(200) 翻转
+mirror_ohlcv = indicators.mirror_ohlcv(ohlcv)
+
+# 翻转K线转 candles 格式
+flipped_candles = []
+for i in range(len(mirror_ohlcv['close'])):
+    flipped_candles.append({
+        'time': candles[i]['time'],
+        'open': float(mirror_ohlcv['open'][i]),
+        'high': float(mirror_ohlcv['high'][i]),
+        'low': float(mirror_ohlcv['low'][i]),
+        'close': float(mirror_ohlcv['close'][i]),
+        'volume': float(mirror_ohlcv['volume'][i]),
+    })
+
+# 翻转数据初始化 flipped namespace
+indicator_cache.init_cache('BTC', '1h', flipped_candles, ':memory:', namespace='flipped')
+
+# 比较 RSI(14) — normal vs flipped
+indicator_cache.set_active_namespace('normal')
+rsi_normal = indicator_cache.get_indicator('rsi', period=14)
+
+indicator_cache.set_active_namespace('flipped')
+rsi_flipped = indicator_cache.get_indicator('rsi', period=14)
+
+indicator_cache.set_active_namespace('normal')
+
+# 也可以直接指定 namespace 参数
+rsi_normal_direct = indicator_cache.get_indicator('rsi', namespace='normal', period=14)
+rsi_flipped_direct = indicator_cache.get_indicator('rsi', namespace='flipped', period=14)
+
+i = 500
+print("=== flipped namespace 指标验证 ===")
+print(f"RSI(14) normal[{i}]:  {rsi_normal[i]:.4f}")
+print(f"RSI(14) flipped[{i}]: {rsi_flipped[i]:.4f}")
+print(f"是否不同: {abs(rsi_normal[i] - rsi_flipped[i]) > 0.01}")
+print(f"简单取反 -normal: {-rsi_normal[i]:.4f}")
+print(f"取反 vs 真实翻转差异: {abs(-rsi_normal[i] - rsi_flipped[i]):.4f}")
+print()
+
+# ATR — 非对称指标，取反完全不对
+atr_normal = indicator_cache.get_indicator('atr', namespace='normal', period=14)
+atr_flipped = indicator_cache.get_indicator('atr', namespace='flipped', period=14)
+print(f"ATR(14) normal[{i}]:  {atr_normal[i]:.4f}")
+print(f"ATR(14) flipped[{i}]: {atr_flipped[i]:.4f}")
+print(f"ATR 取反 -normal: {-atr_normal[i]:.4f}")
+print(f"ATR 翻转后应该接近正常值（波动率不变）: {abs(atr_normal[i] - atr_flipped[i]) < atr_normal[i] * 0.5}")
+print()
+
+# ADX — 方向无关，翻转后应该接近
+adx_normal = indicator_cache.get_indicator('adx', namespace='normal', period=14)
+adx_flipped = indicator_cache.get_indicator('adx', namespace='flipped', period=14)
+print(f"ADX(14) normal[{i}]:  {adx_normal['adx'][i]:.4f}")
+print(f"ADX(14) flipped[{i}]: {adx_flipped['adx'][i]:.4f}")
+
+print("\n=== 结论 ===")
+print(f"normal 和 flipped 的 RSI 不同: {abs(rsi_normal[i] - rsi_flipped[i]) > 0.01}")
+print(f"证明 flipped namespace 确实从翻转K线重新计算了指标")
+print("旧版用 -norm 取反是错的，新版用 flipped namespace 是对的")

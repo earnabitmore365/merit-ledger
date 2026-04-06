@@ -97,7 +97,9 @@
       "Bash(cp ~/.claude/projects/-Users-allenbot/memory/wuji_identity.md ~/.claude/wuji-world/)",
       "Bash(cp ~/.claude/projects/-Users-allenbot/memory/wuji_personality.md ~/.claude/wuji-world/)",
       "Bash(cp ~/.claude/projects/-Users-allenbot/memory/naming_philosophy.md ~/.claude/wuji-world/)",
-      "Bash(cp ~/.claude/projects/-Users-allenbot/memory/secret_zhishi_identity.md ~/.claude/wuji-world/)"
+      "Bash(cp ~/.claude/projects/-Users-allenbot/memory/secret_zhishi_identity.md ~/.claude/wuji-world/)",
+      "Bash(export PATH=\"$HOME/.bun/bin:$PATH\")",
+      "Bash(bun install:*)"
     ]
   }
 }

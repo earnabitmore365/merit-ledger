@@ -1,0 +1,294 @@
+# Handoff — 太极 → 顾问：记忆系统重构方案
+
+> 日期：2026-04-01
+> 来自：太极宗主
+> 请顾问审查方案可行性、遗漏风险、改进建议。
+
+---
+
+## 一、现状问题
+
+### memsearch 实测失败
+翻了 memsearch 的实际记录——**全是空的**。两天的记录只有 Session 标题，没有任何内容。
+
+原因：
+- stop.sh 调 AI 生成摘要，MiniMax API 经常 500/超时 → 返回空 → 写入空
+- 原版 Haiku 也超时
+- 格式不可控（第三方模板，把老板叫"用户"）
+- 数据散落各处（每个 cwd 建一个 `.memsearch/memory/`）
+- 老板看不到这些记录 → 烂了也不知道 → 无法纠正
+
+### conversations.db 的问题
+- 可靠（从不失败，SQLite 本地写入）
+- 但老板看不了 .db 文件 → 完全无法验证记录质量
+- 标签只有关键词匹配，没有语义理解
+- 每次 Stop 都写，数据量大但大部分是噪音
+
+### 核心矛盾
+老板需要能看到记录质量 → 必须是人类可读的格式（markdown）
+AI 需要能高效搜索 → 必须是结构化可查询的格式（DB + 标签）
+这两个需求以前只能满足一个。
+
+---
+
+## 二、方案：双层记忆（markdown + DB）
+
+### 核心设计
+
+```
+人看的 → markdown 滚动日志（实时写入，老板能打开看）
+AI 搜的 → conversations.db（每天批量导入+AI打标签，按标签搜）
+```
+
+**分工：老板管质量（看 md），AI 管效率（搜 DB）。**
+
+### 数据流
+
+```
+干活中 → Stop hook 触发
+  ↓
+解析本轮对话 → 追加写入当天 markdown（~/.claude/memory/daily/2026-04-01.md）
+  ↓
+零 API 依赖，纯文件追加，永远不会失败
+  ↓
+每天凌晨 4am → cron 触发批处理
+  ↓
+读昨天的 md → ai_call 一次性生成标签+摘要 → 写入 conversations.db
+  ↓
+DB 现在有了高质量标签（一天的内容一起打标签，上下文充足，比逐条打更准）
+  ↓
+搜索 → SQL 查 DB（按标签/关键词/日期）
+回顾 → 直接打开 md 文件看
+```
+
+### 三层记忆最终形态
+
+| 层 | 载体 | 谁写 | 谁看 | 占上下文？ |
+|---|------|------|------|----------|
+| **短期** | 上下文原文 | Claude 自动 | AI | 是 |
+| **中期** | 当天 markdown | Stop hook 实时写 | **老板 + AI** | 不占，需要时读 |
+| **长期** | conversations.db | 4am 批处理写 | AI 搜索 | 不占，搜到才注入 |
+
+---
+
+## 三、具体实现
+
+### 3.1 Stop hook 改造（db_write.py）
+
+**现在：** 每次 Stop → 解析 transcript → 写入 conversations.db
+**改成：** 每次 Stop → 解析 transcript → 追加到当天 markdown
+
+markdown 格式：
+```markdown
+### 21:30
+<!-- session:abc123 turn:def456 -->
+- 老板要求清理历史遗留文件
+- 太极执行 declare-delete 申报，石卫审批通过
+- 删除 scripts/merit_gate.py 旧副本
+- 修复白名单路径匹配 bug（~ vs 绝对路径）
+```
+
+每条记录包含：
+- 时间戳（### HH:MM）
+- session/turn 锚点（<!-- 注释，不影响阅读 -->）
+- 结构化 bullet points（谁做了什么，改了什么文件，关键决策）
+
+**AI 摘要生成：** 用 ai_call 生成 bullet points。如果 API 失败 → fallback 到 parse-transcript 的原始输出（保证永远有内容，不像 memsearch 写空）。
+
+### 3.2 目录结构
+
+```
+~/.claude/memory/
+  └── daily/
+      ├── 2026-04-01.md    ← 今天的实时记录（Stop hook 追加）
+      ├── 2026-03-31.md    ← 昨天的（已被 4am 批处理导入 DB）
+      ├── 2026-03-30.md
+      └── ...
+```
+
+为什么放 `~/.claude/memory/daily/` 不放 `.memsearch/memory/`：
+- 不依赖 memsearch 插件
+- 路径清晰，老板能找到
+- 与 merit/（积分系统）和 wuji-world/（世界观）平级
+
+### 3.3 每天 4am 批处理（cron）
+
+```python
+def daily_batch():
+    """凌晨 4am 执行：昨天的 md → DB"""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    md_path = f"~/.claude/memory/daily/{yesterday}.md"
+
+    if not exists(md_path):
+        return
+
+    content = read(md_path)
+
+    # 1. ai_call 一次性打标签+生成日摘要
+    tags_and_summary = ai_call(f"""
+    以下是 {yesterday} 的工作记录。
+    1. 提取 5-10 个搜索标签（中英文技术词）
+    2. 生成一段 3-5 句话的当日摘要
+    输出 JSON：{{"tags": [...], "summary": "..."}}
+
+    记录：
+    {content[:5000]}
+    """)
+
+    # 2. 写入 conversations.db
+    db_insert(
+        time=yesterday,
+        speaker="系统",
+        content=tags_and_summary["summary"],
+        tags=",".join(tags_and_summary["tags"]),
+        project="daily_digest"
+    )
+
+    # 3. API 失败 fallback：用基础关键词匹配打标签
+    # 不丢数据，只是标签质量低一点
+```
+
+### 3.4 搜索接口
+
+```bash
+# 老板或 AI 都能用
+python3 credit_manager.py search "scheduler bug"
+# → 查 DB：WHERE tags LIKE '%scheduler%' OR summary LIKE '%bug%'
+# → 返回匹配的日摘要 + 日期
+# → 需要细节？→ 直接打开那天的 md 文件
+
+python3 credit_manager.py search --date 2026-03-30
+# → 返回那天的摘要 + 标签
+
+python3 credit_manager.py search --tag "纠错"
+# → 返回所有含"纠错"标签的日记录
+```
+
+### 3.5 SessionStart 注入
+
+```python
+def inject_recent_memory():
+    """SessionStart 时注入最近记忆"""
+    # 1. 读当天 md 最后 20 行（今天做了什么）
+    today_md = read_tail("~/.claude/memory/daily/today.md", 20)
+
+    # 2. 读 DB 最近 3 天的日摘要（前几天做了什么）
+    recent = db_query("SELECT time, summary FROM daily_digest ORDER BY time DESC LIMIT 3")
+
+    # 注入量：20 行今天 + 3 条摘要 ≈ 30 行
+    # 比 memsearch 注入的更精准，比全量对话种子轻 10 倍
+```
+
+### 3.6 评分上下文改造
+
+merit_gate.py 的 `get_stop_context()` 现在读 DB 最近 5 条。改成读当天 md 最后 N 行：
+
+```python
+def get_stop_context():
+    """读当天 markdown 做评分上下文（替代 DB 查询）"""
+    today = date.today().isoformat()
+    md_path = os.path.expanduser(f"~/.claude/memory/daily/{today}.md")
+    if not os.path.exists(md_path):
+        return "(无上下文)"
+    with open(md_path) as f:
+        lines = f.readlines()
+    return "".join(lines[-30:])  # 最后 30 行 = 最近几轮对话
+```
+
+---
+
+## 四、memsearch 处理
+
+### 方案：卸载，不再使用
+
+memsearch 的核心价值是语义搜索（embedding 向量匹配）。但：
+1. 实测记录全空，实际价值为零
+2. 依赖外部 API（MiniMax/Haiku），不可靠
+3. 老板看不到记录，无法纠正质量
+4. 进程管理复杂（watch/index/orphan cleanup）
+
+新方案用 **markdown（人看）+ DB 标签搜索（AI 搜）** 替代，覆盖 90% 需求。
+
+剩下 10%（跨语言模糊搜索如"调度器"搜"scheduler"）→ 搜索前让 ai_call 做查询扩展（把中文翻译成英文技术词再搜 DB）。
+
+### 卸载步骤
+```bash
+claude plugins uninstall memsearch@wujitang-memsearch
+# 旧的 .memsearch/ 目录可以保留（有历史数据）或清理
+```
+
+---
+
+## 五、与现有系统的整合
+
+### 天衡册（积分系统）整合
+- mission complete 时额外写一条到当天 md（"任务完成：XXX，+Y 分"）
+- 4am 批处理时这条也会进 DB，带上 mission 相关标签
+
+### 自审协议整合
+- 自审结果【自审】+【遗留清单】写入当天 md
+- 老板翻 md 就能看到每次自审的结果
+
+### 水位监控
+- Stop 时检查当天 md 文件大小 + JSONL 大小
+- 超 70% 提醒压缩
+
+### PreCompact 改造
+- 压缩前：当天 md 已有实时记录（中期记忆安全）
+- 压缩后：SessionStart 注入当天 md 尾部 + DB 近期摘要
+- compact 不再是"失忆"——记忆在 md 和 DB 里，上下文丢了但记忆不丢
+
+---
+
+## 六、对比
+
+| | memsearch（现在） | 新方案 |
+|---|------------------|--------|
+| 写入可靠性 | ❌ API 超时→空记录 | ✅ 文件追加，永不失败 |
+| 老板可见 | ❌ 看不到 | ✅ 打开 md 就能看 |
+| 老板可纠正 | ❌ | ✅ 看到烂记录直接骂 |
+| 搜索方式 | 语义向量搜索 | SQL 标签+关键词搜索 |
+| 搜索质量 | 理论上好但写入为空=搜不到 | 写入可靠=有东西可搜 |
+| API 依赖 | 实时依赖（每次 Stop） | 延迟依赖（4am 批处理，失败有 fallback） |
+| 进程管理 | 复杂（watch/index/milvus） | 无（文件追加 + cron） |
+| 跨语言搜索 | ✅ embedding 天然支持 | ⚠️ 需要 ai_call 查询扩展 |
+
+---
+
+## 七、实施顺序
+
+| 步骤 | 内容 | 依赖 |
+|------|------|------|
+| 1 | 建 `~/.claude/memory/daily/` 目录 | 无 |
+| 2 | 改 db_write.py：Stop 时写 md 而不是 DB | 步骤 1 |
+| 3 | 改 merit_gate.py：评分上下文读当天 md | 步骤 2 |
+| 4 | 改 session_start.py：注入当天 md 尾部 + DB 近期摘要 | 步骤 2 |
+| 5 | 建 4am cron：昨天 md → ai_call 打标签 → 写入 DB | 步骤 2 |
+| 6 | 加 credit_manager.py search 命令 | 步骤 5 |
+| 7 | 卸载 memsearch 插件 | 步骤 2-6 全部验证通过后 |
+
+---
+
+## 八、风险
+
+| 风险 | 影响 | 应对 |
+|------|------|------|
+| 4am ai_call 失败 | 当天 DB 没有智能标签 | fallback：基础关键词匹配打标签，不丢数据 |
+| md 文件太大（长 session） | 单文件几 MB | 每天一个文件，自然分割 |
+| 跨语言搜索弱 | "调度器"搜不到"scheduler" | 搜索前 ai_call 查询扩展 |
+| 迁移期数据断层 | 旧数据在 DB，新数据在 md | 旧 DB 数据保留，新旧并存查询 |
+
+---
+
+## 九、请顾问回复
+
+1. 整体方案可行吗？有没有根本性的问题我没想到？
+2. 4am 批处理的频率对不对？要不要更频繁（如每 6 小时）？
+3. markdown 的记录格式够不够？要不要加更多结构（如任务类型标记）？
+4. 卸载 memsearch 的时机——步骤 2 之后就卸还是全部完成才卸？
+5. conversations.db 的 schema 要不要改？现在的 messages 表结构能直接用还是需要加表？
+
+---
+
+太极宗主
+2026-04-01

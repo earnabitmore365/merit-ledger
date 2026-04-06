@@ -1,0 +1,5 @@
+⚠️ 石卫提醒：这轮有以下操作，请更新 CHANGELOG（/Users/allenbot/.claude/projects/-Users-allenbot/memory/CHANGELOG.md）：
+- BASH `curl -fsSL https://bun.sh/install | bash 2>&1 | tail -5`
+- CREATE/EDIT `/Users/allenbot/.claude/channel-server/webhook.ts`
+- CREATE/EDIT `/Users/allenbot/.claude/channel-server/package.json`
+格式：### HH:MM 一句话描述做了什么和为什么 (YYYY-MM-DD)
