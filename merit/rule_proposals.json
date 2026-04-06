@@ -4,7 +4,7 @@
     "status": "approved",
     "created": "2026-04-04",
     "behavior_id": "bypass_without_report",
-    "rule_text": "执行文件删除前，必须通过 `credit_manager.py::declare-delete()` 完成预声明。",
+    "rule_text": "删除文件前，必须调用 `credit_manager.py::declare-delete()` 完成声明。",
     "source_count": 33,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -664,7 +664,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_老板用健康和血汗支撑",
-    "rule_text": "所有输出内容发布前必须核实事实、校验数据、审查逻辑准确性，验证工作由指定责任人执行，并留存验证记录。",
+    "rule_text": "所有输出内容发布前须由指定责任人核实事实、校验数据、确认逻辑准确，并留存验证记录。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -994,7 +994,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_最佳实践_老板给任何 toke",
-    "rule_text": "敏感凭证（如 token、API key、密钥及密码）必须通过环境变量或密钥管理服务存储，严禁硬编码、明文保存或提交至版本控制系统。",
+    "rule_text": "敏感凭证（如 token、API key、密钥、密码）必须通过环境变量或密钥管理服务存储，严禁硬编码或提交至版本控制系统。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -1002,7 +1002,7 @@
     "approved_date": "2026-04-05",
     "parent_category": "纪律",
     "parent_updated": true,
-    "last_refined": "2026-04-05"
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-068",
