@@ -290,7 +290,7 @@ def cmd_history(args):
         )
 
 
-VIOLATIONS_PATH = os.path.expanduser("~/.claude/merit_violations.jsonl")
+VIOLATIONS_PATH = os.path.join(MERIT_DIR, "violations.jsonl")
 
 
 def cmd_report(args):
@@ -979,11 +979,12 @@ def mission_activate():
 
     m["status"] = "active"
     import fcntl
-    with open(MISSION_PATH, 'w') as f:
+    with open(MISSION_PATH, 'r+') as f:
         fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        f.truncate()
         json.dump(m, f, ensure_ascii=False, indent=2)
         f.flush()
-        fcntl.flock(f, fcntl.LOCK_UN)
 
     print(f"✅ mission 已激活：{m.get('mission', '?')}")
     print(f"   石卫放行计划内操作，开始干活。")

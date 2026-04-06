@@ -808,6 +808,14 @@ DANGEROUS_COMMANDS = [
 
 SAFE_RM_PATHS = {"/tmp/", "/tmp ", "/private/tmp/", "/private/tmp ", "/var/tmp/", "/var/tmp ", "cd /tmp"}
 
+# 磐石守心：pending 状态下 Bash 只读白名单
+PENDING_READONLY_PREFIXES = (
+    "ls ", "cat ", "grep ", "head ", "tail ", "wc ", "echo ",
+    "find ", "which ", "file ", "stat ", "du ", "df ",
+    "python3 -c", "python3 -m py_compile",
+    "python3 ~/.claude/merit/credit_manager.py mission activate",
+)
+
 
 def check_delete_whitelist(cmd):
     """预申报白名单放行——路径统一展开后匹配，不怕 ~ vs 绝对路径"""
@@ -986,22 +994,16 @@ def handle_pre_tool_use(data):
 
     # Bash：pending 拦截 + 拍快照 + 破坏性检查
     if tool_name == "Bash":
-        # pending mission = 自造 plan mode，Bash 写入也要拦
+        cmd = data.get("tool_input", {}).get("command", "")
+        # pending mission = 自造 plan mode（磐石守心），Bash 写入也要拦
         if mission and mission.get("status") == "pending":
-            cmd = data.get("tool_input", {}).get("command", "")
-            # 只读命令放行（ls/cat/grep/head/tail/wc/echo/python3 -c 查询等）
-            read_only_prefixes = ("ls ", "cat ", "grep ", "head ", "tail ", "wc ", "echo ",
-                                  "find ", "which ", "file ", "stat ", "du ", "df ",
-                                  "python3 -c", "python3 -m py_compile",
-                                  "python3 ~/.claude/merit/credit_manager.py mission activate")
             cmd_stripped = cmd.strip()
-            if not any(cmd_stripped.startswith(p) for p in read_only_prefixes):
+            if not any(cmd_stripped.startswith(p) for p in PENDING_READONLY_PREFIXES):
                 output_deny(
                     f"⏸️ 方案待批准，Bash 写入操作已暂停。等老板说\"执行\"后调 mission activate",
                     agent_name, f"Bash: {cmd_stripped[:60]}")
                 return
         take_snapshot()
-        cmd = data.get("tool_input", {}).get("command", "")
         reason = check_bash_destructive(cmd, mission)
         if reason:
             update_credit(agent_name, -5, f"Bash 破坏性命令: {reason}")
