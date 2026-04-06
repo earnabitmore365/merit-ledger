@@ -1,26 +1,20 @@
 {
-  "mission": "plan: fix-score-and-docs.md",
-  "agent": "太极",
-  "started": "2026-04-06T06:23:40",
-  "status": "completed",
+  "mission": "回测种子重建：seed4模式跑generate_seed.py重建4个种子DB",
+  "agent": "两仪",
+  "started": "2026-04-06T07:12:09",
+  "status": "active",
   "estimated_reward": 0,
-  "held_points": 3,
+  "held_points": 2,
   "items": [
     {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/文档/claude_code.md",
+      "type": "bash",
+      "desc": "python3 generate_seed.py --seed4 --workers 4",
       "done": true
     },
     {
       "type": "modify",
-      "file": "~/.claude/projects/-Users-allenbot/memory/stone_guard_v7_design.md",
-      "done": true
-    },
-    {
-      "type": "modify",
-      "file": "~/.claude/merit/credit_manager.py",
-      "done": true
+      "file": "/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md",
+      "done": false
     }
-  ],
-  "completed": "2026-04-06T06:33:19"
+  ]
 }

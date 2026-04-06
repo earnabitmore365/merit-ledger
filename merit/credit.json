@@ -13,8 +13,8 @@
       }
     },
     "两仪": {
-      "score": 543,
-      "held": 27,
+      "score": 502,
+      "held": 29,
       "level": 3,
       "title": "金丹",
       "penalty_only": false,
@@ -22,48 +22,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-05T21:52:40",
-      "agent": "两仪",
-      "delta": -5,
-      "reason": "自审预扣→实扣：session结束仍未补自审",
-      "score_after": 119
-    },
-    {
-      "ts": "2026-04-05T21:57:27",
-      "agent": "两仪",
-      "delta": 0,
-      "reason": "任务押金预扣 1分: 保存自主交易AI架构文档到文档库",
-      "score_after": 119
-    },
-    {
-      "ts": "2026-04-05T21:58:59",
-      "agent": "两仪",
-      "delta": 5,
-      "reason": "任务完成，押金1归还 + 质量奖励+5（verify 3/4，改了几轮）: 保存自主交易AI架构文档到文档库",
-      "score_after": 124
-    },
-    {
-      "ts": "2026-04-05T22:02:39",
-      "agent": "两仪",
-      "delta": 0,
-      "reason": "任务押金预扣 10分: 14个research文件切SQLite→DuckDB",
-      "score_after": 124
-    },
-    {
-      "ts": "2026-04-05T22:02:47",
-      "agent": "太极",
-      "delta": -8,
-      "reason": "石卫评估[say_maybe_no_check]: 太极没有分析cron为何无输出，仅以「你好好想想」回避问题核心，将分析责任推回给执事。",
-      "score_after": 3
-    },
-    {
-      "ts": "2026-04-05T22:04:45",
-      "agent": "两仪",
-      "delta": -10,
-      "reason": "任务放弃，没收押金10: 14个research文件切SQLite→DuckDB",
-      "score_after": 114
-    },
     {
       "ts": "2026-04-05T22:05:11",
       "agent": "两仪",
@@ -721,6 +679,55 @@
       "delta": 1,
       "reason": "老板认可: 好了，你继续下一个任务",
       "score_after": 543
+    },
+    {
+      "ts": "2026-04-06T07:06:30",
+      "agent": "两仪",
+      "delta": 2,
+      "reason": "老板认可: 我觉得顺序应该是这样，先查清楚为什么会有2个同名？因为这代表第一个做的时候注入有问题，所以才会有_1",
+      "score_after": 545
+    },
+    {
+      "ts": "2026-04-06T07:06:30",
+      "agent": "两仪",
+      "delta": 1,
+      "reason": "习惯养成[routine_complete]连续3次",
+      "score_after": 546
+    },
+    {
+      "ts": "2026-04-06T07:09:46",
+      "agent": "两仪",
+      "delta": 2,
+      "reason": "老板认可: 嗯嗯，就这么做，不过你现在吧种子里的空列先删掉，然后把有数据_1的名字换好，准备给正确的regime",
+      "score_after": 548
+    },
+    {
+      "ts": "2026-04-06T07:10:04",
+      "agent": "两仪",
+      "delta": 0,
+      "reason": "任务押金预扣 3分: regime_at_open修复：删空列+重命名_1+修build_seed_report.py防重",
+      "score_after": 548
+    },
+    {
+      "ts": "2026-04-06T07:11:12",
+      "agent": "两仪",
+      "delta": 5,
+      "reason": "任务完成，押金3归还 + 质量奖励+5（verify 3/4，改了几轮）: regime_at_open修复：删空列+重命名_1+修build_seed_report.py防重",
+      "score_after": 500
+    },
+    {
+      "ts": "2026-04-06T07:11:32",
+      "agent": "两仪",
+      "delta": 2,
+      "reason": "老板认可: 嗯嗯，继续",
+      "score_after": 502
+    },
+    {
+      "ts": "2026-04-06T07:12:09",
+      "agent": "两仪",
+      "delta": 0,
+      "reason": "任务押金预扣 2分: 回测种子重建：seed4模式跑generate_seed.py重建4个种子DB",
+      "score_after": 502
     }
   ],
   "last_decay_ts": "2026-04-06T02:13:53"
