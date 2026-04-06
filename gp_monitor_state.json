@@ -1,14 +1,14 @@
 {
   "last_grad_count": 816,
   "restarts": 3,
-  "total_checks": 733,
+  "total_checks": 734,
   "last_jobs": [
-    "BNB/1m",
-    "BNB/1m",
-    "BNB/1m",
-    "BNB/1m"
+    "BNB_COIN/1m",
+    "BNB_COIN/1m",
+    "BTC/1m",
+    "BTC/1m"
   ],
-  "last_memory_gb": 11.6,
+  "last_memory_gb": 11.0,
   "consecutive_ssh_failures": 0,
   "consecutive_crashes": 0
 }
