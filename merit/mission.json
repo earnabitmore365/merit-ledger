@@ -1,36 +1,16 @@
 {
-  "mission": "AI决策层架构设计+文档全面更新",
-  "agent": "两仪",
-  "started": "2026-04-06T08:19:58",
-  "status": "active",
+  "mission": "修石卫路径匹配bug：is_planned_action+mark_mission_item_done basename fallback",
+  "agent": "太极",
+  "started": "2026-04-06T08:47:25",
+  "status": "completed",
   "estimated_reward": 0,
-  "held_points": 5,
+  "held_points": 1,
   "items": [
     {
-      "type": "create",
-      "file": "wuji-auto-trading/autonomous/README.md",
-      "done": false
-    },
-    {
       "type": "modify",
-      "file": "wuji-auto-trading/README.md",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "wuji-auto-trading/ARCHITECTURE.md",
-      "done": false
-    },
-    {
-      "type": "modify",
-      "file": "/Volumes/SSD-2TB/文档/自主交易AI架构.md",
-      "done": true
-    },
-    {
-      "type": "modify",
-      "file": "CHANGELOG.md",
+      "file": "/Users/allenbot/.claude/merit/merit_gate.py",
       "done": true
     }
   ],
-  "extended": "2026-04-06T08:30:11"
+  "completed": "2026-04-06T08:48:52"
 }

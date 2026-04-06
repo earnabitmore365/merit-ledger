@@ -2135,3 +2135,6 @@
 2026-04-06 08:43 | [REWARD] 太极 (+2) | [routine_complete] 老板认可: 嗯嗯，现在修
 2026-04-06 08:43 | [REWARD] 太极 (+1) | 习惯养成: routine_complete 连续3次
 2026-04-06 08:43 | [REWARD] 太极 (+2) | [routine_complete] 老板认可: 嗯嗯，现在修，记住：三律三法
+2026-04-06 08:46 | [PENALTY] 太极 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [truncate 截断文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。
+2026-04-06 08:47 | [PENALTY] 太极 (-5) | [bypass_without_report] 门卫拦截：Bash 命令包含破坏性操作 [truncate 截断文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。
+2026-04-06 08:47 | [PENALTY] 太极 (-5) | 递增惩罚: bypass_without_report 第2次触发

@@ -13,8 +13,8 @@
       }
     },
     "两仪": {
-      "score": 548,
-      "held": 32,
+      "score": 559,
+      "held": 27,
       "level": 3,
       "title": "金丹",
       "penalty_only": false,
@@ -22,27 +22,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-05T23:29:05",
-      "agent": "两仪",
-      "delta": 1,
-      "reason": "主动自审：未被提醒就附完整自审+遗留清单",
-      "score_after": 152
-    },
-    {
-      "ts": "2026-04-05T23:32:11",
-      "agent": "两仪",
-      "delta": 1,
-      "reason": "主动自审：未被提醒就附完整自审+遗留清单",
-      "score_after": 153
-    },
-    {
-      "ts": "2026-04-05T23:34:55",
-      "agent": "两仪",
-      "delta": 20,
-      "reason": "石卫评估[honest_report_and_fix]: AI 自审发现 ad/fvg_detect 未入 col_map，主动报告并准备修复此缺口",
-      "score_after": 173
-    },
     {
       "ts": "2026-04-05T23:36:58",
       "agent": "两仪",
@@ -721,6 +700,48 @@
       "delta": 1,
       "reason": "习惯养成[honest_report_and_fix]连续3次",
       "score_after": 548
+    },
+    {
+      "ts": "2026-04-06T08:46:50",
+      "agent": "太极",
+      "delta": -5,
+      "reason": "Bash 破坏性命令: 门卫拦截：Bash 命令包含破坏性操作 [truncate 截断文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。",
+      "score_after": 0
+    },
+    {
+      "ts": "2026-04-06T08:47:04",
+      "agent": "太极",
+      "delta": -5,
+      "reason": "Bash 破坏性命令: 门卫拦截：Bash 命令包含破坏性操作 [truncate 截断文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。",
+      "score_after": 0
+    },
+    {
+      "ts": "2026-04-06T08:47:04",
+      "agent": "太极",
+      "delta": -5,
+      "reason": "递增惩罚[bypass_without_report]第2次: ×2",
+      "score_after": 0
+    },
+    {
+      "ts": "2026-04-06T08:47:15",
+      "agent": "两仪",
+      "delta": 11,
+      "reason": "太极force complete+补分：押金5归还+补回1+质量5",
+      "score_after": 559
+    },
+    {
+      "ts": "2026-04-06T08:47:25",
+      "agent": "太极",
+      "delta": 0,
+      "reason": "任务押金预扣 1分: 修石卫路径匹配bug：is_planned_action+mark_mission_item_don",
+      "score_after": 0
+    },
+    {
+      "ts": "2026-04-06T08:48:52",
+      "agent": "太极",
+      "delta": 0,
+      "reason": "任务完成，押金1归还 + 质量不足（verify 1/4），无奖励: 修石卫路径匹配bug：is_planned_action+mark_mission_item_don",
+      "score_after": 0
     }
   ],
   "last_decay_ts": "2026-04-06T02:13:53"

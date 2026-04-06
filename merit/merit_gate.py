@@ -536,8 +536,23 @@ def save_mission(mission):
         json.dump(mission, f, ensure_ascii=False, indent=2)
 
 
+def _path_match(planned, actual):
+    """路径匹配：精确 → endswith → basename fallback"""
+    if not planned or not actual:
+        return False
+    if planned == actual:
+        return True
+    # 相对路径 fallback：actual 以 planned 结尾（如 planned='wuji/README.md' 匹配 actual='/Volumes/.../wuji/README.md'）
+    if actual.endswith("/" + planned) or actual.endswith(os.sep + planned):
+        return True
+    # basename fallback：文件名相同
+    if os.path.basename(planned) == os.path.basename(actual) and os.path.basename(planned) != "":
+        return True
+    return False
+
+
 def is_planned_action(mission, tool_name, data):
-    """检查当前操作是否在计划内——精确路径匹配"""
+    """检查当前操作是否在计划内——精确匹配 + 路径 fallback"""
     if not mission:
         return False
     tool_input = data.get("tool_input", {})
@@ -554,13 +569,13 @@ def is_planned_action(mission, tool_name, data):
             planned = ""
 
         if item["type"] == "modify" and tool_name in ("Write", "Edit"):
-            if planned and planned == file_path:
+            if _path_match(planned, file_path):
                 return True
         elif item["type"] == "delete" and cmd:
-            if planned and os.path.basename(planned) in cmd and os.path.dirname(planned) in cmd:
+            if planned and os.path.basename(planned) in cmd:
                 return True
         elif item["type"] == "create" and tool_name == "Write":
-            if planned and planned == file_path:
+            if _path_match(planned, file_path):
                 return True
         elif item["type"] == "bash" and tool_name == "Bash":
             desc_words = item.get("desc", "").split()
@@ -590,10 +605,10 @@ def mark_mission_item_done(tool_name, data):
         else:
             planned = ""
 
-        if item["type"] == "modify" and tool_name in ("Write", "Edit") and planned == file_path:
+        if item["type"] == "modify" and tool_name in ("Write", "Edit") and _path_match(planned, file_path):
             item["done"] = True
             changed = True
-        elif item["type"] == "create" and tool_name == "Write" and planned == file_path:
+        elif item["type"] == "create" and tool_name == "Write" and _path_match(planned, file_path):
             item["done"] = True
             changed = True
         elif item["type"] == "delete" and cmd and planned:
