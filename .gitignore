@@ -24,3 +24,4 @@ stats-cache.json
 *.key
 settings.json.save
 settings.local.json
+.github_token
