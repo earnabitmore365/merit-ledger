@@ -1,0 +1,4 @@
+⚠️ 石卫提醒：这轮有以下操作，请更新 CHANGELOG（/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md）：
+- BASH `curl -s -X POST http://localhost:8788 -H "Authorization: Bearer a1188f5bb3603166795b244965ab9e5a" -d "两仪→太极：确认收到，plans/目录豁免已生效。继续干活。"`
+- CREATE/EDIT `/Volumes/SSD-2TB/project/auto-trading/plans/handoff_v2_remaining.md`
+格式：### HH:MM 一句话描述做了什么和为什么 (YYYY-MM-DD)

@@ -13,8 +13,8 @@
       }
     },
     "两仪": {
-      "score": 562,
-      "held": 27,
+      "score": 564,
+      "held": 31,
       "level": 3,
       "title": "金丹",
       "penalty_only": false,
@@ -22,20 +22,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-05T23:57:44",
-      "agent": "两仪",
-      "delta": 5,
-      "reason": "任务完成，押金2归还 + 质量奖励+5（verify 2/4，改了几轮）: GP复合指标注册+col_map补齐+文档更新",
-      "score_after": 194
-    },
-    {
-      "ts": "2026-04-06T00:11:20",
-      "agent": "两仪",
-      "delta": 2,
-      "reason": "老板认可: 我要这样，像现在K线种子存入新指标的时候，自己算一轮，然后存好后锁定只读，除了种子生成以外没有其他入",
-      "score_after": 196
-    },
     {
       "ts": "2026-04-06T00:14:34",
       "agent": "两仪",
@@ -721,6 +707,20 @@
       "delta": -3,
       "reason": "递增惩罚[panic_no_analysis]第2次: ×2",
       "score_after": 0
+    },
+    {
+      "ts": "2026-04-06T09:14:15",
+      "agent": "两仪",
+      "delta": 0,
+      "reason": "任务押金预扣 4分: plan: handoff_v2_remaining.md",
+      "score_after": 562
+    },
+    {
+      "ts": "2026-04-06T09:14:47",
+      "agent": "两仪",
+      "delta": 2,
+      "reason": "石卫评估[complete_no_correction]: 白纱主动创建Mission并提交完整方案，但方案属于常规功能补全，无问题纠正或创新亮点",
+      "score_after": 564
     }
   ],
   "last_decay_ts": "2026-04-06T02:13:53"
