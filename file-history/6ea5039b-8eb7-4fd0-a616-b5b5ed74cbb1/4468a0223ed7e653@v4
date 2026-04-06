@@ -1,6 +1,0 @@
-# ⚠️ 已弃用 — 活跃文件在另一个路径
-
-活跃的 rules.md 在：`~/.claude/projects/-Volumes-SSD-2TB-project-auto-trading/memory/rules.md`
-
-此文件是旧项目路径 (`/Users/allenbot/project/auto-trading`) 的残留，不再使用。
-实际工作目录是 `/Volumes/SSD-2TB/project/auto-trading`。

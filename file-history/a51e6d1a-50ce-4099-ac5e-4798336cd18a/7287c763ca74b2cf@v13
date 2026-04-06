@@ -1,8 +1,0 @@
-# 监控修正（一次过）
-
-## 改动
-1. ttp.py：百分比×10（杠杆后）+ 去PnL金额
-2. bitmex_race.py：交易时 print→logger.info + [TRADE] 标记
-3. monitor_bot.py：解析[TRADE] + TTP新格式
-
-## 自审通过

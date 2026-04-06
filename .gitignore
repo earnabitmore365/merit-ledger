@@ -27,3 +27,6 @@ settings.local.json
 .github_token
 .channel_token
 channel-server/node_modules/
+history.jsonl
+file-history/
+evolver/

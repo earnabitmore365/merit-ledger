@@ -1,6 +1,0 @@
-# OpenClaw Completion
-source "/Users/allenbot/.openclaw/completions/openclaw.zsh"
-export PATH="/opt/homebrew/bin:$PATH"
-alias abby-time="python3 ~/.openclaw/workspace/skills/abby-watch/scripts/time_cli.py"
-
-. "$HOME/.local/bin/env"

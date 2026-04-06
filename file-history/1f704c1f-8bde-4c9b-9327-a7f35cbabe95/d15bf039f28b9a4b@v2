@@ -1,9 +1,0 @@
-{"type":"Mutation","id":"mut_1772893959383_taiji","category":"innovate","trigger_signals":["memory_missing","user_missing"],"target":"memory:bootstrap","expected_effect":"创建 MEMORY.md 和 USER.md，完成 evolver 基础记忆初始化，后续周期可正常读取项目上下文和用户偏好","risk_level":"low","rationale":"evolver 缺少全局记忆和用户档案，无法在周期间保持上下文。bootstrap 是所有后续进化的前提，必须优先完成。"}
-
-{"type":"PersonalityState","rigor":0.75,"creativity":0.35,"verbosity":0.25,"risk_tolerance":0.35,"obedience":0.9}
-
-{"type":"EvolutionEvent","schema_version":"1.5.0","id":"evt_1772893959383_taiji","parent":null,"intent":"innovate","signals":["memory_missing","user_missing"],"genes_used":["gene_bootstrap_memory_files"],"mutation_id":"mut_1772893959383_taiji","personality_state":{"type":"PersonalityState","rigor":0.75,"creativity":0.35,"verbosity":0.25,"risk_tolerance":0.35,"obedience":0.9},"blast_radius":{"files":2,"lines":60},"outcome":{"status":"success","score":1.0}}
-
-{"type":"Gene","schema_version":"1.5.0","id":"gene_bootstrap_memory_files","category":"innovate","signals_match":["memory_missing","user_missing","bootstrap","init"],"preconditions":["MEMORY.md does not exist","USER.md does not exist"],"strategy":["Check if MEMORY.md exists; create with project context if missing","Check if USER.md exists; create with user profile if missing","Record creation in MEMORY.md evolution history table"],"constraints":{"max_files":5,"forbidden_paths":[".git","node_modules","skills/evolver"]},"validation":["test -f MEMORY.md && echo ok","test -f USER.md && echo ok"]}
-
-{"type":"Capsule","schema_version":"1.5.0","id":"capsule_1772893959383_taiji","trigger":["memory_missing","user_missing"],"gene":"gene_bootstrap_memory_files","summary":"创建 MEMORY.md（项目背景+进化历史）和 USER.md（老板档案+层级关系），完成 evolver 基础记忆初始化","confidence":1.0,"blast_radius":{"files":2,"lines":60}}

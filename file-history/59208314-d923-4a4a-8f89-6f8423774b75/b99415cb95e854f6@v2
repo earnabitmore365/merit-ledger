@@ -1,3 +1,0 @@
-#!/bin/sh
-# 自动推送：每次 commit 后立即 push 到 origin main
-git push origin main 2>/dev/null &

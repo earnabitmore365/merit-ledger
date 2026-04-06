@@ -1,9 +1,0 @@
-#!/bin/bash
-echo "=== 启动 GP v2.0 scheduler ==="
-cd ~/trading/gp_engine
-nohup python3 -u gp_scheduler.py --workers 4 --rounds 0 --regime > scheduler_output.log 2>&1 &
-echo "PID=$!"
-sleep 5
-ps aux | grep gp_scheduler | grep -v grep
-echo "=== 日志头 ==="
-head -30 scheduler_output.log

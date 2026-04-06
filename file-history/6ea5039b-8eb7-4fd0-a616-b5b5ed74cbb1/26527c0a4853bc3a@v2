@@ -1,9 +1,0 @@
-#!/bin/bash
-pkill -f "gp_scheduler.py" 2>/dev/null
-pkill -f "gp_evolve.py" 2>/dev/null
-sleep 3
-cd ~/trading/gp_engine
-nohup python3 -u gp_scheduler.py --workers 4 --rounds 50 --regime > scheduler_output.log 2>&1 &
-echo "PID=$!"
-sleep 8
-head -20 scheduler_output.log

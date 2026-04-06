@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "trading": {
-      "type": "stdio",
-      "command": "python3",
-      "args": ["/Users/allenbot/project/auto-trading/mcp_server.py"]
-    }
-  }
-}

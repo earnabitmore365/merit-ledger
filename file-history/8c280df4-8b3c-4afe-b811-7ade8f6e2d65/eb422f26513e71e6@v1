@@ -1,2 +1,0 @@
-# 每日凌晨4点自动跑交易管线（下载+纯信号+TTP）
-0 4 * * * /Volumes/BIWIN\ NV\ 7400\ 2TB/project/auto-trading/lab/daily_cron.sh >> /Volumes/BIWIN\ NV\ 7400\ 2TB/project/auto-trading/lab/logs/daily_cron.log 2>&1

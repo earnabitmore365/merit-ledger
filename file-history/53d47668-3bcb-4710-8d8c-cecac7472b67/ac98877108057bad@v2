@@ -1,7 +1,0 @@
-#!/bin/bash
-kill 28320 28321 2>/dev/null
-sleep 1
-echo "=== 剩余 ==="
-ps aux | grep -E "gp_scheduler|gp_evolve" | grep -v grep
-echo "=== 内存 ==="
-free -m | head -2
