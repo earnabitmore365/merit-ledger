@@ -304,7 +304,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_绕过问题 ≠ 解决问",
-    "rule_text": "方案须实质性完成其声称的核心功能，不得以虚假步骤、形式化拆分或无关操作等方式掩盖功能未真正实现的事实。",
+    "rule_text": "方案必须完整实现其声明的核心功能，且每个功能环节须有实际价值产出；禁止通过虚假步骤、形式化拆分或无关操作等方式制造功能已实现的假象。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
