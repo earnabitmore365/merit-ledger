@@ -14,7 +14,7 @@
     {
       "type": "modify",
       "file": "/Volumes/SSD-2TB/project/auto-trading/CHANGELOG.md",
-      "done": false
+      "done": true
     },
     {
       "type": "bash",
