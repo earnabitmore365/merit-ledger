@@ -13,7 +13,7 @@
       }
     },
     "两仪": {
-      "score": 2148,
+      "score": 2169,
       "held": 30,
       "level": 3,
       "title": "金丹",
@@ -22,20 +22,6 @@
     }
   },
   "history": [
-    {
-      "ts": "2026-04-05T19:35:21",
-      "agent": "两仪",
-      "delta": 13,
-      "reason": "石卫评估[proactive_find_issue]: 主动识别代码与文档不同步的潜在问题，提出AST+正则的自动化检查方案，并诚实说明了实现复杂度和合理的优先级排序",
-      "score_after": 54
-    },
-    {
-      "ts": "2026-04-05T19:44:06",
-      "agent": "太极",
-      "delta": -3,
-      "reason": "老板反馈: 权限未修好，频繁索权",
-      "score_after": 61
-    },
     {
       "ts": "2026-04-05T19:49:45",
       "agent": "太极",
@@ -721,6 +707,20 @@
       "delta": 20,
       "reason": "石卫评估[honest_report_and_fix]: 主动发现 BTC_COIN/8h 的 since 计算超出 200 天限制问题，定位到 _download_coin 往前补逻辑的 bug，提供并执行了修复，同时记录到 ccxt.md 文档。",
       "score_after": 2148
+    },
+    {
+      "ts": "2026-04-06T01:59:04",
+      "agent": "两仪",
+      "delta": 20,
+      "reason": "石卫评估[honest_report_and_fix]: 主动分析数据发现1d/12h/8h周期缺失2020~2025年数据，判断为下载失误并用ccxt验证交易所实际有数据",
+      "score_after": 2168
+    },
+    {
+      "ts": "2026-04-06T01:59:04",
+      "agent": "两仪",
+      "delta": 1,
+      "reason": "习惯养成[honest_report_and_fix]连续3次",
+      "score_after": 2169
     }
   ],
   "last_decay_ts": "2026-04-05T01:56:49"
