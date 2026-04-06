@@ -47,9 +47,8 @@
     "desktop-shortcut": 112,
     "terminal-setup": 121
   },
-  "promptQueueUseCount": 5788,
+  "promptQueueUseCount": 5796,
   "btwUseCount": 6,
-  "showExpandedTodos": true,
   "cachedGrowthBookFeatures": {
     "tengu_log_datadog_events": true,
     "tengu_garnet_loom": false,
