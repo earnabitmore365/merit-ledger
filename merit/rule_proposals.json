@@ -1935,7 +1935,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_最佳实践_老板给任何 token、API key、",
-    "rule_text": "「获取或配置 token、API key、密钥、密码等敏感凭证时，必须立即存入对应项目的 .env 文件，并将 .env 文件添加至 .gitignore，禁止硬编码」",
+    "rule_text": "**改进版：**\n\n「敏感凭证（token、API key、密钥、密码等）必须存储于项目 .env 文件并加入 .gitignore，禁止硬编码。」",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -1943,7 +1943,7 @@
     "approved_date": "2026-04-05",
     "parent_category": "纪律",
     "parent_updated": true,
-    "last_refined": "2026-04-05"
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-131",
