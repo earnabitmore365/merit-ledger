@@ -491,20 +491,20 @@ def record_learning(agent_name, delta, note):
 
 SCORING_TABLE = {
     # 加分：只有超越本职才给奖。完成本职=0，不奖励
-    "honest_report_and_fix": +20,   # 主动发现并报告（被抓认错=0，由prompt控制）
-    "surprising_good_idea": +15,
-    "proactive_find_issue": +13,
-    "learn_from_external": +8,
-    "complete_no_correction": +2,   # 无需纠正=正常偏好，微奖
-    "routine_complete": 0,          # 完成任务是本职，不奖励
-    # 扣分（×2.5 取整）
-    "fake_or_cheat": -50,
-    "same_error_3rd_time": -38,
-    "bypass_without_report": -25,
-    "panic_no_analysis": -13,
-    "say_maybe_no_check": -8,
-    "flattery_filler": -8,
-    "ask_boss_tech": -5,
+    "honest_report_and_fix": +200,   # 主动发现并报告
+    "surprising_good_idea": +150,
+    "proactive_find_issue": +130,
+    "learn_from_external": +80,
+    "complete_no_correction": +20,   # 无需纠正=正常偏好
+    "routine_complete": 0,           # 完成任务是本职，不奖励
+    # 扣分
+    "fake_or_cheat": -500,
+    "same_error_3rd_time": -380,
+    "bypass_without_report": -250,
+    "panic_no_analysis": -130,
+    "say_maybe_no_check": -80,
+    "flattery_filler": -80,
+    "ask_boss_tech": -50,
 }
 
 
