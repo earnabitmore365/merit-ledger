@@ -1,8 +1,8 @@
 {
   "mission": "更新架构文档：融入调研和执事补充",
   "agent": "两仪",
-  "started": "2026-04-06T05:09:15",
-  "status": "active",
+  "started": "2026-04-06T05:48:10",
+  "status": "aborted",
   "estimated_reward": 0,
   "held_points": 1,
   "items": [
@@ -11,5 +11,6 @@
       "file": "5",
       "done": false
     }
-  ]
+  ],
+  "extended": "2026-04-06T05:50:06"
 }

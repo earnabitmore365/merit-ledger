@@ -1324,7 +1324,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_绕过问题 ≠ 解决问题。把\"信号分段+交",
-    "rule_text": "方案必须针对问题根源采取实质性整改措施，严禁以改名称、换包装等形式化、敷衍性整改。",
+    "rule_text": "方案必须针对问题根源采取实质性整改措施，严禁以改名称、换包装等形式化、敷衍性整改规避实质整改要求。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -1755,7 +1755,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_后台跑测试/验证必须盯着（2分钟查一次）",
-    "rule_text": "「后台任务启动后，系统每2分钟检查一次运行状态；若检测到异常（如超时、崩溃、资源耗尽），应立即停止任务并生成包含错误类型、时间戳及堆栈信息的错误报告。」",
+    "rule_text": "后台任务启动后，系统每2分钟检查一次运行状态；若检测到异常（如超时、崩溃、内存耗尽、CPU过载），应立即停止任务并生成包含错误类型、时间戳、相关诊断信息及堆栈信息（如适用）的错误报告。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -2287,13 +2287,14 @@
     "status": "approved",
     "created": "2026-04-06",
     "behavior_id": "lrn_纠错_踩坑后必须同时更新 claude_cod",
-    "rule_text": "踩坑后必须同时更新learnings和claude_code.md踩坑清单，不能只更新其中一个。",
+    "rule_text": "踩坑后必须同时更新learnings和claude_code.md，二者缺一不可。",
     "source_count": 2,
     "effective_triggers": 0,
     "last_trigger": null,
     "approved_by": "evolve_auto",
     "approved_date": "2026-04-06",
     "parent_category": "纪律",
-    "parent_updated": true
+    "parent_updated": true,
+    "last_refined": "2026-04-06"
   }
 ]
