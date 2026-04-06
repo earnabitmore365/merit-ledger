@@ -904,7 +904,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_知道公式不对说了三遍",
-    "rule_text": "发现错误或缺陷时，必须立即停止操作并妥善处理；问题未彻底解决前，禁止继续执行后续步骤或领取相关奖励。",
+    "rule_text": "「发现错误或缺陷时，应立即停止操作并处理；问题未彻底解决前，禁止继续执行后续步骤或领取奖励。」",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -1264,7 +1264,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_纠错_世界观文件没有 git 版本管理。改之前",
-    "rule_text": "对设定或世界观相关文件的编辑或删除前，必须备份原文件至指定目录并记录备份时间；新建文件应于当日内完成备份存档。",
+    "rule_text": "设定或世界观相关文件的编辑、删除前必须备份至指定目录并记录时间；新建文件须于当日内完成备份存档。",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -1786,7 +1786,7 @@
     "status": "approved",
     "created": "2026-04-05",
     "behavior_id": "lrn_最佳实践_替换旧资源时，建立完整清理链，不靠记忆。",
-    "rule_text": "**改进版**：\n\n「替换旧资源时，清理必须同步完成，不得延迟或依赖记忆」",
+    "rule_text": "「替换旧资源时，清理必须同步完成，不得延迟或依赖记忆」",
     "source_count": 1,
     "effective_triggers": 0,
     "last_trigger": null,
@@ -1794,7 +1794,7 @@
     "approved_date": "2026-04-05",
     "parent_category": "完整性",
     "parent_updated": true,
-    "last_refined": "2026-04-05"
+    "last_refined": "2026-04-06"
   },
   {
     "id": "SUB-121",
