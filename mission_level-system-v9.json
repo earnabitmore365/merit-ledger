@@ -1,0 +1,46 @@
+{
+  "mission": "等级体系v9：8级+凡体+太极保底元婴+无极令牌",
+  "agent": "太极",
+  "started": "2026-04-07T11:29:20",
+  "status": "completed",
+  "estimated_reward": 0,
+  "held_points": 5,
+  "items": [
+    {
+      "type": "modify",
+      "file": "/Users/allenbot/.claude/merit/merit_gate.py",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "/Users/allenbot/.claude/merit/credit_manager.py",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "/Users/allenbot/.claude/scripts/session_start.py",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "/Users/allenbot/.claude/merit/credit.json",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "/Users/allenbot/.claude/projects/-Users-allenbot/memory/credit_system_design.md",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "/Users/allenbot/.claude/projects/-Users-allenbot/memory/stone_guard_v7_design.md",
+      "done": true
+    },
+    {
+      "type": "modify",
+      "file": "/Users/allenbot/.claude/merit/test_merit.py",
+      "done": true
+    }
+  ],
+  "completed": "2026-04-07T11:45:00"
+}
