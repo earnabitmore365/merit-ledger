@@ -1230,9 +1230,12 @@ def handle_pre_tool_use(data):
             return
 
     # 合同制强制：Write/Edit .py 文件必须有 active mission + 文件在 plan 范围内
+    # 太极改 merit 系统文件免检（太极是 merit 维护者，不被自己的流程卡住）
+    MERIT_DIR_ABS = os.path.expanduser("~/.claude/merit")
     if tool_name in ("Write", "Edit"):
         fp = data.get("tool_input", {}).get("file_path", "")
-        if fp.endswith(".py"):
+        is_taiji_merit = agent_name == "太极" and fp.startswith(MERIT_DIR_ABS)
+        if fp.endswith(".py") and not is_taiji_merit:
             has_active = mission and mission.get("status") == MS_ACTIVE
             if not has_active:
                 log_pending_review(agent_name, f"skip_plan: 无 active mission 改 .py", fp)
