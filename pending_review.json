@@ -10564,5 +10564,176 @@
     "detail": "检测到完成/汇报但没有【自审】",
     "reviewed": false,
     "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:04:48",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:09:35",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "skip_plan: 无 active mission 改 .py",
+    "detail": "/Users/allenbot/.claude/merit/credit_manager.py",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:11:36",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:12:57",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:18:23",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:21:31",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:26:09",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:33:39",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:41:18",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:41:39",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "未备份: build_seed_report.py",
+    "detail": "缺 /tmp/build_seed_report.py.bak",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:42:10",
+    "source": "shiwei",
+    "agent": "太极",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:42:36",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "未备份: run_gate_coin_margin.py",
+    "detail": "缺 /tmp/run_gate_coin_margin.py.bak",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:42:50",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "未备份: unified_trader.py",
+    "detail": "缺 /tmp/unified_trader.py.bak",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:43:02",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "未备份: unified_trader.py",
+    "detail": "缺 /tmp/unified_trader.py.bak",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:43:18",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "未备份: strategy_runner.py",
+    "detail": "缺 /tmp/strategy_runner.py.bak",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:44:00",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "未备份: build_seed_report.py",
+    "detail": "缺 /tmp/build_seed_report.py.bak",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T04:47:36",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T10:40:19",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "Bash 破坏性命令: 门卫拦截：Bash 命令包含破坏性操作 [rm 删除文件]。G-003 铁律。先用 credit_manager.py declare-delete 预申报要删的文件。",
+    "detail": "cmd: # 删除损坏的 WAL，让 DuckDB 回退到最后一个 checkpoint\nrm reports/seed_report.duckdb.wal && echo \"WAL deleted\" && p",
+    "reviewed": false,
+    "verdict": null
+  },
+  {
+    "time": "2026-04-10T10:41:12",
+    "source": "shiwei",
+    "agent": "两仪",
+    "event": "缺自审",
+    "detail": "检测到完成/汇报但没有【自审】",
+    "reviewed": false,
+    "verdict": null
   }
 ]
