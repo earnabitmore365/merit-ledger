@@ -1,13 +1,13 @@
 {
-  "file": "build_klines_indicators.py",
-  "time": "2026-04-10T03:35:35",
+  "file": "build_seed_report.py",
+  "time": "2026-04-10T04:44:01",
   "results": {
     "syntax": "pass",
     "logic": "pass",
-    "chain": "pending",
+    "chain": "pass",
     "docs": "pending",
     "anti_patterns": "pass"
   },
-  "pass_count": 3,
+  "pass_count": 4,
   "total": 5
 }
