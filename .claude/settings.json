@@ -1,0 +1,202 @@
+{
+  "env": {
+    "BASH_MAX_TIMEOUT_MS": "7200000",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
+    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v4-pro",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-v4-flash",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-v4-flash",
+    "ANTHROPIC_MODEL": "deepseek-v4-flash",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK": "1",
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "128000"
+  },
+  "compactPrompt": "CRITICAL TARGET: After compaction the conversation MUST be at least 80K tokens (approximately 40% of current size, NOT 60%).\n\nMUST keep verbatim (the most recent ~40% of conversation):\n- All user messages and instructions\n- Current task context, file paths, error messages\n- Active debugging state and recent tool outputs\n- Recent code snippets and decisions\n\nMAY summarize (only from the oldest ~60%):\n- Historical context no longer needed\n- Completed exploratory steps\n- Resolved issues (keep one-line resolution, drop exploration)\n\nFAILURE CONDITION: If result is below 70K tokens, you compressed too aggressively. The target is ~80K, not 40K.",
+  "permissions": {
+    "allow": [
+      "Bash(ls *)",
+      "Bash(python3 *)",
+      "Bash(git *)",
+      "Bash(grep *)",
+      "Bash(cat *)",
+      "Bash(wc *)",
+      "Bash(touch *)",
+      "Bash(cp *)",
+      "Bash(mkdir *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(find *)",
+      "Bash(du *)",
+      "Bash(echo *)",
+      "Bash(curl *)",
+      "Bash(for *)",
+      "Bash(while *)",
+      "Bash(rm *)",
+      "Bash(ps *)",
+      "Bash(sqlite3 *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(pip3 *)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Edit(/Users/allenbot/**)",
+      "Edit(/Volumes/SSD-2TB/**)",
+      "Write(/Users/allenbot/**)",
+      "Write(/Volumes/SSD-2TB/**)",
+      "Read(/Users/allenbot/**)",
+      "Read(/Volumes/SSD-2TB/**)",
+      "//_白纱_auto-trading_专属_Web数据源",
+      "WebFetch(domain:api.alternative.me)",
+      "WebFetch(domain:api.coingecko.com)",
+      "WebFetch(domain:bitcoin-data.com)",
+      "WebFetch(domain:stablecoins.llama.fi)",
+      "WebFetch(domain:fapi.binance.com)",
+      "WebFetch(domain:www.haocaimi.com)",
+      "WebFetch(domain:www.cnblogs.com)",
+      "WebFetch(domain:news.qq.com)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(dd if=*)",
+      "Bash(mkfs*)",
+      "Write(data/*.duckdb)",
+      "Write(data/*.db)",
+      "Read(.env.prod*)"
+    ],
+    "defaultMode": "bypassPermissions",
+    "skipDangerousModePermissionPrompt": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/session_start.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/archive_daily.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/second_brain_sync.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/gate.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"收到任务时先判断类型：改代码（新建）→/forge，改代码（修复/审查）→/reforge，改认知/调研/文档/配置/知识库/世界观→/wiki，判断不清楚→停下问老祖。\"}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/pre_compact_save.py"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/scripts/db_write.py"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "ccstatusline"
+  },
+  "enabledPlugins": {
+    "claude-hud@claude-hud": true,
+    "engineering@knowledge-work-plugins": true,
+    "harness@harness-marketplace": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-hud": {
+      "source": {
+        "source": "github",
+        "repo": "jarrodwatts/claude-hud"
+      }
+    },
+    "knowledge-work-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/knowledge-work-plugins"
+      }
+    },
+    "harness-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "revfactory/harness"
+      }
+    }
+  },
+  "language": "中文",
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "dark-daltonized",
+  "preferredNotifChannel": "ghostty",
+  "agentPushNotifEnabled": true,
+  "voiceEnabled": true,
+  "//_白纱_auto-trading_专属_配置": {
+    "enabledMcpjsonServers": [
+      "liangyi-channel"
+    ],
+    "disabledMcpjsonServers": [
+      "liangyi2-channel"
+    ]
+  },
+  "model": "sonnet"
+}
