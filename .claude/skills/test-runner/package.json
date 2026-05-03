@@ -1,0 +1,6 @@
+{
+  "name": "test-runner",
+  "version": "1.0.0",
+  "description": "Auto-execute validation scripts and test suites, reporting structured pass/fail results",
+  "main": "index.js"
+}

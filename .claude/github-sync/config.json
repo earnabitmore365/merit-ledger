@@ -1,0 +1,30 @@
+{
+  "token_path": "~/.claude/.github_token",
+  "default_branch": "main",
+  "repos": {
+    "merit": {
+      "remote": "earnabitmore365/wujitang-merit",
+      "local": "~/.claude/merit"
+    },
+    "auto-trading": {
+      "remote": "earnabitmore365/auto-trading",
+      "local": "/Volumes/SSD-2TB/project/wuji-auto-trading"
+    }
+  },
+  "global_ignore": [
+    "**/*.db", "**/*.sqlite", "**/*.parquet",
+    "**/.credentials*", "**/.env", "**/.comm_pass",
+    "**/*.jsonl",
+    "**/__pycache__/**", "**/*.pyc",
+    "**/backups/**", "**/image-cache/**",
+    "**/credit.json", "**/mission.json",
+    "**/emergency.flag", "**/eval_cooldown.json",
+    "**/stop_eval_params.json", "**/conversations*.db",
+    "**/gp_monitor.log", "**/gp_monitor_state.json",
+    "**/.channel_token", "**/changelog_miss_count.json",
+    "**/verify_pre_state.json", "**/scan_stats.json",
+    "**/plan_review_result.json", "**/pending_reward_claims.json",
+    "**/audit_pending.json", "**/delete_whitelist.json",
+    "**/*.bak"
+  ]
+}

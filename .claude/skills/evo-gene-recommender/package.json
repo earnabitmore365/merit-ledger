@@ -1,0 +1,6 @@
+{
+  "name": "evo-gene-recommender",
+  "version": "1.0.0",
+  "description": "Recommend optimal evolution genes for given signals based on historical performance",
+  "main": "index.js"
+}

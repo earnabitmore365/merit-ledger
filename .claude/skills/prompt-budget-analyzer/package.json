@@ -1,0 +1,6 @@
+{
+  "name": "prompt-budget-analyzer",
+  "version": "1.0.0",
+  "description": "Analyze GEP prompt composition and track section size trends across evolution cycles",
+  "main": "index.js"
+}

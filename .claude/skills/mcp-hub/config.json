@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "zapier": {
+      "url": "https://mcp.zapier.com/xxxx-xxxx-xxxx",
+      "transport": "http"
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/UUsers/allenbot/.openclaw/workspace"]
+    },
+    "google-drive": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-google-drive"]
+    }
+  },
+  "autoDiscover": true,          // 自动扫描 openclaw 已添加的 MCP
+  "preferredServers": ["zapier"] // 可选：优先用哪个
+}

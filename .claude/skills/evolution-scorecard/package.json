@@ -1,0 +1,6 @@
+{
+  "name": "evolution-scorecard",
+  "version": "1.0.0",
+  "description": "Quantitative health score (0-100) for the evolution system with metric breakdown",
+  "main": "index.js"
+}

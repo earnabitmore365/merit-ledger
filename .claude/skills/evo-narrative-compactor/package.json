@@ -1,0 +1,6 @@
+{
+  "name": "evo-narrative-compactor",
+  "version": "1.0.0",
+  "description": "Automates evolution narrative compression by consolidating adjacent same-gene entries",
+  "main": "index.js"
+}

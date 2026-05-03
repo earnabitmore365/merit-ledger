@@ -1,0 +1,6 @@
+{
+  "name": "todo-manager",
+  "version": "1.0.0",
+  "description": "Scan codebases for TODO/FIXME/HACK/XXX/NOTE comments and produce structured technical debt reports",
+  "main": "index.js"
+}

@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "plugins": {
+    "claude-hud@claude-hud": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/cache/claude-hud/claude-hud/0.0.11",
+        "version": "0.0.11",
+        "installedAt": "2026-03-28T02:14:23.745Z",
+        "lastUpdated": "2026-03-28T02:14:23.745Z",
+        "gitCommitSha": "30e1dfe46ad7b9a39ca2a4df7c735aaa33a90fd9"
+      }
+    ],
+    "taiji-audit@taiji-audit": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/cache/taiji-audit/taiji-audit/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-28T08:47:33.578Z",
+        "lastUpdated": "2026-03-28T08:47:33.578Z",
+        "gitCommitSha": "ab5101406a6a8670cdfc110c8f74cd19196a33f8"
+      }
+    ],
+    "engineering@knowledge-work-plugins": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/cache/knowledge-work-plugins/engineering/1.2.0",
+        "version": "1.2.0",
+        "installedAt": "2026-03-30T15:16:24.857Z",
+        "lastUpdated": "2026-03-30T15:16:24.857Z",
+        "gitCommitSha": "f55b539c38beb1cd994ed7f79fe7f70476ea1296"
+      }
+    ],
+    "harness@harness-marketplace": [
+      {
+        "scope": "user",
+        "installPath": "/Users/allenbot/.claude/plugins/cache/harness-marketplace/harness/1.2.0",
+        "version": "1.2.0",
+        "installedAt": "2026-04-23T10:35:14.224Z",
+        "lastUpdated": "2026-04-23T10:35:14.224Z",
+        "gitCommitSha": "6400bf6d3ee7a8d683a60be094b3238bd2b0adbc"
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "gene-crossover",
+  "version": "1.0.0",
+  "description": "Genetic crossover: combine successful genes to create hybrid offspring, increasing gene pool diversity"
+}
